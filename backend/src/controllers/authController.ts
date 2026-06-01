@@ -1,0 +1,381 @@
+import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { z } from 'zod';
+import sql from '../config/db.js';
+import AppError from '../utils/AppError.js';
+import catchAsync from '../utils/catchAsync.js';
+import type { JwtPayload } from '../middleware/authenticate.js';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function signAccessToken(payload: Omit<JwtPayload, 'jti'>): { token: string; jti: string } {
+  const jti = crypto.randomUUID();
+  return {
+    token: jwt.sign({ ...payload, jti }, process.env.JWT_ACCESS_SECRET!, {
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as string,
+    }),
+    jti,
+  };
+}
+
+function makeRefreshToken(userId: string) {
+  const raw  = crypto.randomBytes(64).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  const jwt_token = jwt.sign(
+    { sub: userId },
+    process.env.JWT_REFRESH_SECRET!,
+    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as string }
+  );
+  return { raw, hash, jwt_token };
+}
+
+function setRefreshCookie(res: Response, token: string) {
+  res.cookie('refreshToken', token, {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge:   7 * 24 * 60 * 60 * 1000,
+    path:     '/api/auth',
+  });
+}
+
+/**
+ * Determine role from which subtype table the user appears in.
+ * Returns 'DOCTOR' | 'LAB_TECH' | 'MANAGER' | null.
+ */
+async function resolveRole(userId: string): Promise<JwtPayload['role'] | null> {
+  const [row] = await sql`
+    SELECT
+      CASE
+        WHEN d.doctor_id      IS NOT NULL THEN 'DOCTOR'
+        WHEN lt.technician_id IS NOT NULL THEN 'LAB_TECH'
+        WHEN hm.manager_id    IS NOT NULL THEN 'MANAGER'
+        ELSE NULL
+      END AS role
+    FROM users u
+    LEFT JOIN doctors            d  ON d.user_id       = u.user_id
+    LEFT JOIN lab_technicians    lt ON lt.user_id       = u.user_id
+    LEFT JOIN hospital_managers  hm ON hm.user_id       = u.user_id
+    WHERE u.user_id = ${userId}
+    LIMIT 1
+  `;
+  return (row?.role ?? null) as JwtPayload['role'] | null;
+}
+
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+
+const registerSchema = z.object({
+  username: z.string().min(3,  { message: 'ERR_USERNAME_TOO_SHORT' }),
+  email:    z.string().email({ message: 'ERR_EMAIL_INVALID' }),
+  password: z.string().min(8,  { message: 'ERR_PASSWORD_TOO_SHORT' }),
+  role:     z.enum(['DOCTOR', 'LAB_TECH', 'MANAGER'], { message: 'ERR_ROLE_INVALID' }),
+  organization_id: z.string().uuid({ message: 'ERR_ORG_INVALID' }).optional(),
+  department_id:   z.string().uuid({ message: 'ERR_DEPT_INVALID' }).optional(),
+});
+
+const loginSchema = z.object({
+  email:    z.string().email({ message: 'ERR_EMAIL_INVALID' }),
+  password: z.string().min(1, { message: 'ERR_PASSWORD_REQUIRED' }),
+});
+
+// ─── Controllers ──────────────────────────────────────────────────────────────
+
+export const register = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = registerSchema.safeParse(req.body);
+    if (!val.success) {
+      const fields: Record<string, string> = {};
+      val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+      return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+    }
+
+    const { username, email, password, role, organization_id, department_id } = val.data;
+
+    // Check uniqueness against users table directly
+    const [existing] = await sql`
+      SELECT user_id FROM users
+      WHERE (email = ${email} OR username = ${username})
+        AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (existing) return next(new AppError('ERROR_ACCOUNT_EXISTS', 409));
+
+    const password_hash = await bcrypt.hash(password, 12);
+
+    // INSERT directly into users — no auth_users table
+    const [user] = await sql`
+      INSERT INTO users (username, email, password_hash, organization_id, department_id, status)
+      VALUES (
+        ${username}, ${email}, ${password_hash},
+        ${organization_id ?? null}, ${department_id ?? null},
+        'ACTIVE'
+      )
+      RETURNING user_id
+    `;
+
+    // INSERT role-specific subtype record
+    if (role === 'DOCTOR') {
+      await sql`INSERT INTO doctors (user_id) VALUES (${user.user_id})`;
+    } else if (role === 'LAB_TECH') {
+      await sql`INSERT INTO lab_technicians (user_id) VALUES (${user.user_id})`;
+    } else if (role === 'MANAGER') {
+      await sql`INSERT INTO hospital_managers (user_id) VALUES (${user.user_id})`;
+    }
+
+    res.status(201).json({ status: 'success', messageKey: 'SUCCESS_REGISTERED' });
+  }
+);
+
+export const login = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = loginSchema.safeParse(req.body);
+    if (!val.success) {
+      const fields: Record<string, string> = {};
+      val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+      return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+    }
+
+    const { email, password } = val.data;
+
+    // Fetch user with credentials from users table
+    const [user] = await sql`
+      SELECT
+        u.user_id,
+        u.username,
+        u.email,
+        u.password_hash,
+        u.failed_login_count,
+        u.locked_until,
+        u.organization_id,
+        u.preferred_lang,
+        u.status
+      FROM users u
+      WHERE u.email = ${email}
+        AND u.deleted_at IS NULL
+      LIMIT 1
+    `;
+
+    // Enumeration-safe: identical response for wrong email or wrong password
+    const badCredentials = () => next(new AppError('ERROR_INVALID_CREDENTIALS', 401));
+
+    if (!user) return badCredentials();
+
+    // Brute-force lock
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      return next(new AppError('ERROR_ACCOUNT_LOCKED', 423));
+    }
+
+    // Account status check
+    if (user.status !== 'ACTIVE') {
+      return next(new AppError('ERROR_ACCOUNT_INACTIVE', 403));
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash ?? '');
+    if (!isMatch) {
+      const newCount  = (user.failed_login_count ?? 0) + 1;
+      const lockUntil = newCount >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
+      await sql`
+        UPDATE users
+        SET failed_login_count = ${newCount},
+            locked_until       = ${lockUntil}
+        WHERE user_id = ${user.user_id}
+      `;
+      return badCredentials();
+    }
+
+    // Resolve role from subtype table
+    const role = await resolveRole(user.user_id);
+    if (!role) return next(new AppError('ERROR_ACCOUNT_INCOMPLETE', 403));
+
+    // Reset failed login count
+    await sql`
+      UPDATE users
+      SET failed_login_count = 0,
+          locked_until       = NULL,
+          last_login_at      = NOW()
+      WHERE user_id = ${user.user_id}
+    `;
+
+    // Issue tokens
+    const payload: Omit<JwtPayload, 'jti'> = {
+      user_id: user.user_id,
+      org_id:  user.organization_id,
+      role,
+    };
+    const { token: accessToken }    = signAccessToken(payload);
+    const { raw, hash, jwt_token }  = makeRefreshToken(user.user_id);
+
+    await sql`
+      INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
+      VALUES (
+        ${user.user_id},
+        ${hash},
+        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })},
+        ${req.ip ?? null},
+        NOW() + INTERVAL '7 days'
+      )
+    `;
+
+    setRefreshCookie(res, raw);
+
+    res.status(200).json({
+      status:     'success',
+      messageKey: 'SUCCESS_LOGIN',
+      data: {
+        accessToken,
+        user: {
+          user_id:        user.user_id,
+          username:       user.username,
+          email:          user.email,
+          role,
+          org_id:         user.organization_id,
+          preferred_lang: user.preferred_lang,
+        },
+      },
+    });
+  }
+);
+
+export const refresh = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const rawToken: string | undefined = req.cookies?.refreshToken;
+    if (!rawToken) return next(new AppError('ERROR_NO_REFRESH_TOKEN', 401));
+
+    let decoded: { sub: string };
+    try {
+      decoded = jwt.verify(rawToken, process.env.JWT_REFRESH_SECRET!) as { sub: string };
+    } catch {
+      return next(new AppError('ERROR_TOKEN_INVALID', 401));
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const [stored] = await sql`
+      SELECT id, user_id, family, revoked_at, expires_at
+      FROM refresh_tokens
+      WHERE token_hash = ${tokenHash}
+      LIMIT 1
+    `;
+
+    if (!stored) return next(new AppError('ERROR_TOKEN_INVALID', 401));
+
+    // Reuse detection: revoke entire family
+    if (stored.revoked_at) {
+      await sql`
+        UPDATE refresh_tokens SET revoked_at = NOW()
+        WHERE family = ${stored.family}
+      `;
+      return next(new AppError('ERROR_TOKEN_REUSE_DETECTED', 401));
+    }
+
+    if (new Date(stored.expires_at) < new Date()) {
+      return next(new AppError('ERROR_TOKEN_EXPIRED', 401));
+    }
+
+    // Revoke old token
+    await sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ${stored.id}`;
+
+    // Fetch user
+    const [user] = await sql`
+      SELECT user_id, username, email, organization_id, preferred_lang, status
+      FROM users
+      WHERE user_id = ${decoded.sub} AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (!user || user.status !== 'ACTIVE') return next(new AppError('ERROR_USER_NOT_FOUND', 404));
+
+    const role = await resolveRole(user.user_id);
+    if (!role) return next(new AppError('ERROR_ACCOUNT_INCOMPLETE', 403));
+
+    const { token: accessToken }   = signAccessToken({ user_id: user.user_id, org_id: user.organization_id, role });
+    const { raw: newRaw, hash: newHash } = makeRefreshToken(user.user_id);
+
+    await sql`
+      INSERT INTO refresh_tokens (user_id, token_hash, family, device_info, ip_address, expires_at)
+      VALUES (
+        ${user.user_id}, ${newHash}, ${stored.family},
+        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })},
+        ${req.ip ?? null},
+        NOW() + INTERVAL '7 days'
+      )
+    `;
+
+    setRefreshCookie(res, newRaw);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        accessToken,
+        user: {
+          user_id:        user.user_id,
+          username:       user.username,
+          email:          user.email,
+          role,
+          org_id:         user.organization_id,
+          preferred_lang: user.preferred_lang,
+        },
+      },
+    });
+  }
+);
+
+export const logout = catchAsync(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const rawToken: string | undefined = req.cookies?.refreshToken;
+
+    if (rawToken) {
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      await sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ${tokenHash}`;
+    }
+
+    // Blacklist the current access token
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.decode(token) as { jti?: string; exp?: number };
+        if (decoded?.jti && decoded?.exp) {
+          await sql`
+            INSERT INTO token_blacklist (jti, expires_at)
+            VALUES (${decoded.jti}, TO_TIMESTAMP(${decoded.exp}))
+            ON CONFLICT (jti) DO NOTHING
+          `;
+        }
+      } catch { /* ignore */ }
+    }
+
+    res.clearCookie('refreshToken', { path: '/api/auth' });
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_LOGOUT' });
+  }
+);
+
+export const getMe = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const [user] = await sql`
+      SELECT
+        u.user_id, u.username, u.email, u.organization_id,
+        u.department_id, u.preferred_lang, u.status,
+        o.name AS org_name,
+        CASE
+          WHEN d.doctor_id      IS NOT NULL THEN 'DOCTOR'
+          WHEN lt.technician_id IS NOT NULL THEN 'LAB_TECH'
+          WHEN hm.manager_id    IS NOT NULL THEN 'MANAGER'
+          ELSE NULL
+        END AS role
+      FROM users u
+      LEFT JOIN organizations     o  ON o.organization_id = u.organization_id
+      LEFT JOIN doctors            d  ON d.user_id = u.user_id
+      LEFT JOIN lab_technicians    lt ON lt.user_id = u.user_id
+      LEFT JOIN hospital_managers  hm ON hm.user_id = u.user_id
+      WHERE u.user_id = ${req.user!.user_id}
+        AND u.deleted_at IS NULL
+      LIMIT 1
+    `;
+
+    if (!user) return next(new AppError('ERROR_USER_NOT_FOUND', 404));
+
+    res.status(200).json({ status: 'success', data: { user } });
+  }
+);
