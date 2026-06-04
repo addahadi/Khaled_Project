@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { timeAgo } from '@/lib/formatDate';
 
 interface LabStats {
   pending_count: string;
@@ -58,7 +59,7 @@ export default function LabDashboard() {
       },
       onFinal: stopOrders,
     });
-  }, []);
+  }, [startStats, stopStats, startOrders, stopOrders]);
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -138,6 +139,7 @@ export default function LabDashboard() {
                   <TableHead>Test Type</TableHead>
                   <TableHead>Ordered By</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Waiting</TableHead>
                   <TableHead>Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -148,6 +150,14 @@ export default function LabDashboard() {
                     <TableCell>{order.test_type}</TableCell>
                     <TableCell className="text-muted-foreground">{order.ordered_by_name}</TableCell>
                     <TableCell>{statusBadge(order.status)}</TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-medium ${
+                        Date.now() - new Date(order.ordered_at).getTime() > 86_400_000
+                          ? 'text-destructive' : 'text-muted-foreground'
+                      }`}>
+                        {timeAgo(order.ordered_at)}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       {order.status === 'PENDING' ? (
                         <Button size="sm" variant="outline" onClick={() => startOrder(order.test_id)} disabled={startingId === order.test_id}>

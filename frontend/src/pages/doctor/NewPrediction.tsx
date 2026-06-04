@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,13 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Brain, FlaskConical, Activity,
   Loader2, AlertTriangle, CheckCircle2,
-  TrendingUp, Zap,
+  TrendingUp, Zap, Info,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient   from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import UpgradePrompt from '@/components/auth/UpgradePrompt';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Patient {
   patient_id: string; name: string; age: number; gender: string;
@@ -40,16 +41,25 @@ const RISK_CONFIG: Record<string, { color: string; bar: string; icon: React.Elem
   CRITICAL: { color: 'text-red-600',    bar: '[&>div]:bg-red-500',    icon: AlertTriangle },
 };
 
-const MODEL_VERSIONS = ['v2.3.1', 'v2.2.0', 'v2.1.5'];
+const MODEL_VERSIONS = [
+  { value: 'v2.3.1', label: 'Latest (v2.3.1)', description: 'Recommended — best accuracy' },
+  { value: 'v2.2.0', label: 'Stable (v2.2.0)', description: 'Previous release' },
+  { value: 'v2.1.5', label: 'Legacy (v2.1.5)', description: 'For comparison only' },
+];
 
 export default function NewPrediction() {
   const [searchParams]   = useSearchParams();
+  const location          = useLocation();
   const navigate          = useNavigate();
   const { toast }         = useToast();
   const { isLoading: patientsLoading, startLoading, stopLoading } = useDelayedLoading();
 
+  // Read patient_id from either route state (from PatientDetail) or query param
+  const preselectedId = (location.state as { patientId?: string })?.patientId
+    ?? searchParams.get('patient_id') ?? '';
+
   const [patients,      setPatients]      = useState<Patient[]>([]);
-  const [selectedId,    setSelectedId]    = useState(searchParams.get('patient_id') ?? '');
+  const [selectedId,    setSelectedId]    = useState(preselectedId);
   const [modelVersion,  setModelVersion]  = useState('v2.3.1');
   const [submitting,    setSubmitting]    = useState(false);
   const [result,        setResult]        = useState<PredictionResult | null>(null);
@@ -81,18 +91,18 @@ export default function NewPrediction() {
           patient_id:    selectedId,
           model_version: modelVersion,
         }),
+      invalidateKeys: [['doctor', 'predictions'], ['doctor', 'patients']],
       onStart: () => { setSubmitting(true); setResult(null); setOverageWarn(null); },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onSuccess: (data) => {
         const res = data as {
           predictionRequest: PredictionResult;
           overage_warning?:  OverageWarning;
         };
         setResult(res.predictionRequest);
-        // Image 1: show overage badge if isOverage was true on backend
         if (res.overage_warning) setOverageWarn(res.overage_warning);
       },
       onError: ({ message }) => {
-        // Image 1: 402 trial limit → show upgrade prompt
         if (message.toLowerCase().includes('trial') || message.toLowerCase().includes('limit')) {
           setShowUpgrade(true);
         } else {
@@ -117,7 +127,7 @@ export default function NewPrediction() {
         <div>
           <h1 className="text-2xl font-bold">New AI Prediction</h1>
           <p className="text-muted-foreground text-sm">
-            Image 2 — runs Random Forest / XGBoost / NN on clinical + lab data
+            Runs an ensemble AI model on the patient's latest clinical record and lab results.
           </p>
         </div>
       </div>
@@ -167,7 +177,10 @@ export default function NewPrediction() {
               </SelectTrigger>
               <SelectContent>
                 {MODEL_VERSIONS.map(v => (
-                  <SelectItem key={v} value={v}>{v}</SelectItem>
+                  <SelectItem key={v.value} value={v.value}>
+                    <span className="font-medium">{v.label}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{v.description}</span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -211,7 +224,7 @@ export default function NewPrediction() {
         </CardContent>
       </Card>
 
-      {/* ── Result card (Image 2 → show risk score preview) ─────────────────── */}
+      {/* ── Result card ─────────────────── */}
       {result && riskCfg && (
         <Card className={`border-2 ${
           result.risk_level === 'CRITICAL' ? 'border-red-300 bg-red-50 dark:bg-red-950/10'
@@ -225,7 +238,7 @@ export default function NewPrediction() {
                 <RiskIcon className={`h-5 w-5 ${riskCfg.color}`} />
                 Prediction Result
               </CardTitle>
-              {/* Image 1: overage badge */}
+              {/* Overage badge */}
               {overageWarn && (
                 <Badge className="bg-orange-100 text-orange-800 border-orange-200 gap-1 text-xs">
                   <Zap className="h-3 w-3" />
@@ -250,13 +263,27 @@ export default function NewPrediction() {
                 </div>
                 <Progress value={result.risk_score * 100} className={riskCfg.bar} />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Confidence: {Math.round(result.confidence * 100)}%</span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 cursor-help">
+                          Confidence: {Math.round(result.confidence * 100)}%
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                        Model confidence reflects how certain the AI is about its risk
+                        classification, based on the completeness and consistency of input
+                        data. It does not represent the probability of infection.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <span>Model: {result.model_version}</span>
                 </div>
               </div>
             </div>
 
-            {/* Image 1: overage notice message */}
+            {/* Overage notice */}
             {overageWarn && (
               <div className="rounded-lg bg-orange-100 dark:bg-orange-950/20 p-3 text-sm text-orange-800 dark:text-orange-300 flex gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -286,7 +313,7 @@ export default function NewPrediction() {
         </Card>
       )}
 
-      {/* Image 1: trial upgrade prompt */}
+      {/* Trial upgrade prompt */}
       <UpgradePrompt
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}

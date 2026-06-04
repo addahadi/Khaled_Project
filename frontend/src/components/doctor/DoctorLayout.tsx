@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import {
   LayoutDashboard, Users, Brain, FlaskConical,
@@ -18,13 +18,13 @@ import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState, useEffect } from 'react';
-import ApiManager from '@/api/ApiManager';
+import { useAlerts } from '@/contexts/AlertsContext';
 
 const NAV_ITEMS = [
   { title: 'Dashboard',   url: '/doctor/dashboard',         icon: LayoutDashboard },
   { title: 'Patients',    url: '/doctor/patients',          icon: Users },
   { title: 'Predictions', url: '/doctor/predictions',       icon: Brain },
+  { title: 'Alerts',      url: '/doctor/alerts',            icon: Bell },
   { title: 'Profile',     url: '/doctor/profile',           icon: UserCircle },
 ];
 
@@ -33,18 +33,7 @@ function DoctorSidebar() {
   const collapsed  = state === 'collapsed';
   const { user, logout } = useAuth();
   const navigate   = useNavigate();
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    ApiManager.execute({
-      queryKey: ['doctor', 'alerts'],
-      endpoint:  '/doctor/alerts',
-      onSuccess: (d) => {
-        const alerts = (d as { alerts: { is_read: boolean }[] }).alerts;
-        setUnread(alerts.filter(a => !a.is_read).length);
-      },
-    });
-  }, []);
+  const { unreadCount: unread } = useAlerts();
 
   return (
     <Sidebar collapsible="icon">
@@ -68,6 +57,14 @@ function DoctorSidebar() {
                     >
                       <item.icon className="mr-2 h-4 w-4 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
+                      {item.title === 'Alerts' && unread > 0 && (
+                        <Badge 
+                          variant="destructive" 
+                          className="ml-auto text-[10px] h-4 min-w-4 px-1 py-0 flex items-center justify-center"
+                        >
+                          {unread > 9 ? '9+' : unread}
+                        </Badge>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -110,18 +107,7 @@ function DoctorSidebar() {
 
 export function DoctorLayout() {
   const navigate = useNavigate();
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    ApiManager.execute({
-      queryKey: ['doctor', 'alerts'],
-      endpoint:  '/doctor/alerts',
-      onSuccess: (d) => {
-        const alerts = (d as { alerts: { is_read: boolean }[] }).alerts;
-        setUnread(alerts.filter(a => !a.is_read).length);
-      },
-    });
-  }, []);
+  const { unreadCount: unread } = useAlerts();
 
   return (
     <SidebarProvider>
@@ -132,7 +118,8 @@ export function DoctorLayout() {
             <SidebarTrigger />
             <Button
               variant="ghost" size="icon" className="relative"
-              onClick={() => navigate('/doctor/dashboard')}
+              aria-label={`View alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
+              onClick={() => navigate('/doctor/alerts')}
             >
               <Bell className="h-5 w-5" />
               {unread > 0 && (

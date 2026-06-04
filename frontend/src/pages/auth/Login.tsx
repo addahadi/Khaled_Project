@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Activity } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { loginSchema, flattenZodErrors } from '@/api/schemas';
@@ -25,6 +26,7 @@ export default function Login() {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [showPwd,  setShowPwd]  = useState(false);
   const [errors,   setErrors]   = useState<Record<string, string>>({});
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -65,10 +67,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center
                     bg-gradient-to-br from-background to-muted/30 px-4">
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <Activity className="h-6 w-6 text-primary-foreground" />
-          </div>
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <BrandLogo size="md" />
           <span className="text-2xl font-bold">DiagInfect</span>
         </div>
 
@@ -92,13 +92,31 @@ export default function Login() {
 
               <div className="space-y-1">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password" type="password" placeholder="••••••••"
-                  value={password} onChange={e => setPassword(e.target.value)}
-                  className={errors.password ? 'border-destructive' : ''}
-                  required autoComplete="current-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="password" type={showPwd ? 'text' : 'password'} placeholder="••••••••"
+                    value={password} onChange={e => setPassword(e.target.value)}
+                    className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}
+                    required autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd(prev => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPwd ? 'Hide password' : 'Show password'}
+                  >
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                <div className="flex justify-end">
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>

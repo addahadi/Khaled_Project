@@ -14,13 +14,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   ArrowLeft, User, FlaskConical, Brain,
-  Activity, Thermometer, Heart, Plus,
+  Activity, Thermometer, Heart, Plus, Pencil, Trash2,
   AlertTriangle, CheckCircle2, Loader2,
 } from 'lucide-react';
 import ApiManager  from '@/api/ApiManager';
 import apiClient   from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { labOrderSchema, clinicalDataSchema, flattenZodErrors } from '@/api/schemas';
+import { TagInput } from '@/components/ui/tag-input';
+import { formatDate } from '@/lib/formatDate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PatientDetail {
@@ -73,13 +75,16 @@ export default function PatientDetail() {
   const [savingClin,  setSavingClin]  = useState(false);
   const [labErrors,   setLabErrors]   = useState<Record<string, string>>({});
   const [clinErrors,  setClinErrors]  = useState<Record<string, string>>({});
+  const [editingClin, setEditingClin] = useState<ClinicalRecord | null>(null);
+  const [deleteClinId, setDeleteClinId] = useState<string | null>(null);
+  const [deletingClin, setDeletingClin] = useState(false);
 
   // Lab order form
   const [labForm, setLabForm] = useState({ test_type: '', notes: '' });
   // Clinical data form
   const [clinForm, setClinForm] = useState({
     temperature: '', heart_rate: '', spo2: '',
-    bp_sys: '', bp_dia: '', symptoms: '',
+    bp_sys: '', bp_dia: '', symptoms: [] as string[],
   });
 
   useEffect(() => {
@@ -128,37 +133,38 @@ export default function PatientDetail() {
     });
   };
 
-  // ── Submit clinical data ────────────────────────────────────────────────────
+  // ── Submit clinical data (add / edit) ───────────────────────────────────────
   const handleClinicalData = () => {
-    const result = clinicalDataSchema.safeParse({
-      ...clinForm,
-      temperature: clinForm.temperature ? Number(clinForm.temperature) : undefined,
-      heart_rate: clinForm.heart_rate ? Number(clinForm.heart_rate) : undefined,
-      spo2: clinForm.spo2 ? Number(clinForm.spo2) : undefined,
-      bp_sys: clinForm.bp_sys ? Number(clinForm.bp_sys) : undefined,
-      bp_dia: clinForm.bp_dia ? Number(clinForm.bp_dia) : undefined,
-      symptoms: clinForm.symptoms ? clinForm.symptoms.split(',').map(s => s.trim()) : [],
-    });
+    // Validate form values as strings (schema expects strings)
+    const result = clinicalDataSchema.safeParse(clinForm);
     if (!result.success) { setClinErrors(flattenZodErrors(result.error)); return; }
     setClinErrors({});
+
+    // Parse numbers and symptoms after validation passes
+    const toNum = (v: string | undefined) => v ? Number(v) : undefined;
+    const vitals = {
+      temperature: toNum(result.data.temperature),
+      heart_rate: toNum(result.data.heart_rate),
+      spo2: toNum(result.data.spo2),
+      blood_pressure_systolic: toNum(result.data.bp_sys),
+      blood_pressure_diastolic: toNum(result.data.bp_dia),
+    };
+    const symptoms = clinForm.symptoms;
+
+    const isEdit = editingClin !== null;
+    const mutationFn = isEdit
+      ? () => apiClient.patch(`/doctor/clinical-data/${editingClin.data_id}`, { vitals, symptoms })
+      : () => apiClient.post('/doctor/clinical-data', { patient_id: patientId, vitals, symptoms });
+
     ApiManager.executeMutation({
-      mutationFn: () => apiClient.post('/doctor/clinical-data', {
-        patient_id: patientId,
-        vitals: {
-          temperature: result.data.temperature,
-          heart_rate: result.data.heart_rate,
-          spo2: result.data.spo2,
-          blood_pressure_systolic: result.data.bp_sys,
-          blood_pressure_diastolic: result.data.bp_dia,
-        },
-        symptoms: result.data.symptoms,
-      }),
+      mutationFn,
       invalidateKeys: [['doctor', 'patient', patientId!]],
       onStart: () => setSavingClin(true),
       onSuccess: (_d, msg) => {
-        toast({ title: 'Clinical data saved', description: msg });
+        toast({ title: isEdit ? 'Clinical data updated' : 'Clinical data saved', description: msg });
         setClinicOpen(false);
-        setClinForm({ temperature: '', heart_rate: '', spo2: '', bp_sys: '', bp_dia: '', symptoms: '' });
+        setEditingClin(null);
+        setClinForm({ temperature: '', heart_rate: '', spo2: '', bp_sys: '', bp_dia: '', symptoms: [] });
         ApiManager.execute({
           queryKey: ['doctor', 'patient', patientId!],
           endpoint: `/doctor/patients/${patientId}`,
@@ -167,6 +173,27 @@ export default function PatientDetail() {
       },
       onError: ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
       onFinal:  () => setSavingClin(false),
+    });
+  };
+
+  // ── Delete clinical data ────────────────────────────────────────────────────
+  const handleDeleteClinicalData = () => {
+    if (!deleteClinId) return;
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.delete(`/doctor/clinical-data/${deleteClinId}`),
+      invalidateKeys: [['doctor', 'patient', patientId!]],
+      onStart: () => setDeletingClin(true),
+      onSuccess: (_d, msg) => {
+        toast({ title: 'Deleted', description: msg });
+        setDeleteClinId(null);
+        ApiManager.execute({
+          queryKey: ['doctor', 'patient', patientId!],
+          endpoint: `/doctor/patients/${patientId}`,
+          onSuccess: (d) => setPatient((d as { patient: PatientDetail }).patient),
+        });
+      },
+      onError: ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
+      onFinal:  () => setDeletingClin(false),
     });
   };
 
@@ -186,18 +213,22 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Back + header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/doctor/patients')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{patient.name}</h1>
-            <p className="text-muted-foreground text-sm">
-              {patient.age} yrs · {patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}
-            </p>
-          </div>
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <button onClick={() => navigate('/doctor/patients')} className="hover:text-primary transition-colors flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4" /> Patients
+        </button>
+        <span>/</span>
+        <span className="text-foreground font-medium">{patient.name}</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">{patient.name}</h1>
+          <p className="text-muted-foreground text-sm">
+            {patient.age} yrs · {patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => setClinicOpen(true)}>
@@ -207,7 +238,7 @@ export default function PatientDetail() {
             <FlaskConical className="h-4 w-4" /> Order Lab
           </Button>
           <Button size="sm" className="gap-2"
-            onClick={() => navigate(`/doctor/predictions/new?patient_id=${patient.patient_id}`)}>
+            onClick={() => navigate('/doctor/predictions/new', { state: { patientId: patient.patient_id } })}>
             <Brain className="h-4 w-4" /> Run AI Prediction
           </Button>
         </div>
@@ -269,7 +300,7 @@ export default function PatientDetail() {
                 <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium">{patient.name}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Age</span><span className="font-medium">{patient.age}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Gender</span><span className="font-medium">{patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Registered</span><span className="font-medium">{new Date(patient.created_at).toLocaleDateString()}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Registered</span><span className="font-medium">{formatDate(patient.created_at)}</span></div>
               </CardContent>
             </Card>
 
@@ -318,6 +349,28 @@ export default function PatientDetail() {
                   <span className="text-xs text-muted-foreground">
                     {new Date(cd.created_at).toLocaleString()}
                   </span>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => {
+                        setEditingClin(cd);
+                        setClinForm({
+                          temperature: cd.vitals.temperature?.toString() ?? '',
+                          heart_rate: cd.vitals.heart_rate?.toString() ?? '',
+                          spo2: cd.vitals.spo2?.toString() ?? '',
+                          bp_sys: cd.vitals.blood_pressure_systolic?.toString() ?? '',
+                          bp_dia: cd.vitals.blood_pressure_diastolic?.toString() ?? '',
+                          symptoms: Array.isArray(cd.symptoms) ? cd.symptoms : [],
+                        });
+                        setClinErrors({});
+                        setClinicOpen(true);
+                      }}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteClinId(cd.data_id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid sm:grid-cols-4 gap-3 text-sm mb-3">
                   {cd.vitals.temperature     && <div><span className="text-muted-foreground">Temp: </span><strong>{cd.vitals.temperature}°C</strong></div>}
@@ -329,13 +382,16 @@ export default function PatientDetail() {
                     </div>
                   )}
                 </div>
-                {cd.symptoms.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {cd.symptoms.map(s => (
-                      <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const sx = Array.isArray(cd.symptoms) ? cd.symptoms : [];
+                  return sx.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {sx.map(s => (
+                        <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
               </CardContent>
             </Card>
           ))}
@@ -358,7 +414,7 @@ export default function PatientDetail() {
                   <p className="font-medium text-sm">{lt.test_type}</p>
                   {lt.notes && <p className="text-xs text-muted-foreground mt-0.5">{lt.notes}</p>}
                   <p className="text-xs text-muted-foreground mt-1">
-                    Ordered {new Date(lt.ordered_at).toLocaleDateString()}
+                    Ordered {formatDate(lt.ordered_at)}
                   </p>
                 </div>
                 <Badge className={`text-xs ${LAB_STATUS[lt.status] ?? ''}`}>{lt.status}</Badge>
@@ -438,10 +494,10 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Clinical Data Dialog ─────────────────────────────────────────────── */}
-      <Dialog open={clinicOpen} onOpenChange={setClinicOpen}>
+      {/* ── Clinical Data Dialog (Add / Edit) ──────────────────────────────────── */}
+      <Dialog open={clinicOpen} onOpenChange={(open) => { if (!open) { setEditingClin(null); setClinErrors({}); } setClinicOpen(open); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Record Clinical Data</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingClin ? 'Edit Clinical Data' : 'Record Clinical Data'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -460,10 +516,13 @@ export default function PatientDetail() {
               ))}
             </div>
             <div className="space-y-1">
-              <Label>Symptoms <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-              <Input placeholder="fever, cough, fatigue"
+              <Label>Symptoms</Label>
+              <TagInput
                 value={clinForm.symptoms}
-                onChange={e => setClinForm(p => ({ ...p, symptoms: e.target.value }))} />
+                onChange={(tags) => setClinForm(p => ({ ...p, symptoms: tags }))}
+                placeholder="Type a symptom (e.g. Fever)…"
+              />
+              <p className="text-xs text-muted-foreground">Press Enter or comma to add. Suggestions appear as you type.</p>
             </div>
           </div>
           <DialogFooter>
@@ -471,6 +530,27 @@ export default function PatientDetail() {
             <Button onClick={handleClinicalData} disabled={savingClin} className="gap-2">
               {savingClin && <Loader2 className="h-4 w-4 animate-spin" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Clinical Data Confirmation ─────────────────────────────────── */}
+      <Dialog open={deleteClinId !== null} onOpenChange={(open) => { if (!open) setDeleteClinId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete Clinical Data</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Deleting this record will remove it from AI prediction inputs. Any future predictions
+            for <strong>{patient.name}</strong> will no longer include this clinical snapshot.
+          </p>
+          <p className="text-sm text-destructive font-medium mt-2">
+            This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteClinId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteClinicalData} disabled={deletingClin} className="gap-2">
+              {deletingClin && <Loader2 className="h-4 w-4 animate-spin" />}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

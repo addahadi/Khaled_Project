@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DiagInfect — UX/Ergonomic Audit Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+  :root {
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --surface-2: #f0efec;
+    --border: #e2e0da;
+    --text: #1a1916;
+    --text-muted: #6b6860;
+    --critical: #c0392b;
+    --critical-bg: #fdf3f2;
+    --critical-border: #f5c6c2;
+    --high: #d35400;
+    --high-bg: #fef5ee;
+    --high-border: #fad5bb;
+    --moderate: #b8860b;
+    --moderate-bg: #fefce8;
+    --moderate-border: #fde68a;
+    --good: #1a7a4a;
+    --good-bg: #f0fdf6;
+    --good-border: #a7f3d0;
+    --accent: #1d3557;
+    --accent-light: #e8edf5;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .wrapper { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+
+  /* ── Header ── */
+  .report-header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    align-items: start;
+    padding: 40px;
+    background: var(--accent);
+    color: white;
+    border-radius: 16px;
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .report-header::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -60px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+  .report-header::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; right: 100px;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.03);
+  }
+  .header-logo {
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+  }
+  .header-meta { position: relative; z-index: 1; }
+  .header-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin-bottom: 6px;
+  }
+  .header-title { font-size: 32px; font-weight: 700; line-height: 1.15; margin-bottom: 12px; }
+  .header-title span { opacity: 0.6; font-weight: 300; }
+  .header-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .header-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 99px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Table of Contents ── */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .toc-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 32px; }
+  .toc-list li a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .toc-list li a:hover { border-bottom-color: var(--accent); }
+  .toc-num { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-width: 24px; }
+
+  /* ── Section Headings ── */
+  .section { margin-bottom: 56px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--border);
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .section-title { font-size: 22px; font-weight: 700; }
+
+  /* ── Page Card ── */
+  .page-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .page-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .page-name { font-weight: 700; font-size: 16px; }
+  .page-path {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .page-body { padding: 24px; }
+  .page-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  /* ── Block: good / issue ── */
+  .block { margin-bottom: 12px; }
+  .block-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .block-label .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-good { background: var(--good); }
+  .dot-issue { background: #9b59b6; }
+
+  .good-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--good-bg);
+    border: 1px solid var(--good-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .good-item .check { color: var(--good); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  .issue-item {
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .issue-problem {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #faf9f7;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.5;
+  }
+  .issue-problem .x { color: #9b59b6; flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+  .issue-fix {
+    padding: 10px 14px;
+    background: var(--accent-light);
+    line-height: 1.5;
+  }
+  .fix-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  /* ── Severity Cards ── */
+  .severity-grid { display: flex; flex-direction: column; gap: 20px; }
+  .severity-card {
+    border-radius: 12px;
+    border: 1.5px solid;
+    overflow: hidden;
+  }
+  .severity-card.critical { border-color: var(--critical-border); }
+  .severity-card.high     { border-color: var(--high-border); }
+  .severity-card.moderate { border-color: var(--moderate-border); }
+
+  .severity-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+  .severity-card.critical .severity-header { background: var(--critical-bg); color: var(--critical); }
+  .severity-card.high     .severity-header { background: var(--high-bg);     color: var(--high); }
+  .severity-card.moderate .severity-header { background: var(--moderate-bg); color: var(--moderate); }
+
+  .severity-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .critical .severity-pill { background: var(--critical); color: white; }
+  .high .severity-pill     { background: var(--high); color: white; }
+  .moderate .severity-pill { background: var(--moderate); color: white; }
+
+  .severity-items { background: var(--surface); padding: 6px; }
+  .sev-item {
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    background: white;
+  }
+  .sev-item:last-child { margin-bottom: 0; }
+  .sev-item-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .sev-source {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .sev-item-desc { font-size: 14px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.55; }
+  .sev-item-rec {
+    font-size: 13.5px;
+    padding: 10px 14px;
+    border-radius: 7px;
+    line-height: 1.55;
+  }
+  .critical .sev-item-rec { background: var(--critical-bg); border-left: 3px solid var(--critical); }
+  .high     .sev-item-rec { background: var(--high-bg);     border-left: 3px solid var(--high); }
+  .moderate .sev-item-rec { background: var(--moderate-bg); border-left: 3px solid var(--moderate); }
+  .rec-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .critical .rec-label { color: var(--critical); }
+  .high     .rec-label { color: var(--high); }
+  .moderate .rec-label { color: var(--moderate); }
+
+  /* ── Missing Criteria ── */
+  .missing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .missing-card {
+    padding: 20px;
+    border-radius: 10px;
+    border: 1.5px solid;
+  }
+  .missing-card.critical { background: var(--critical-bg); border-color: var(--critical-border); }
+  .missing-card.high     { background: var(--high-bg);     border-color: var(--high-border); }
+  .missing-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .missing-card.critical .missing-title { color: var(--critical); }
+  .missing-card.high     .missing-title { color: var(--high); }
+  .missing-desc { font-size: 13.5px; line-height: 1.55; color: var(--text-muted); margin-bottom: 10px; }
+  .missing-rec  { font-size: 13px; line-height: 1.5; font-style: italic; }
+  .missing-card.critical .missing-rec { color: var(--critical); }
+  .missing-card.high     .missing-rec { color: var(--high); }
+
+  /* ── Code spans ── */
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* ── Summary table ── */
+  .summary-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .summary-table th {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-muted);
+  }
+  .summary-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .summary-table tbody tr:hover { background: var(--surface-2); }
+  .pill {
+    display: inline-flex; align-items: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 99px; letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .pill-crit { background: var(--critical); color: white; }
+  .pill-high { background: var(--high); color: white; }
+  .pill-mod  { background: var(--moderate); color: white; }
+  .pill-good { background: var(--good); color: white; }
+
+  /* ── Footer ── */
+  .report-footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+    font-family: var(--mono);
+    letter-spacing: 0.5px;
+  }
+
+  @media (max-width: 720px) {
+    .page-cols { grid-template-columns: 1fr; }
+    .missing-grid { grid-template-columns: 1fr; }
+    .toc-list { grid-template-columns: 1fr; }
+    .report-header { grid-template-columns: 1fr; }
+    .header-logo { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header class="report-header">
+    <div class="header-logo">🏥</div>
+    <div class="header-meta">
+      <div class="header-label">UI/UX &amp; Ergonomic Audit Report</div>
+      <h1 class="header-title">DiagInfect <span>— Clinical AI Platform</span></h1>
+      <p style="opacity:0.75;font-size:14px;line-height:1.55;max-width:560px;">
+        Full-spectrum ergonomic analysis based on Nielsen's 10 Usability Heuristics,
+        Bastien &amp; Scapin's Ergonomic Criteria, and ISO 9241.
+        Covers all screens, user flows, and interaction patterns.
+      </p>
+      <div class="header-badges">
+        <span class="header-badge">React + TypeScript</span>
+        <span class="header-badge">3 User Roles</span>
+        <span class="header-badge">12 Pages Audited</span>
+        <span class="header-badge">June 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- QUICK-REFERENCE SUMMARY TABLE -->
+  <div class="page-card" style="margin-bottom:48px;">
+    <div class="page-card-header">
+      <span class="page-name">Executive Summary — Issue Tally</span>
+    </div>
+    <div style="padding:8px 8px 8px;">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Page / Area</th>
+            <th>Critical</th>
+            <th>High</th>
+            <th>Moderate</th>
+            <th>Key Theme</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Login</td><td><span class="pill pill-crit">1</span></td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">1</span></td><td>Missing auth affordances</td></tr>
+          <tr><td>Register Organization</td><td>—</td><td><span class="pill pill-high">3</span></td><td><span class="pill pill-mod">2</span></td><td>Password safety &amp; step accessibility</td></tr>
+          <tr><td>Doctor Dashboard</td><td><span class="pill pill-crit">2</span></td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">2</span></td><td>Alert navigation broken, sub-pixel touch targets</td></tr>
+          <tr><td>Patients List</td><td>—</td><td><span class="pill pill-high">1</span></td><td><span class="pill pill-mod">3</span></td><td>No sort, no export, color-only risk</td></tr>
+          <tr><td>Patient Detail</td><td><span class="pill pill-crit">2</span></td><td><span class="pill pill-high">3</span></td><td><span class="pill pill-mod">2</span></td><td>Symptom UX, delete without upstream warning</td></tr>
+          <tr><td>New Prediction</td><td><span class="pill pill-crit">1</span></td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">2</span></td><td>Dev comment in UI, model version exposes engineering detail</td></tr>
+          <tr><td>Prediction History</td><td>—</td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">3</span></td><td>XAI jargon, no date filter, tiny bar charts</td></tr>
+          <tr><td>Lab Dashboard</td><td>—</td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">2</span></td><td>Priority ordering absent, no age/urgency cues</td></tr>
+          <tr><td>Lab Orders</td><td><span class="pill pill-crit">1</span></td><td><span class="pill pill-high">1</span></td><td><span class="pill pill-mod">2</span></td><td>Dual contradictory actions on PENDING</td></tr>
+          <tr><td>Enter Results</td><td>—</td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">3</span></td><td>No test templates, jargon in labels</td></tr>
+          <tr><td>Manager Dashboard</td><td>—</td><td><span class="pill pill-high">1</span></td><td><span class="pill pill-mod">2</span></td><td>Custom bar charts lack ARIA</td></tr>
+          <tr><td>Staff Management</td><td><span class="pill pill-crit">1</span></td><td><span class="pill pill-high">2</span></td><td><span class="pill pill-mod">1</span></td><td>Irreversible status changes with no confirmation</td></tr>
+          <tr><td>Subscription</td><td>—</td><td><span class="pill pill-high">1</span></td><td><span class="pill pill-mod">2</span></td><td>Plan switch dialog missing pricing comparison</td></tr>
+          <tr><td>Shared / Global</td><td><span class="pill pill-crit">2</span></td><td><span class="pill pill-high">3</span></td><td><span class="pill pill-mod">3</span></td><td>Double API calls, color-only coding, no session timeout</td></tr>
+          <tr style="background:var(--surface-2);font-weight:700;">
+            <td>Totals</td>
+            <td><span class="pill pill-crit">10 Critical</span></td>
+            <td><span class="pill pill-high">27 High</span></td>
+            <td><span class="pill pill-mod">30 Moderate</span></td>
+            <td>67 issues total</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <ol class="toc-list">
+      <li><a href="#s1"><span class="toc-num">01</span> Authentication (Login / Register / Activate)</a></li>
+      <li><a href="#s2"><span class="toc-num">02</span> Doctor — Dashboard</a></li>
+      <li><a href="#s3"><span class="toc-num">03</span> Doctor — Patients List</a></li>
+      <li><a href="#s4"><span class="toc-num">04</span> Doctor — Patient Detail</a></li>
+      <li><a href="#s5"><span class="toc-num">05</span> Doctor — New Prediction</a></li>
+      <li><a href="#s6"><span class="toc-num">06</span> Doctor — Prediction History</a></li>
+      <li><a href="#s7"><span class="toc-num">07</span> Lab — Dashboard &amp; Orders</a></li>
+      <li><a href="#s8"><span class="toc-num">08</span> Lab — Enter Results</a></li>
+      <li><a href="#s9"><span class="toc-num">09</span> Manager — Dashboard &amp; Staff</a></li>
+      <li><a href="#s10"><span class="toc-num">10</span> Manager — Subscription</a></li>
+      <li><a href="#s11"><span class="toc-num">11</span> Missing Ergonomic Criteria</a></li>
+      <li><a href="#s12"><span class="toc-num">12</span> Flow &amp; Friction Analysis</a></li>
+    </ol>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SECTION 1: PAGE-BY-PAGE BREAKDOWN                        -->
+  <!-- ════════════════════════════════════════════════════════ -->
+
+  <!-- AUTH PAGES -->
+  <section class="section" id="s1">
+    <div class="section-header">
+      <span class="section-num">Section 1.1</span>
+      <h2 class="section-title">Authentication — Login, Register, Activate</h2>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Login Page</span>
+        <span class="page-path">src/pages/auth/Login.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Client-side Zod validation fires before the API call, providing immediate inline error messages per field — satisfies Bastien &amp; Scapin's "Error Management" criterion.</div>
+            <div class="good-item"><span class="check">✓</span> <code>autoComplete="email"</code> and <code>autoComplete="current-password"</code> are correctly set, leveraging browser password managers and reducing manual entry burden.</div>
+            <div class="good-item"><span class="check">✓</span> The submit button is disabled with a spinner during the API call — clear system status feedback (Nielsen Heuristic #1).</div>
+            <div class="good-item"><span class="check">✓</span> Role-aware post-login redirect via <code>DASHBOARD</code> map prevents users from ever landing on the wrong portal.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No password visibility toggle.</strong> The <code>type="password"</code> field provides no eye icon. Clinical users often type complex passwords; masking with no reveal option increases login failure rate.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add an <code>&lt;Eye/EyeOff&gt;</code> icon button inside the input's right padding (using absolute positioning) that toggles <code>type</code> between <code>"password"</code> and <code>"text"</code>. Mark it <code>aria-label="Show password"</code>.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No "Forgot Password" link.</strong> This is a critical missing affordance. Clinical staff who rotate passwords frequently will hit this wall.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a "Forgot password?" link under the password field, right-aligned, that navigates to a <code>/forgot-password</code> flow. This is the most-expected pattern per iOS HIG &amp; Material Design guidelines.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Generic <code>Activity</code> icon as app logo.</strong> The branding uses a generic activity/heartbeat icon that carries no clinical-diagnostic meaning. For a disease-diagnosis platform, this creates weak brand recall.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Use a compound icon (e.g., a microscope + brain outline or a stylized pathogen) that communicates both laboratory and AI aspects. Alternatively, a text wordmark in a medical typeface creates stronger recall.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Register Organization — Multi-Step Wizard</span>
+        <span class="page-path">src/pages/auth/RegisterOrganization.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Step indicator with completed state (green checkmark), active state (primary colour), and inactive state (muted) provides strong orientation — excellent application of Bastien &amp; Scapin's "Guidance" criterion.</div>
+            <div class="good-item"><span class="check">✓</span> Per-step Zod validation prevents users from progressing with invalid data, enforcing progressive disclosure correctly.</div>
+            <div class="good-item"><span class="check">✓</span> Plans are lazily loaded only when step 3 is reached — efficient use of network resources.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Step labels hidden on mobile</strong> via <code>hidden sm:block</code>. On a 375px phone the step indicator shows only numbered circles with no textual context. A user at step 2 has no hint that the next step is "Choose Plan."</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Below the numbered circles, show the <em>current</em> step label always: <code>"Step 2 of 3 — Organization Details"</code>. This single line costs 20px of height and entirely resolves mobile orientation loss.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No password strength meter.</strong> The password field in Step 1 accepts any string that passes Zod's minimum length. Clinical platform accounts may hold PHI — a strength indicator is both a security and trust signal.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a 4-segment progress bar beneath the password field with labels: Weak / Fair / Strong / Very Strong, driven by entropy estimation (e.g., zxcvbn library). Show it only after the first keystroke.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Plan selection has no loading skeleton for step 3.</strong> Plans are fetched asynchronously when entering step 3, but there is no loading state; the card area is blank until data arrives.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Render 3 <code>&lt;Skeleton&gt;</code> plan-card placeholders while <code>plans.length === 0</code> and the fetch is in flight, identical to the skeleton patterns used elsewhere in the app for consistency.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOCTOR DASHBOARD -->
+  <section class="section" id="s2">
+    <div class="section-header">
+      <span class="section-num">Section 1.2</span>
+      <h2 class="section-title">Doctor — Dashboard</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Doctor Dashboard</span>
+        <span class="page-path">src/pages/doctor/Dashboard.tsx + DoctorLayout.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> 4-card KPI grid with individual loading skeletons — each stat loads independently without blocking the whole view. Excellent granularity.</div>
+            <div class="good-item"><span class="check">✓</span> <code>RISK_STYLE</code> color map is applied consistently across the dashboard, patient cards, and prediction rows — strong visual consistency (ISO 9241-11: Consistency).</div>
+            <div class="good-item"><span class="check">✓</span> The empty-state for no patients renders a contextual CTA ("Register one") rather than a dead-end message — excellent error recovery guidance.</div>
+            <div class="good-item"><span class="check">✓</span> Unread alert count badge on the sidebar-Bell and in the Alerts section title gives dual-channel notification.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — Bell notification button navigates to <code>/doctor/dashboard</code>, not to Alerts.</strong> In <code>DoctorLayout.tsx</code>: <code>onClick={() =&gt; navigate('/doctor/dashboard')}</code>. A user on the Patients page sees 5 unread alerts, clicks the bell, and is taken to… the same dashboard, not to an alerts detail view. This violates the "Match between System and Real World" heuristic — a bell universally means "show me my notifications."</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Navigate to <code>/doctor/alerts</code> (create a dedicated alerts page) or anchor to the alerts section: <code>navigate('/doctor/dashboard', { state: { scrollTo: 'alerts' } })</code>. The dedicated page is strongly preferred for scalability.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — "Mark as read" button is 16×16px (h-4 w-4).</strong> The blue dot button that marks an alert as read is a standalone interactive element of only 16×16px. WCAG 2.5.5 requires a minimum 44×44px touch target. On a tablet this is nearly impossible to tap accurately in a clinical environment.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Replace the dot with a labeled button: <code>&lt;Button variant="ghost" size="sm" onClick={() =&gt; markRead(a.alert_id)}&gt;Mark read&lt;/Button&gt;</code>. This gives a 36–44px touch target and is self-describing.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Duplicate API calls on every layout mount.</strong> Both <code>DoctorSidebar</code> and <code>DoctorLayout</code> independently call <code>/doctor/alerts</code> via <code>ApiManager.execute</code> on mount. This fires two identical requests every time the layout renders.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Lift the alerts state to a shared context (e.g., extend <code>AuthContext</code> or create an <code>AlertsContext</code>) so the count is fetched once, shared across both consumers, and updated reactively when <code>markRead</code> is called.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Prediction cards navigate to the general list, not the detail.</strong> Clicking a recent prediction card calls <code>navigate('/doctor/predictions')</code> — it drops the user at the list, requiring an additional click to find the specific item.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Navigate directly to the specific prediction: <code>navigate(\`/doctor/predictions/${pr.request_id}\`)</code>. The <code>PredictionHistory</code> component already has an <code>openDetail</code> mechanism for this.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PATIENTS LIST -->
+  <section class="section" id="s3">
+    <div class="section-header">
+      <span class="section-num">Section 1.3</span>
+      <h2 class="section-title">Doctor — Patients List</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Patients List</span>
+        <span class="page-path">src/pages/doctor/Patients.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Dual-mode filtering: text search + risk-level toggle buttons. Both work simultaneously and reset independently — excellent flexibility.</div>
+            <div class="good-item"><span class="check">✓</span> Three empty-state variations (loading, no results for search, genuinely empty list) each with contextual CTAs. No dead-end states.</div>
+            <div class="good-item"><span class="check">✓</span> Risk score percentage shown alongside the badge gives clinicians a quantitative anchor alongside the categorical label.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No column sorting.</strong> The patient grid has no sort-by-name, sort-by-risk, or sort-by-date capability. A doctor with 200 patients who wants to triage the most recently added cannot do so.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a sort dropdown (or heading-click-to-sort if switching to a list layout): "Sort by: Name A–Z | Risk: Highest First | Recently Added". Client-side sort on the <code>patients</code> array before rendering <code>filtered</code>.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Risk classification is color-coded only.</strong> CRITICAL, HIGH, MODERATE, LOW are differentiated only by background color. For users with deuteranopia (red-green color blindness), CRITICAL red and MODERATE amber look identical.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a unique prefix icon to each risk badge: CRITICAL → <code>&lt;AlertTriangle&gt;</code>, HIGH → <code>&lt;TrendingUp&gt;</code>, MODERATE → <code>&lt;Minus&gt;</code>, LOW → <code>&lt;CheckCircle2&gt;</code>. The icon provides a redundant visual cue that is color-agnostic.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Patient registration form collects only Name, Age, Gender.</strong> The <code>medical_history</code> field exists in the backend schema and patient detail view, but registration never populates it. Doctors must navigate back to add this data separately.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add an optional "Medical History" text area (or tag-input for conditions) to the registration dialog under a "Advanced (optional)" collapsible section. Pre-filling this at registration reduces the number of follow-up steps.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PATIENT DETAIL -->
+  <section class="section" id="s4">
+    <div class="section-header">
+      <span class="section-num">Section 1.4</span>
+      <h2 class="section-title">Doctor — Patient Detail</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Patient Detail</span>
+        <span class="page-path">src/pages/doctor/PatientDetail.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Tab-based layout (Overview / Clinical / Lab / Predictions) cleanly partitions high-density data without nesting. Badge counts in tab labels aid rapid triage.</div>
+            <div class="good-item"><span class="check">✓</span> Risk banner with left color-border (border-l-4) is prominent and non-intrusive — it's visible without dominating the page.</div>
+            <div class="good-item"><span class="check">✓</span> Edit and delete actions on clinical records are contextual (per-card), not global — limiting the blast radius of accidental clicks.</div>
+            <div class="good-item"><span class="check">✓</span> Lab order dialog pre-focuses on the test-type field by default (first focusable element), enabling fast keyboard-first entry.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — Symptoms field uses a raw comma-separated text input.</strong> Clinical symptoms are unstructured free text: <code>placeholder="fever, cough, fatigue"</code>. Users can enter "Fever", "fever", "FEVER" — all as separate values. This pollutes AI training data and makes symptom trends impossible to track.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Replace with a tag-input component backed by a curated symptom list (combobox). Show autocomplete suggestions from a predefined clinical vocabulary (ICD-10 symptoms, or a curated list of 50–100 common infectious disease symptoms). Still allow free-text additions as a fallback.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — Deleting clinical data has no upstream impact warning.</strong> The confirmation dialog reads "This action cannot be undone" but says nothing about the fact that deleting vitals data will affect the quality (or possibility) of future AI predictions for this patient.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Extend the confirmation dialog: <em>"Deleting this record will remove it from AI prediction inputs. Any future predictions for [Patient Name] will no longer include this clinical snapshot. This cannot be undone."</em> This satisfies ISO 9241-110's "Error Tolerance" principle.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Lab test type is a free-text field.</strong> <code>placeholder="e.g. CBC, Blood Culture, Urinalysis"</code>. A doctor might type "cbc", "CBC", "Complete Blood Count" — all referring to the same test. Lab technicians then see inconsistent test names.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Replace with a <code>&lt;Select&gt;</code> or combobox populated with standardized test names from a <code>/lab/test-types</code> endpoint. Allow custom entry only as a last resort, with a warning: "Custom test types may not be recognized by the AI prediction model."</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No breadcrumb navigation.</strong> On mobile, the back-arrow returns to <code>/doctor/patients</code> only. If the user arrived from Dashboard's "recent patients" list, the back arrow still goes to the patients list, not the dashboard. There's no breadcrumb like "Dashboard → Patients → Ahmed Benali."</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a breadcrumb bar: <code>Patients / {patient.name}</code>. The "Patients" segment links to the list. This costs one line of JSX and solves navigation orientation completely.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEW PREDICTION -->
+  <section class="section" id="s5">
+    <div class="section-header">
+      <span class="section-num">Section 1.5</span>
+      <h2 class="section-title">Doctor — New Prediction</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">New AI Prediction</span>
+        <span class="page-path">src/pages/doctor/NewPrediction.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> The "Data used for prediction" summary card contextualizes the AI's inputs before the doctor submits — builds trust and transparency (XAI principle).</div>
+            <div class="good-item"><span class="check">✓</span> Risk result card uses dynamic colour border + background tinting (e.g., <code>border-red-300 bg-red-50</code>) that scales from LOW to CRITICAL — excellent progressive urgency feedback.</div>
+            <div class="good-item"><span class="check">✓</span> Overage warning is surfaced both as a badge and as an inline message box — dual-channel notification for a billing-sensitive event.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — Developer annotation leaked into production UI.</strong> The page subtitle reads: <em>"Image 2 — runs Random Forest / XGBoost / NN on clinical + lab data"</em>. This is a developer comment that was never removed. It directly violates Nielsen's Aesthetic and Minimalist Design heuristic and destroys clinical credibility.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Replace with a clinically meaningful subtitle: <em>"Runs an ensemble AI model on the patient's latest clinical record and completed lab results."</em> Audit all pages for similar inline annotations.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Model Version selector exposes engineering internals to clinicians.</strong> A doctor has no clinical basis for choosing between v2.3.1, v2.2.0, and v2.1.5. Showing version numbers creates decision paralysis and forces meaningless choices.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Default to the latest model silently. If version selection is required for audit trails, remove it from the doctor's UI and let it be a manager/admin setting. If doctors <em>must</em> see it, label it as <em>"Recommended (latest)" / "Previous version"</em> with a changelog tooltip.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>"Confidence" percentage is unexplained for clinicians.</strong> The result card shows "Confidence: 87%" with no tooltip explaining what this means. A doctor might interpret this as "87% certainty the patient has an infection" rather than its actual meaning (model confidence in its own classification).</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add an info icon (<code>InfoCircle</code>) next to the Confidence label with a tooltip: <em>"Model confidence reflects how certain the AI is about its risk classification, based on the completeness and consistency of input data. It does not represent the probability of infection."</em></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PREDICTION HISTORY -->
+  <section class="section" id="s6">
+    <div class="section-header">
+      <span class="section-num">Section 1.6</span>
+      <h2 class="section-title">Doctor — Prediction History</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Prediction History + XAI Sheet</span>
+        <span class="page-path">src/pages/doctor/PredictionHistory.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Summary stat tiles at the top are clickable filters — tapping "3 CRITICAL" immediately filters the list to CRITICAL only. Excellent direct manipulation.</div>
+            <div class="good-item"><span class="check">✓</span> XAI feature explanations are surfaced in a side-sheet rather than a navigation away, preserving context and enabling quick review-and-return.</div>
+            <div class="good-item"><span class="check">✓</span> Feature direction (↑ increases risk / ↓ decreases risk) uses both an arrow symbol AND red/green color coding — redundant encoding that is partially color-blind safe.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>XAI feature names are raw backend identifiers.</strong> Features like <code>temperature</code>, <code>heart_rate</code>, <code>wbc_count</code> appear as-is. While these are readable, more complex names from ML feature engineering (e.g., <code>crp_log_transformed</code>, <code>neutrophil_lymphocyte_ratio</code>) would be opaque to most clinicians.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Maintain a frontend label map (similar to the existing <code>FEATURE_LABELS</code> in <code>Subscription.tsx</code>) that translates feature identifiers to human-readable clinical names. Example: <code>"neutrophil_lymphocyte_ratio" → "Neutrophil-to-Lymphocyte Ratio (NLR)"</code>. Add brief clinical context on hover.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Contribution bars are 1.5px tall (h-1.5).</strong> The XAI bar charts are 6px tall and 96px wide. They are functionally invisible at arm's length and inaccessible to screen readers (no ARIA roles, no text alternative for the bar value).</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Increase bars to at least <code>h-3</code> (12px). Add <code>role="meter"</code>, <code>aria-valuenow</code>, <code>aria-valuemin="0"</code>, <code>aria-valuemax="100"</code> attributes. Consider using a horizontal bar label with the percentage text always visible rather than only on hover.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No date-range filter.</strong> Doctors reviewing trends cannot filter predictions to "this week" or "last 30 days." The only filter is by risk level.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a date-range picker (from/to or quick selections: "Today / Last 7 Days / This Month / All Time") that filters the <code>predictions</code> array client-side. This is a high-frequency clinical workflow for progress monitoring.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LAB -->
+  <section class="section" id="s7">
+    <div class="section-header">
+      <span class="section-num">Section 1.7</span>
+      <h2 class="section-title">Lab — Dashboard &amp; Orders</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Lab Dashboard + Lab Orders</span>
+        <span class="page-path">src/pages/lab/LabDashboard.tsx + LabOrders.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Dashboard shows "Completed Today" and "Total Completed" as separate stats — reflects the lab tech's actual daily mental model (shift-based work).</div>
+            <div class="good-item"><span class="check">✓</span> Inline Start → Enter Results action flow in the dashboard table eliminates the need to navigate to a separate page for workflow initiation.</div>
+            <div class="good-item"><span class="check">✓</span> Search in LabOrders.tsx searches by both patient name AND test type — covering both primary lookup methods a lab tech uses.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — PENDING orders show both "Start" AND "Enter Results" simultaneously in LabOrders.tsx.</strong> The condition <code>(o.status === 'INPROGRESS' || o.status === 'PENDING')</code> renders "Enter Results" for PENDING orders, while a separate condition also renders "Start". A PENDING order shows two competing CTAs with no guidance on which to use first.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Apply a strict state machine: PENDING → only show "Start". INPROGRESS → only show "Enter Results". Remove the OR condition. Optionally, combine them as a single "Begin Test" button that starts AND navigates to entry in one action.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No urgency/age indicators on pending orders.</strong> The orders table shows the order date but no indication of how long it has been pending. A 3-hour-old STAT order looks identical to a routine order placed yesterday.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a relative time column ("2h ago / 3 days ago") using a library like <code>date-fns/formatDistanceToNow</code>. Highlight orders older than N hours with an amber badge "Overdue". Sort PENDING by age ascending by default (oldest first = most urgent).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ENTER RESULTS -->
+  <section class="section" id="s8">
+    <div class="section-header">
+      <span class="section-num">Section 1.8</span>
+      <h2 class="section-title">Lab — Enter Results</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Enter Lab Results</span>
+        <span class="page-path">src/pages/lab/EnterResults.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Auto-computed flag ("Server-computed") with a blue "auto" label is a superb UX pattern — it reduces manual work and prevents human error in classification while remaining transparent.</div>
+            <div class="good-item"><span class="check">✓</span> Completed orders are rendered in full disabled read-only state rather than a separate page — lab techs can review results in context without extra navigation.</div>
+            <div class="good-item"><span class="check">✓</span> Row removal is protected: "Remove" button only appears when <code>rows.length &gt; 1</code>, preventing the user from accidentally emptying all entries.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No test templates or presets.</strong> For a CBC, a lab tech must manually add 8–15 analyte rows one by one. There are no templates. This is the highest-friction workflow in the entire application for the lab role.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a "Load Template" button that pre-populates rows with standard analytes for the test type. Templates could be managed by the manager, or built-in for common tests (CBC: WBC, RBC, HGB, HCT, PLT, MCV, MCH, MCHC). This single feature could reduce lab entry time by 60–80%.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>"Panel Group" label is technical jargon.</strong> The <code>sub_panel</code> field is labeled "Panel Group" with a placeholder <code>"e.g. CBC_DIFF"</code>. The underscore-separated all-caps format is an internal database convention, not clinical vocabulary.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Label it "Test Group (optional)" with placeholder <code>"e.g. Differential, Electrolytes"</code>. Use human-readable values that map to the backend's expected format, or accept any grouping string and let the server normalize it.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No in-row validation feedback during entry.</strong> Validation errors appear as a toast notification plus inline errors, but only after clicking Submit. A lab tech entering 12 analytes won't discover a missing field until they've completed everything.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Apply per-row <code>onBlur</code> validation using the Zod row schema. Mark each row's required fields with a red border immediately on blur. This provides instant feedback per field rather than a batch error at submission.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MANAGER -->
+  <section class="section" id="s9">
+    <div class="section-header">
+      <span class="section-num">Section 1.9</span>
+      <h2 class="section-title">Manager — Dashboard &amp; Staff</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Manager Dashboard + Staff Management</span>
+        <span class="page-path">src/pages/manager/ManagerDashboard.tsx + Staff.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Risk distribution bars on the dashboard update dynamically from real prediction data, giving managers a live quality-of-care signal.</div>
+            <div class="good-item"><span class="check">✓</span> Usage progress bar turns destructive red at 85% threshold — proactive notification before hitting the limit, not after.</div>
+            <div class="good-item"><span class="check">✓</span> Staff table provides role-colour badges AND status-colour badges simultaneously — allows scanning for "active doctors" vs "suspended lab techs" at a glance.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>CRITICAL — Status changes (Suspend/Deactivate) fire immediately with no confirmation dialog.</strong> The dropdown <code>onClick={() =&gt; updateStatus(m.user_id, 'SUSPENDED')}</code> patches the API instantly. A manager misclicking "Suspend" instead of "Deactivate" on a doctor actively using the system creates an immediate access disruption.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Intercept destructive actions (INACTIVE, SUSPENDED) with a confirmation dialog: <em>"Are you sure you want to suspend [Dr. Name]? They will immediately lose access to all patient records. This can be reversed from this page."</em> Keep "Activate" as a direct action since it's restorative, not destructive.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No reason/note field for suspension.</strong> When a manager suspends a staff member, no audit note is recorded. HR and compliance requirements in healthcare typically mandate that account suspensions carry a reason code.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add an optional "Reason" textarea to the suspension confirmation dialog. Submit as <code>{ status: 'SUSPENDED', note: '...' }</code>. Display the note in a tooltip on the staff row's status badge for audit traceability.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Risk distribution bars lack ARIA roles.</strong> The custom progress bars in the Manager Dashboard are plain <code>&lt;div&gt;</code> elements with no ARIA attributes. Screen readers will announce them as anonymous content with no semantic meaning.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add <code>role="meter"</code>, <code>aria-label="Critical Risk: 5 predictions"</code>, <code>aria-valuenow={5}</code>, <code>aria-valuemin={0}</code>, <code>aria-valuemax={total}</code> to each bar's container. Alternatively, switch to the shadcn <code>&lt;Progress&gt;</code> component which includes these by default.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUBSCRIPTION -->
+  <section class="section" id="s10">
+    <div class="section-header">
+      <span class="section-num">Section 1.10</span>
+      <h2 class="section-title">Manager — Subscription</h2>
+    </div>
+    <div class="page-card">
+      <div class="page-card-header">
+        <span class="page-name">Subscription &amp; Plan Management</span>
+        <span class="page-path">src/pages/manager/Subscription.tsx</span>
+      </div>
+      <div class="page-body">
+        <div class="page-cols">
+          <div>
+            <div class="block-label"><span class="dot dot-good"></span>Strong Ergonomic Implementations</div>
+            <div class="good-item"><span class="check">✓</span> Current plan card is visually differentiated with a primary-tinted border and background — users can immediately identify their active plan among others.</div>
+            <div class="good-item"><span class="check">✓</span> Feature list uses <code>FEATURE_LABELS</code> map to show human-readable names rather than internal keys — good abstraction layer.</div>
+            <div class="good-item"><span class="check">✓</span> Overage count is surfaced both in the progress bar section AND in the Manager Dashboard — consistent cross-page status communication.</div>
+          </div>
+          <div>
+            <div class="block-label"><span class="dot dot-issue"></span>Issues &amp; Better Approaches</div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>Plan switch confirmation dialog has no pricing or feature comparison.</strong> The <code>confirmPlan</code> dialog shows the plan name but no pricing delta. A manager confirming a switch from Trial (free) to Hospital ($799/mo) sees no price display before confirming.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Include in the confirmation dialog: the new plan's monthly price, the key feature difference from the current plan ("+∞ predictions, +Unlimited staff"), and the effective date. This is a purchasing decision that warrants full information disclosure.</div>
+            </div>
+            <div class="issue-item">
+              <div class="issue-problem"><span class="x">✕</span> <strong>No billing history or invoice download.</strong> The subscription page shows current plan and usage but has no record of past invoices or payment history. For an institutional healthcare buyer, this is a standard requirement.</div>
+              <div class="issue-fix"><div class="fix-label">→ Better Approach</div> Add a "Billing History" section (even if initially showing only the current cycle's invoice) with an option to download a PDF receipt. This can be a future endpoint stub with a placeholder message for now.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SECTION 2: MISSING ERGONOMIC CRITERIA                   -->
+  <!-- ════════════════════════════════════════════════════════ -->
+
+  <section class="section" id="s11">
+    <div class="section-header">
+      <span class="section-num">Section 2</span>
+      <h2 class="section-title">Missing Ergonomic Criteria — Critical &amp; High Priority</h2>
+    </div>
+
+    <div class="missing-grid">
+
+      <div class="missing-card critical">
+        <div class="missing-title">🚫 Session Timeout Warning</div>
+        <div class="missing-desc">No session expiry warning exists anywhere in the application. JWT tokens will expire silently. A doctor mid-way through entering clinical data will have their form state destroyed when the session expires, with no warning and no save prompt. In a PHI context, this is both a workflow and a compliance failure.</div>
+        <div class="missing-rec">→ Implement a countdown modal at T-5 minutes before token expiry offering "Stay logged in" or "Log out securely". Use a silent token-refresh call to extend on confirmation.</div>
+      </div>
+
+      <div class="missing-card critical">
+        <div class="missing-title">🚫 Keyboard Navigation &amp; Focus Management</div>
+        <div class="missing-desc">Modal dialogs (Add Patient, Lab Order, Delete Confirmation) do not implement focus trapping. When a dialog opens, keyboard focus is not moved into it. When it closes, focus is not returned to the triggering element. This breaks the WCAG 2.1 criterion 2.4.3 (Focus Order) and renders the app non-functional for keyboard-only users.</div>
+        <div class="missing-rec">→ Use shadcn's Dialog component's built-in focus management (which uses Radix UI), verify it's not being overridden. Add <code>initialFocusRef</code> to direct focus to the primary input on open.</div>
+      </div>
+
+      <div class="missing-card critical">
+        <div class="missing-title">🚫 No "Forgot Password" Flow</div>
+        <div class="missing-desc">The authentication system has no password reset mechanism. For clinical staff (doctors, lab techs) who may rotate passwords frequently, this creates a complete lock-out scenario that requires manual admin intervention. This is a table-stakes authentication feature that is entirely absent.</div>
+        <div class="missing-rec">→ Add <code>/forgot-password</code> (email entry) and <code>/reset-password/:token</code> (new password entry) pages. Wire to <code>/auth/forgot-password</code> and <code>/auth/reset-password</code> backend endpoints.</div>
+      </div>
+
+      <div class="missing-card critical">
+        <div class="missing-title">🚫 Undo / Rollback for Destructive Actions</div>
+        <div class="missing-desc">Clinical data deletion (PatientDetail), patient deletion (if implemented), and staff suspension are all permanent and immediate. The ISO 9241-110 Controllability principle requires that users be able to reverse actions. In a clinical context, accidental deletion of a vital signs record could have patient safety implications.</div>
+        <div class="missing-rec">→ Implement a 10-second undo toast for clinical data deletion: "Record deleted. <u>Undo</u>". This uses optimistic UI deletion on the frontend with a deferred API call that can be cancelled. No new backend endpoints required.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ No ARIA Live Regions for Dynamic Content</div>
+        <div class="missing-desc">Toast notifications, alert count updates, and loading state changes are purely visual. Screen readers have no way to announce "3 new unread alerts" or "Prediction completed successfully" without ARIA live region markup (<code>aria-live="polite"</code>).</div>
+        <div class="missing-rec">→ Wrap the toast container with <code>aria-live="polite" aria-atomic="true"</code>. Add <code>aria-live="polite"</code> to the alert count badge in the header. The shadcn Toaster component can be extended to include this.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ No Contextual Help or Tooltips for Clinical Metrics</div>
+        <div class="missing-desc">Clinical metrics (Risk Score, Confidence, SpO2, BP Systolic) are displayed with no contextual definition. A new doctor joining the platform has no in-app guidance on what a 78% risk score means clinically, or how to interpret the XAI feature contributions. This violates Bastien &amp; Scapin's "Guidance" criterion entirely.</div>
+        <div class="missing-rec">→ Add <code>&lt;Tooltip&gt;</code> components (already in the UI library) with clinical definitions for: Risk Score, Confidence, each vital sign abbreviation, and XAI contribution direction. Provide a link to a "How to read this report" help article.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ No Colour-Independent Risk Encoding</div>
+        <div class="missing-desc">Across all risk badges (CRITICAL / HIGH / MODERATE / LOW), colour is the sole differentiator. Approximately 8% of male users have colour-blindness. For a medical decision-support tool, relying solely on colour for clinical severity classification violates WCAG 1.4.1 (Use of Color) and could lead to misinterpretation of patient risk.</div>
+        <div class="missing-rec">→ Add redundant encoding: unique icons per risk level, text labels (never omitted), and distinct shapes where space allows. Example: CRITICAL = ▲ filled triangle (red) + bold text; LOW = ✓ circle (green) + regular text.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ No Onboarding or First-Run Experience</div>
+        <div class="missing-desc">New organizations that complete registration arrive at a blank dashboard with no patients, no predictions, and no guidance. There are empty-state CTAs, but no structured onboarding: no setup checklist, no guided first prediction, no video walkthrough link. First-run abandonment is highest in clinical software where the learning curve is steep.</div>
+        <div class="missing-rec">→ Add a dismissible onboarding banner on first login: "Welcome to DiagInfect. Get started: 1. Register your first patient → 2. Add clinical vitals → 3. Run your first AI prediction." Each step links directly to the relevant page. Mark complete in localStorage per user.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ No Profile Edit Capability</div>
+        <div class="missing-desc">The Doctor Profile page (<code>Profile.tsx</code>) is entirely read-only. Doctors cannot update their username, email, preferred language, or set a profile photo. The Manager Profile has the same limitation. This violates the ISO 9241-11 user satisfaction principle — users expect to manage their own identity.</div>
+        <div class="missing-rec">→ Add an "Edit" button that converts the profile fields to an editable form (inline edit or a dialog). At minimum, allow username and preferred language updates. Email changes should trigger re-verification.</div>
+      </div>
+
+      <div class="missing-card high">
+        <div class="missing-title">⚠️ Date Formatting Without Explicit Locale</div>
+        <div class="missing-desc"><code>toLocaleDateString()</code> and <code>toLocaleString()</code> are called throughout the app (Dashboard, PatientDetail, PredictionHistory, etc.) without an explicit locale argument. In an Algerian clinical context, the date format could render as MM/DD/YYYY in one browser and DD/MM/YYYY in another — a clinically dangerous ambiguity for birth dates and test timestamps.</div>
+        <div class="missing-rec">→ Define a single <code>formatDate(dateStr: string)</code> utility in <code>src/lib/utils.ts</code> that uses <code>new Intl.DateTimeFormat('fr-DZ', { day:'2-digit', month:'short', year:'numeric' }).format(new Date(dateStr))</code>. Replace all raw <code>toLocaleDateString()</code> calls with this utility.</div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SECTION 3: FLOW & FRICTION ANALYSIS                     -->
+  <!-- ════════════════════════════════════════════════════════ -->
+
+  <section class="section" id="s12">
+    <div class="section-header">
+      <span class="section-num">Section 3</span>
+      <h2 class="section-title">UI/UX Flow &amp; Friction Analysis — Categorized by Severity</h2>
+    </div>
+
+    <div class="severity-grid">
+
+      <!-- CRITICAL FLOWS -->
+      <div class="severity-card critical">
+        <div class="severity-header">
+          <span class="severity-pill">CRITICAL</span>
+          CRITICAL FLOW FLAWS — Task Abandonment &amp; User Disorientation
+        </div>
+        <div class="severity-items">
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Alert Notification Leads Nowhere</span>
+              <span class="sev-source">DoctorLayout.tsx</span>
+            </div>
+            <div class="sev-item-desc">The primary notification entry point in the application — the bell icon with a badge counter — navigates to <code>/doctor/dashboard</code> instead of an alerts view. A doctor on the Patients page who sees "5 unread alerts" clicks the bell, lands on the same dashboard, and must visually scan the entire page to locate the alerts panel at the bottom right. This is a primary flow breakdown: the notification signal and its resolution are disconnected.</div>
+            <div class="sev-item-rec critical">
+              <div class="rec-label">Redesign Recommendation</div>
+              Create a dedicated <code>/doctor/alerts</code> page listing all alerts with filters (All / Unread / CRITICAL). Wire the bell icon to this page. The dashboard can continue showing a preview of 3–5 alerts with a "View all" link. This standard pattern (used by every major SaaS platform) resolves the disconnect entirely.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Lab Order Dual-CTA Causes Workflow Paralysis</span>
+              <span class="sev-source">LabOrders.tsx</span>
+            </div>
+            <div class="sev-item-desc">In the Lab Orders table, a PENDING order displays both a "Start" button AND an "Enter Results" button simultaneously. These are sequential actions in a defined workflow, not parallel alternatives. A new lab technician faced with two competing action buttons on a PENDING order has no way to know which to click first without external guidance. Clicking "Enter Results" on a PENDING order without starting it may create a workflow state error.</div>
+            <div class="sev-item-rec critical">
+              <div class="rec-label">Redesign Recommendation</div>
+              Enforce a strict state machine in the UI: PENDING → "Start" only. INPROGRESS → "Enter Results" only. Optionally, make "Start" automatically navigate to the results entry page so the two steps are merged into one action for the technician. Label the merged button: "Start &amp; Enter Results."
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Developer Annotation Displayed to Clinical Users</span>
+              <span class="sev-source">NewPrediction.tsx</span>
+            </div>
+            <div class="sev-item-desc">The subtitle of the New Prediction page reads verbatim: <em>"Image 2 — runs Random Forest / XGBoost / NN on clinical + lab data."</em> This is a code review annotation that was never removed. A clinician seeing this text would reasonably question the maturity and reliability of the platform, creating an immediate trust failure at the most critical moment in the user journey — the moment they're about to rely on AI for a patient decision.</div>
+            <div class="sev-item-rec critical">
+              <div class="rec-label">Redesign Recommendation</div>
+              Immediately remove and replace with: <em>"Runs an ensemble AI model on the patient's latest clinical record and lab results."</em> Conduct a full codebase search for similar inline annotations: grep for "Image [0-9]" in all <code>.tsx</code> files. This is a production bug.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- HIGH FLOWS -->
+      <div class="severity-card high">
+        <div class="severity-header">
+          <span class="severity-pill">HIGH</span>
+          HIGH FLOW FLAWS — Cognitive Overload &amp; Repetitive Manual Input
+        </div>
+        <div class="severity-items">
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Lab Results Entry — 8–15 Manual Row Entries Per Test</span>
+              <span class="sev-source">EnterResults.tsx</span>
+            </div>
+            <div class="sev-item-desc">For a complete CBC, a lab technician must: click "Add Analyte" 8+ times, type each analyte name from memory, enter the value, type the reference range (low and high), optionally set a panel group, and then select or auto-compute a flag. For a comprehensive metabolic panel this could be 20+ rows. No templates, no auto-fill from the test type, no import. This is the highest-friction task in the app.</div>
+            <div class="sev-item-rec high">
+              <div class="rec-label">Redesign Recommendation</div>
+              Implement test templates: when the order has a recognized test type (CBC, BMP, LFT, Urinalysis), pre-populate rows with the standard analytes, their default reference ranges, and expected units. Show a "Load CBC Template" button when the test type matches. Allow managers to create custom templates. This single feature eliminates 80% of manual keystrokes for the lab role.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>No Direct Patient→Prediction Shortcut from Detail Page</span>
+              <span class="sev-source">PatientDetail.tsx / NewPrediction.tsx</span>
+            </div>
+            <div class="sev-item-desc">Running a prediction for a specific patient requires: navigating to Patient Detail → clicking "Run AI Prediction" → being taken to the New Prediction page WITH the patient pre-selected (this part works via <code>?patient_id=</code> query param). However, after a prediction is run, clicking "New Prediction" clears the patient selection entirely rather than defaulting to the same patient. A doctor running multiple iterations for the same patient must re-select them every time.</div>
+            <div class="sev-item-rec high">
+              <div class="rec-label">Redesign Recommendation</div>
+              After a successful prediction result, change the "New Prediction" button label to "Run Again for [Patient Name]" and pass the same <code>patient_id</code> query parameter. Only offer a blank "New Prediction (different patient)" as a secondary option.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Staff Suspension — No Confirmation, No Reason, No Audit Trail</span>
+              <span class="sev-source">Staff.tsx</span>
+            </div>
+            <div class="sev-item-desc">A manager selecting "Suspend" from a staff dropdown instantly patches <code>/manager/staff/:id/status</code> with no confirmation step. If the manager is using a touch device and accidentally scrolls the dropdown to "Suspend" instead of "Deactivate," a doctor's access is revoked immediately. In a hospital context, this could interrupt an active patient consultation.</div>
+            <div class="sev-item-rec high">
+              <div class="rec-label">Redesign Recommendation</div>
+              Gate all INACTIVE and SUSPENDED status changes behind a confirmation dialog with the staff member's name prominently displayed. Add an optional reason textarea. For SUSPENDED, show a clear warning: "This user will immediately lose access to all platform features." Deliver a success toast that includes an "Undo" button for 15 seconds post-action.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Clinical Symptoms Entry — Free-Text Comma-Separated</span>
+              <span class="sev-source">PatientDetail.tsx</span>
+            </div>
+            <div class="sev-item-desc">Symptoms are entered as a single text string, split by commas on save: <code>symptoms.split(',').map(s =&gt; s.trim())</code>. This creates three problems: (1) Inconsistent casing ("Fever" vs "fever") creates duplicate values in the backend. (2) Multi-word symptoms with commas fail (e.g., "nausea, vomiting, and diarrhea" becomes 3 separate entries including "and diarrhea"). (3) Doctors cannot search or filter by symptom across patients.</div>
+            <div class="sev-item-rec high">
+              <div class="rec-label">Redesign Recommendation</div>
+              Replace with a tag-input component (e.g., a controlled combobox that adds chips on Enter/comma). Source suggestions from a curated 100-symptom list normalized to lowercase. Stored symptoms become a proper array of clean strings on every save. This also enables future "patients with this symptom" cross-queries.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Model Version Selection — Meaningless to Clinical Users</span>
+              <span class="sev-source">NewPrediction.tsx</span>
+            </div>
+            <div class="sev-item-desc">Doctors are asked to choose between model versions v2.3.1, v2.2.0, and v2.1.5. These version numbers carry no clinical meaning. No changelog, no accuracy comparison, no clinical validation notes are provided. In practice, all doctors will select v2.3.1 (the default), making the selector pure visual noise. It also creates a medico-legal ambiguity: if a prediction is acted upon on v2.2.0, who is responsible for not using the latest version?</div>
+            <div class="sev-item-rec high">
+              <div class="rec-label">Redesign Recommendation</div>
+              Remove the model version selector from the doctor-facing UI entirely. Auto-select the latest model. If version auditability is required (e.g., for clinical validation), display the version used in the <em>result</em> card as a read-only reference: "Prediction made with Model v2.3.1." Expose version selection only in manager settings for institutional governance.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- MODERATE FLOWS -->
+      <div class="severity-card moderate">
+        <div class="severity-header">
+          <span class="severity-pill">MODERATE</span>
+          MODERATE FLOW FLAWS — Visual Inconsistencies &amp; Navigation Inefficiencies
+        </div>
+        <div class="severity-items">
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Duplicate API Calls on Every Layout Mount</span>
+              <span class="sev-source">DoctorLayout.tsx + DoctorSidebar.tsx</span>
+            </div>
+            <div class="sev-item-desc">Both <code>DoctorLayout</code> and its child <code>DoctorSidebar</code> fetch <code>/doctor/alerts</code> independently with separate <code>useState</code> + <code>useEffect</code> hooks. This fires 2 identical HTTP requests on every page load. The two components maintain separate unread counts that can drift apart if one updates before the other.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Consolidate into a single <code>useAlerts()</code> custom hook or a React Context at the <code>DoctorLayout</code> level. Pass the <code>unread</code> count down as a prop to <code>DoctorSidebar</code>. This eliminates one redundant network request per page navigation.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Inconsistent Date Formatting Across Locales</span>
+              <span class="sev-source">All pages using toLocaleDateString()</span>
+            </div>
+            <div class="sev-item-desc">At least 15 instances of raw <code>toLocaleDateString()</code> / <code>toLocaleString()</code> without locale arguments exist across Dashboard, PatientDetail, PredictionHistory, LabOrders, Staff, and Subscription pages. In an Algerian hospital setting (fr-DZ), dates can render ambiguously as MM/DD or DD/MM depending on the user's browser language setting.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Create a <code>fmtDate(d: string)</code> utility in <code>src/lib/utils.ts</code> using explicit <code>Intl.DateTimeFormat</code> with <code>'fr-DZ'</code> locale. Global find-replace all <code>new Date(...).toLocaleDateString()</code> and <code>.toLocaleString()</code> calls in page files with this utility.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Profile Page is Fully Read-Only — No Edit Path</span>
+              <span class="sev-source">src/pages/doctor/Profile.tsx + manager/Profile.tsx</span>
+            </div>
+            <div class="sev-item-desc">Both the Doctor and Manager profile pages display user information (username, email, organization) with no way to edit any field. The <code>preferred_lang</code> field is fetched but never surfaced in the UI at all. Users who need to change their email or language preference have no in-app path to do so.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Add an "Edit Profile" button that transitions the card into an editable form. Minimally: username (editable), preferred_lang (select dropdown), email (editable with re-verification notice). Password change should be a separate "Change Password" section with current + new + confirm fields.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>UpgradePrompt "Maybe Later" Has No Suppression Mechanism</span>
+              <span class="sev-source">components/auth/UpgradePrompt.tsx</span>
+            </div>
+            <div class="sev-item-desc">The upgrade prompt appears whenever a 402 error is thrown. "Maybe Later" dismisses it for the current interaction but it reappears on the next prediction attempt. There is no "Don't show again for today" or "Remind me in 3 days" option. For a doctor who knowingly operates on a trial plan, this is interruption noise on every prediction.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Add a "Remind me tomorrow" option that sets a <code>localStorage</code> flag with a timestamp. Suppress the full modal for 24 hours; instead show a dismissible banner: "Your trial limit has been reached. <u>Upgrade</u>." The full modal should still appear once per day as a gentle reminder.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>XAI Contribution Bars — Inaccessible and Near-Invisible</span>
+              <span class="sev-source">PredictionHistory.tsx (Sheet)</span>
+            </div>
+            <div class="sev-item-desc">Feature contribution bars in the XAI side sheet are <code>h-1.5</code> (6px tall) and have no ARIA attributes, no accessible text, no percentage label shown without hover. They are functionally unusable for screen reader users and barely readable for users with moderate visual impairments. The percentage is shown as a separate <code>span</code> but positioned to the right, not associated with the bar via ARIA.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Increase to <code>h-3</code> minimum. Add <code>role="meter"</code>, <code>aria-valuetext</code> with the formatted percentage. Pair the bar visually with the percentage value directly below it rather than in a separate column. Consider a horizontal bar chart design (wider bars, percentage labels inline) that communicates contribution strength much more clearly.
+            </div>
+          </div>
+
+          <div class="sev-item">
+            <div class="sev-item-title">
+              <span>Patients Page — No Sorting or Export</span>
+              <span class="sev-source">Patients.tsx</span>
+            </div>
+            <div class="sev-item-desc">A doctor with 150 patients and no sort controls must scroll through the entire grid to find recently added patients or patients with the highest risk scores. Risk-filter buttons help narrow by category, but within a category there's no ordering. Export for clinical handover (e.g., printing a patient list for ward rounds) is entirely absent.</div>
+            <div class="sev-item-rec moderate">
+              <div class="rec-label">Redesign Recommendation</div>
+              Add: (1) A sort dropdown: "Name A–Z | Highest Risk | Recently Added | Oldest First." (2) A CSV export button that downloads patient name, age, gender, risk level, and last prediction date. Both are client-side operations on the existing <code>patients</code> state array — no backend changes required.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="report-footer">
+    DiagInfect UI/UX Ergonomic Audit — Based on Nielsen (2000), Bastien &amp; Scapin (1993), ISO 9241-11/110 —
+    67 issues identified across 14 screens — June 2026
+  </div>
+
+</div>
+</body>
+</html>

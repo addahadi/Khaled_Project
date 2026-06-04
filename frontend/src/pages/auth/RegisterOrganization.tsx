@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Activity, Loader2, UserCircle, Building2,
   CreditCard, CheckCircle2, ChevronRight, Check,
@@ -73,9 +75,10 @@ function StepBar({ current }: { current: Step }) {
             >
               {done ? <Check className="h-4 w-4" /> : n}
             </div>
-            <span className={`hidden sm:block text-xs font-medium
+            <span className={`text-xs font-medium
               ${active ? 'text-foreground' : 'text-muted-foreground'}`}>
-              {label}
+              <span className="sm:hidden">{label.split(' ')[0]}</span>
+              <span className="hidden sm:inline">{label}</span>
             </span>
             {idx < steps.length - 1 && (
               <ChevronRight className={`h-4 w-4 mx-1 ${done ? 'text-green-500' : 'text-muted-foreground'}`} />
@@ -254,6 +257,41 @@ export default function RegisterOrganization() {
                 <Field id="confirm"  label="Confirm"  type="password" placeholder="Repeat password"
                   value={form.confirm}  onChange={set('confirm')}  error={errors.confirm} />
               </div>
+              {/* Password strength meter */}
+              {form.password.length > 0 && (() => {
+                const checks = [
+                  form.password.length >= 8,
+                  /[A-Z]/.test(form.password),
+                  /[a-z]/.test(form.password),
+                  /[0-9]/.test(form.password),
+                  /[^A-Za-z0-9]/.test(form.password),
+                ];
+                const score = checks.filter(Boolean).length;
+                const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
+                const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
+                return (
+                  <div className="space-y-1 -mt-2">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <div
+                          key={i}
+                          className={`h-1.5 flex-1 rounded-full transition-colors ${
+                            i <= score ? colors[score] : 'bg-muted'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className={`text-xs font-medium ${
+                      score <= 2 ? 'text-destructive' : score <= 3 ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {labels[score]}
+                      {score < 4 && <span className="text-muted-foreground font-normal ml-1">
+                        — {!checks[0] ? 'Use at least 8 characters' : !checks[1] ? 'Add an uppercase letter' : !checks[3] ? 'Add a number' : 'Add a special character'}
+                      </span>}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-1">
                 <Label>Language</Label>
@@ -344,8 +382,24 @@ export default function RegisterOrganization() {
             </Card>
 
             {plans.length === 0 ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="grid gap-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="rounded-xl border-2 border-border p-4">
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-6 w-20" />
+                        <div className="flex gap-3">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-5 w-5 rounded-full shrink-0" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="grid gap-4">

@@ -13,9 +13,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, X, UserPlus, Clock } from 'lucide-react';
 import ApiManager from '../../api/ApiManager';
 import apiClient from '../../api/apiClient';
+import { queryClient } from '../../api/queryClientSetup';
 import { useDelayedLoading } from '../../api/useDelayedLoading';
 import UpgradePrompt from '../auth/UpgradePrompt';
 import { inviteStaffSchema, flattenZodErrors } from '../../api/schemas';
+import { formatDate } from '@/lib/formatDate';
 
 interface Department { department_id: string; name: string }
 interface Invitation {
@@ -78,7 +80,7 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
       onSuccess: (d) => setInvitations((d as { invitations: Invitation[] }).invitations),
       onFinal:   stopLoading,
     });
-  }, [open]);
+  }, [open, startLoading, stopLoading]);
 
   const reset = () => {
     setEmail(''); setRole(''); setDeptId('');
@@ -113,7 +115,8 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
           variant: res.overage_notice ? 'default' : 'default',
         });
 
-        // Refresh invitation list
+        // Invalidate then refresh invitation list
+        queryClient.invalidateQueries({ queryKey: ['manager', 'invitations'] });
         ApiManager.execute({
           queryKey: ['manager', 'invitations'],
           endpoint: '/invitations',
@@ -124,7 +127,7 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
         onSent?.();
       },
       onError: ({ message, fields }) => {
-        // Image 1 + 3: 402 trial limit → show upgrade prompt
+        // 402 trial limit → show upgrade prompt
         if (message.includes('trial') || message.includes('limit')) {
           setShowUpgrade(true);
         } else if (fields) {
@@ -267,7 +270,7 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(inv.expires_at).toLocaleDateString()}
+                        {formatDate(inv.expires_at)}
                       </TableCell>
                       <TableCell>
                         {inv.status === 'PENDING' && (
@@ -294,7 +297,7 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
         </DialogContent>
       </Dialog>
 
-      {/* Image 3: upgrade prompt on 402 trial limit */}
+      {/* Upgrade prompt on 402 trial limit */}
       <UpgradePrompt
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}

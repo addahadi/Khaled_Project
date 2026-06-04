@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,15 +11,18 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Search, UserPlus, Users, ChevronRight,
-  AlertTriangle, Loader2,
+  Loader2, Download, SortAsc,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient   from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { addPatientSchema, flattenZodErrors } from '@/api/schemas';
+import { formatDate } from '@/lib/formatDate';
+import { getRiskConfig } from '@/lib/riskConfig';
 
 interface Patient {
   patient_id:  string;
@@ -29,14 +32,9 @@ interface Patient {
   risk_status: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | null;
   risk_score:  number | null;
   created_at:  string;
+  medical_history?: string;
 }
 
-const RISK_STYLE: Record<string, string> = {
-  LOW:      'bg-green-100  text-green-800  border-green-200',
-  MODERATE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  HIGH:     'bg-orange-100 text-orange-800 border-orange-200',
-  CRITICAL: 'bg-red-100    text-red-800    border-red-200',
-};
 
 const GENDER_OPTIONS = ['MALE', 'FEMALE', 'OTHER'];
 
@@ -48,13 +46,14 @@ export default function Patients() {
   const [patients,   setPatients]   = useState<Patient[]>([]);
   const [search,     setSearch]     = useState('');
   const [riskFilter, setRiskFilter] = useState('ALL');
+  const [sortOrder,  setSortOrder]  = useState('recent');
   const [addOpen,    setAddOpen]    = useState(false);
   const [saving,     setSaving]     = useState(false);
 
-  const [form, setForm] = useState({ name: '', age: '', gender: '' });
+  const [form, setForm] = useState({ name: '', age: '', gender: '', medical_history: '' });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const load = () => {
+  const load = useCallback(() => {
     ApiManager.execute({
       queryKey: ['doctor', 'patients'],
       endpoint: '/doctor/patients',
@@ -62,16 +61,53 @@ export default function Patients() {
       onSuccess: (d) => setPatients((d as { patients: Patient[] }).patients),
       onFinal:   stopLoading,
     });
-  };
+  }, [startLoading, stopLoading]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const filtered = patients.filter(p => {
+  let filtered = patients.filter(p => {
     const q = search.toLowerCase();
     const matchSearch = p.name.toLowerCase().includes(q);
     const matchRisk   = riskFilter === 'ALL' || p.risk_status === riskFilter;
     return matchSearch && matchRisk;
   });
+
+  filtered.sort((a, b) => {
+    if (sortOrder === 'recent') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortOrder === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    if (sortOrder === 'name') return a.name.localeCompare(b.name);
+    if (sortOrder === 'risk') {
+      const r = { 'CRITICAL': 4, 'HIGH': 3, 'MODERATE': 2, 'LOW': 1, 'ALL': 0 };
+      const sa = a.risk_status ? r[a.risk_status] || 0 : 0;
+      const sb = b.risk_status ? r[b.risk_status] || 0 : 0;
+      return sb - sa;
+    }
+    return 0;
+  });
+
+  const handleExportCSV = () => {
+    const rows = [['Name', 'Age', 'Gender', 'Risk Level', 'Risk Score', 'Added Date']];
+    patients.forEach(p => {
+      rows.push([
+        `"${p.name}"`,
+        p.age.toString(),
+        p.gender,
+        p.risk_status || 'None',
+        p.risk_score ? Math.round(p.risk_score * 100) + '%' : 'N/A',
+        formatDate(p.created_at)
+      ]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `patients_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleAdd = () => {
     const result = addPatientSchema.safeParse({
@@ -94,7 +130,7 @@ export default function Patients() {
       onSuccess: (_data, msg) => {
         toast({ title: 'Patient registered', description: msg });
         setAddOpen(false);
-        setForm({ name: '', age: '', gender: '' });
+        setForm({ name: '', age: '', gender: '', medical_history: '' });
         load();
       },
       onError: ({ message, fields }) => {
@@ -113,9 +149,14 @@ export default function Patients() {
           <h1 className="text-2xl font-bold">Patients</h1>
           <p className="text-muted-foreground text-sm">{patients.length} total patients</p>
         </div>
-        <Button className="gap-2" onClick={() => setAddOpen(true)}>
-          <UserPlus className="h-4 w-4" /> New Patient
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+          <Button className="gap-2" onClick={() => setAddOpen(true)}>
+            <UserPlus className="h-4 w-4" /> New Patient
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -130,6 +171,19 @@ export default function Patients() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-[160px] bg-background">
+              <SortAsc className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Recently Added</SelectItem>
+              <SelectItem value="risk">Highest Risk</SelectItem>
+              <SelectItem value="name">Name A-Z</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+
           {['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'].map(r => (
             <Button
               key={r}
@@ -194,14 +248,17 @@ export default function Patients() {
                 </div>
 
                 <div className="flex items-center justify-between mt-3">
-                  {p.risk_status ? (
-                    <Badge className={`text-xs ${RISK_STYLE[p.risk_status] ?? ''}`}>
-                      {p.risk_status === 'CRITICAL' && (
-                        <AlertTriangle className="mr-1 h-3 w-3" />
-                      )}
-                      {p.risk_status}
-                    </Badge>
-                  ) : (
+                  {p.risk_status ? (() => {
+                    const cfg = getRiskConfig(p.risk_status);
+                    if (!cfg) return <Badge variant="secondary" className="text-xs">Unknown</Badge>;
+                    const RiskIcon = cfg.icon;
+                    return (
+                      <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
+                        <RiskIcon className="h-3 w-3" />
+                        {cfg.label}
+                      </Badge>
+                    );
+                  })() : (
                     <Badge variant="secondary" className="text-xs">No prediction</Badge>
                   )}
                   {p.risk_score !== null && (
@@ -212,7 +269,7 @@ export default function Patients() {
                 </div>
 
                 <p className="text-xs text-muted-foreground mt-2">
-                  Added {new Date(p.created_at).toLocaleDateString()}
+                  Added {formatDate(p.created_at)}
                 </p>
               </CardContent>
             </Card>
@@ -269,6 +326,17 @@ export default function Patients() {
                 </Select>
                 {fieldErrors.gender && <p className="text-xs text-destructive">{fieldErrors.gender}</p>}
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Medical History (Optional)</Label>
+              <Textarea
+                placeholder="Prior conditions, known allergies..."
+                value={form.medical_history}
+                onChange={e => setForm(p => ({ ...p, medical_history: e.target.value }))}
+                className="resize-none"
+                rows={3}
+              />
             </div>
           </div>
 

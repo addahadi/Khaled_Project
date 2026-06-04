@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Brain, Search, AlertTriangle, CheckCircle2,
-  TrendingUp, ChevronRight, Zap,
+  Brain, Search, CheckCircle2,
+  ChevronRight, Zap, TrendingUp, Calendar,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { getRiskConfig, RISK_CONFIG } from '@/lib/riskConfig';
+import type { RiskLevel } from '@/lib/riskConfig';
 
 interface Prediction {
   request_id:   string;
@@ -38,27 +42,54 @@ interface PredictionDetail extends Prediction {
   raw_payload:          Record<string, unknown>;
 }
 
-const RISK_STYLE: Record<string, string> = {
-  LOW:      'bg-green-100  text-green-800  border-green-200',
-  MODERATE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  HIGH:     'bg-orange-100 text-orange-800 border-orange-200',
-  CRITICAL: 'bg-red-100    text-red-800    border-red-200',
+
+// ── XAI feature label map ──────────────────────────────────────────────────────
+const FEATURE_LABELS: Record<string, string> = {
+  wbc_count:                  'White Blood Cell Count',
+  rbc_count:                  'Red Blood Cell Count',
+  hemoglobin:                 'Hemoglobin',
+  hematocrit:                 'Hematocrit',
+  platelet_count:             'Platelet Count',
+  crp_level:                  'C-Reactive Protein (CRP)',
+  esr:                        'Erythrocyte Sedimentation Rate',
+  procalcitonin:              'Procalcitonin',
+  temperature:                'Body Temperature',
+  heart_rate:                 'Heart Rate',
+  spo2:                       'Blood Oxygen (SpO₂)',
+  blood_pressure_systolic:    'Systolic Blood Pressure',
+  blood_pressure_diastolic:   'Diastolic Blood Pressure',
+  neutrophil_pct:             'Neutrophil %',
+  lymphocyte_pct:             'Lymphocyte %',
+  albumin:                    'Albumin',
+  creatinine:                 'Creatinine',
+  bun:                        'Blood Urea Nitrogen',
+  alt:                        'ALT (Liver Enzyme)',
+  ast:                        'AST (Liver Enzyme)',
+  bilirubin:                  'Bilirubin',
+  glucose:                    'Blood Glucose',
+  sodium:                     'Sodium',
+  potassium:                  'Potassium',
+  age:                        'Patient Age',
+  gender:                     'Patient Gender',
+  symptom_count:              'Number of Symptoms',
+  fever_present:              'Fever Present',
+  days_since_onset:           'Days Since Symptom Onset',
 };
-const RISK_BAR: Record<string, string> = {
-  LOW:      '[&>div]:bg-green-500',
-  MODERATE: '[&>div]:bg-yellow-500',
-  HIGH:     '[&>div]:bg-orange-500',
-  CRITICAL: '[&>div]:bg-red-500',
-};
+
+function featureLabel(raw: string): string {
+  return FEATURE_LABELS[raw] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
 export default function PredictionHistory() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
   const { isLoading: detailLoading, startLoading: startDetail, stopLoading: stopDetail } = useDelayedLoading();
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [search,      setSearch]      = useState('');
   const [riskFilter,  setRiskFilter]  = useState('ALL');
+  const [dateFilter,  setDateFilter]  = useState('ALL');
   const [detail,      setDetail]      = useState<PredictionDetail | null>(null);
   const [sheetOpen,   setSheetOpen]   = useState(false);
 
@@ -70,7 +101,17 @@ export default function PredictionHistory() {
       onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
       onFinal:   stopLoading,
     });
-  }, []);
+  }, [startLoading, stopLoading]);
+
+  // Auto-open a specific prediction detail when navigated from Dashboard
+  useEffect(() => {
+    const targetId = (location.state as { openPrediction?: string })?.openPrediction;
+    if (targetId && predictions.length > 0) {
+      openDetail(targetId);
+      // Clear state to prevent re-opening on re-render
+      window.history.replaceState({}, '');
+    }
+  }, [predictions, location.state]);
 
   const openDetail = (predictionId: string) => {
     setSheetOpen(true);
@@ -87,11 +128,22 @@ export default function PredictionHistory() {
     const q = search.toLowerCase();
     const matchSearch = p.patient_name.toLowerCase().includes(q);
     const matchRisk   = riskFilter === 'ALL' || p.risk_level === riskFilter;
-    return matchSearch && matchRisk;
+
+    let matchDate = true;
+    if (dateFilter !== 'ALL') {
+      const pDate = new Date(p.created_at).getTime();
+      const now = new Date().getTime();
+      const diffDays = (now - pDate) / (1000 * 3600 * 24);
+      if (dateFilter === 'TODAY') matchDate = diffDays <= 1;
+      else if (dateFilter === '7DAYS') matchDate = diffDays <= 7;
+      else if (dateFilter === '30DAYS') matchDate = diffDays <= 30;
+    }
+
+    return matchSearch && matchRisk && matchDate;
   });
 
   // Counts for summary
-  const counts = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
+  const counts: Record<RiskLevel, number> = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
   predictions.forEach(p => { if (p.risk_level) counts[p.risk_level]++; });
 
   return (
@@ -138,6 +190,18 @@ export default function PredictionHistory() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+        <Select value={dateFilter} onValueChange={setDateFilter}>
+          <SelectTrigger className="w-[160px] bg-background">
+            <Calendar className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Date Range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Time</SelectItem>
+            <SelectItem value="TODAY">Today</SelectItem>
+            <SelectItem value="7DAYS">Last 7 Days</SelectItem>
+            <SelectItem value="30DAYS">This Month</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* List */}
@@ -180,24 +244,29 @@ export default function PredictionHistory() {
                   : p.risk_level === 'HIGH'   ? 'bg-orange-100'
                   : p.risk_level === 'MODERATE'? 'bg-yellow-100' : 'bg-green-100'
                 }`}>
-                  {p.risk_level === 'LOW'
-                    ? <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    : <AlertTriangle className={`h-5 w-5 ${
-                        p.risk_level === 'CRITICAL' ? 'text-red-600'
-                        : p.risk_level === 'HIGH' ? 'text-orange-600' : 'text-yellow-600'
-                      }`} />
-                  }
+                  {(() => {
+                    const cfg = getRiskConfig(p.risk_level);
+                    if (!cfg) return <CheckCircle2 className="h-5 w-5 text-muted-foreground" />;
+                    const RiskIcon = cfg.icon;
+                    return <RiskIcon className={`h-5 w-5 ${cfg.color}`} />;
+                  })()}
                 </div>
 
                 {/* Patient + risk */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium truncate">{p.patient_name}</span>
-                    {p.risk_level && (
-                      <Badge className={`text-xs ${RISK_STYLE[p.risk_level] ?? ''}`}>
-                        {p.risk_level}
-                      </Badge>
-                    )}
+                    {p.risk_level && (() => {
+                      const cfg = getRiskConfig(p.risk_level);
+                      if (!cfg) return null;
+                      const RiskIcon = cfg.icon;
+                      return (
+                        <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
+                          <RiskIcon className="h-3 w-3" />
+                          {cfg.label}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
                     {p.risk_score !== null && (
@@ -211,7 +280,7 @@ export default function PredictionHistory() {
                       </span>
                     )}
                     <span className="text-xs text-muted-foreground">
-                      {new Date(p.created_at).toLocaleDateString()}
+                      {formatDate(p.created_at)}
                     </span>
                   </div>
                 </div>
@@ -249,9 +318,14 @@ export default function PredictionHistory() {
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Risk Level</span>
-                      <Badge className={`${RISK_STYLE[detail.risk_level] ?? ''}`}>
-                        {detail.risk_level}
-                      </Badge>
+                    <Badge className={`${getRiskConfig(detail.risk_level)?.badgeClass ?? ''} gap-1`}>
+                      {(() => {
+                        const cfg = getRiskConfig(detail.risk_level);
+                        if (!cfg) return detail.risk_level;
+                        const RiskIcon = cfg.icon;
+                        return <><RiskIcon className="h-3 w-3" />{cfg.label}</>;
+                      })()}
+                    </Badge>
                     </div>
                     <div>
                       <div className="flex justify-between text-sm mb-1">
@@ -262,7 +336,7 @@ export default function PredictionHistory() {
                       </div>
                       <Progress
                         value={(detail.risk_score ?? 0) * 100}
-                        className={RISK_BAR[detail.risk_level] ?? ''}
+                        className={getRiskConfig(detail.risk_level)?.barClass ?? ''}
                       />
                     </div>
                     <div className="flex justify-between text-sm">
@@ -277,7 +351,7 @@ export default function PredictionHistory() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Date</span>
-                  <span>{new Date(detail.created_at).toLocaleString()}</span>
+                  <span>{formatDateTime(detail.created_at)}</span>
                 </div>
               </div>
 
@@ -297,10 +371,17 @@ export default function PredictionHistory() {
                         }`}>
                           {fe.direction === 'POSITIVE' ? '↑' : '↓'}
                         </div>
-                        <span className="flex-1 text-sm truncate">{fe.feature_name}</span>
-                        <div className="w-24 bg-muted rounded-full h-1.5">
+                        <span className="flex-1 text-sm truncate">{featureLabel(fe.feature_name)}</span>
+                        <div
+                          className="w-24 bg-muted rounded-full h-3"
+                          role="progressbar"
+                          aria-valuenow={Math.abs(fe.contribution) * 100}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${featureLabel(fe.feature_name)}: ${(fe.contribution * 100).toFixed(1)}% ${fe.direction === 'POSITIVE' ? 'increases' : 'decreases'} risk`}
+                        >
                           <div
-                            className={`h-1.5 rounded-full ${
+                            className={`h-3 rounded-full ${
                               fe.direction === 'POSITIVE' ? 'bg-red-400' : 'bg-green-400'
                             }`}
                             style={{ width: `${Math.min(Math.abs(fe.contribution) * 400, 100)}%` }}

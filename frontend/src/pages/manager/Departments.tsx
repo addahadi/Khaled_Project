@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import apiClient from '@/api/apiClient';
 import ApiManager from '@/api/ApiManager';
+import { queryClient } from '@/api/queryClientSetup';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate } from '@/lib/formatDate';
 
 // ─── Icon registry ────────────────────────────────────────────────────────────
 
@@ -82,8 +84,8 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    (apiClient.get(`/manager/departments/${departmentId}/members`) as Promise<{ data: { members: Member[] } }>)
-      .then(res => { if (!cancelled) setMembers(res.data.members); })
+    (apiClient.get(`/manager/departments/${departmentId}/members`) as Promise<{ members: Member[] }>)
+      .then(res => { if (!cancelled) setMembers(res.members); })
       .catch(() => {
         if (!cancelled) {
           toast({ title: 'Error', description: 'Failed to load members.', variant: 'destructive' });
@@ -238,7 +240,7 @@ function DepartmentCard({
             <div className="min-w-0">
               <CardTitle className="text-base truncate">{dept.name}</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Created {new Date(dept.created_at).toLocaleDateString()}
+                Created {formatDate(dept.created_at)}
               </p>
             </div>
           </div>
@@ -326,6 +328,8 @@ function DepartmentDialog({
         await apiClient.post('/manager/departments', { name: name.trim(), icon });
         toast({ title: 'Created', description: 'Department created successfully.' });
       }
+      // Bust the React Query cache so the next fetch is always fresh
+      queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
       onSaved();
       onOpenChange(false);
     } catch (err: any) {
@@ -399,15 +403,12 @@ export default function Departments() {
         setDepartments((data as { departments: Department[] }).departments),
       onFinal:   stopLoading,
     });
-  }, []);
+  }, [startLoading, stopLoading]);
 
   useEffect(() => { loadDepartments(); }, [loadDepartments]);
 
   const handleSaved = () => {
-    // Invalidate cache and reload
-    import('@/api/queryClientSetup').then(({ queryClient }) => {
-      queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
-    });
+    // invalidateQueries is already called inside executeMutation; just reload.
     loadDepartments();
   };
 
@@ -417,6 +418,8 @@ export default function Departments() {
     try {
       await apiClient.delete(`/manager/departments/${deleteTarget.department_id}`);
       toast({ title: 'Deleted', description: `"${deleteTarget.name}" has been deleted.` });
+      // Bust the React Query cache so the reload fetches fresh data
+      queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
       setDeleteTarget(null);
       handleSaved();
     } catch (err: any) {

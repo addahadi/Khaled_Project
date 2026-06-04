@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog, DialogContent, DialogHeader,
@@ -5,7 +6,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Zap, ArrowRight, Lock } from 'lucide-react';
+import { Zap, ArrowRight, Lock, X } from 'lucide-react';
 
 interface UpgradePromptProps {
   open:        boolean;
@@ -36,6 +37,45 @@ const COPY = {
 export default function UpgradePrompt({ open, onClose, limitType }: UpgradePromptProps) {
   const navigate = useNavigate();
   const copy = COPY[limitType];
+  const [suppressed, setSuppressed] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const lastSeen = localStorage.getItem('upgradePromptSuppressedAt');
+      if (lastSeen && Date.now() - parseInt(lastSeen, 10) < 24 * 60 * 60 * 1000) {
+        setSuppressed(true);
+      } else {
+        setSuppressed(false);
+      }
+    }
+  }, [open]);
+
+  const handleSuppress = () => {
+    localStorage.setItem('upgradePromptSuppressedAt', Date.now().toString());
+    setSuppressed(true);
+    onClose();
+  };
+
+  if (open && suppressed) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-5">
+        <div className="bg-background border border-border shadow-lg rounded-lg p-4 flex items-center justify-between gap-4 max-w-sm">
+          <div className="text-sm font-medium">
+            Your trial limit has been reached.{' '}
+            <button
+              onClick={() => { setSuppressed(false); }}
+              className="text-primary hover:underline"
+            >
+              Upgrade
+            </button>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -66,7 +106,7 @@ export default function UpgradePrompt({ open, onClose, limitType }: UpgradePromp
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Maybe Later</Button>
+          <Button variant="outline" onClick={handleSuppress}>Remind me tomorrow</Button>
           <Button
             className="gap-2"
             onClick={() => {

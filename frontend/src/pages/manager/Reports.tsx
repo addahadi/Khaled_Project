@@ -41,7 +41,7 @@ export default function Reports() {
       onSuccess: (data: unknown) => setReports((data as { reports: ReportData }).reports),
       onFinal: stopLoading,
     });
-  }, []);
+  }, [startLoading, stopLoading]);
 
   const riskLevels = reports
     ? [

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,14 +35,17 @@ export default function ManagerDashboard() {
   const [reports, setReports] = useState<ReportData | null>(null);
 
   useEffect(() => {
-    ApiManager.execute({
-      queryKey: ['manager', 'reports'],
-      endpoint: '/manager/reports',
-      onStart: startLoading,
-      onSuccess: (data: unknown) => setReports((data as { reports: ReportData }).reports),
-      onFinal: stopLoading,
-    });
-  }, []);
+    const loadReports = () => {
+      ApiManager.execute({
+        queryKey: ['manager', 'reports'],
+        endpoint: '/manager/reports',
+        onStart: startLoading,
+        onSuccess: (data: unknown) => setReports((data as { reports: ReportData }).reports),
+        onFinal: stopLoading,
+      });
+    };
+    loadReports();
+  }, [startLoading, stopLoading]);
 
   const usagePct = reports?.usageStats?.prediction_limit
     ? Math.min(
@@ -167,8 +170,16 @@ export default function ManagerDashboard() {
                 return (
                   <div key={label} className="flex items-center gap-3">
                     <span className="w-16 text-sm">{label}</span>
-                    <div className="flex-1 bg-muted rounded-full h-2">
-                      <div className={`${color} h-2 rounded-full`} style={{ width: `${pct}%` }} />
+                    <div className="flex-1 bg-muted rounded-full h-2" role="presentation">
+                      <div
+                        className={`${color} h-2 rounded-full`}
+                        style={{ width: `${pct}%` }}
+                        role="progressbar"
+                        aria-valuenow={Number(val)}
+                        aria-valuemin={0}
+                        aria-valuemax={total}
+                        aria-label={`${label} risk: ${val} of ${total} predictions (${pct}%)`}
+                      />
                     </div>
                     <span className="text-sm font-medium w-8 text-right">{val}</span>
                   </div>

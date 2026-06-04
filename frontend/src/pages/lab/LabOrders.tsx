@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate, timeAgo } from '@/lib/formatDate';
 
 interface LabOrder {
   test_id: string;
@@ -40,7 +41,7 @@ export default function LabOrders() {
   const [filter, setFilter] = useState('ALL');
   const [startingId, setStartingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadOrders = useCallback(() => {
     ApiManager.execute({
       queryKey: ['lab', 'orders'],
       endpoint: '/lab/orders',
@@ -48,7 +49,9 @@ export default function LabOrders() {
       onSuccess: (data: unknown) => setOrders((data as { orders: LabOrder[] }).orders),
       onFinal: stopLoading,
     });
-  }, []);
+  }, [startLoading, stopLoading]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
 
   const filtered = orders.filter(o => {
     const matchesSearch =
@@ -145,7 +148,16 @@ export default function LabOrders() {
                       <Badge className={`text-xs ${STATUS_STYLES[o.status] ?? ''}`}>{o.status}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {new Date(o.ordered_at).toLocaleDateString()}
+                      <span>{formatDate(o.ordered_at)}</span>
+                      {(o.status === 'PENDING' || o.status === 'INPROGRESS') && (
+                        <span className={`block text-xs mt-0.5 ${
+                          // Highlight if waiting more than 24h
+                          Date.now() - new Date(o.ordered_at).getTime() > 86_400_000
+                            ? 'text-destructive font-medium' : 'text-muted-foreground'
+                        }`}>
+                          {timeAgo(o.ordered_at)}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -155,7 +167,7 @@ export default function LabOrders() {
                             Start
                           </Button>
                         )}
-                        {(o.status === 'INPROGRESS' || o.status === 'PENDING') && (
+                        {o.status === 'INPROGRESS' && (
                           <Button size="sm" onClick={() => navigate(`/lab/orders/${o.test_id}`)}>
                             Enter Results
                           </Button>

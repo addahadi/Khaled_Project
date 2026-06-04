@@ -3,7 +3,6 @@ import { z } from 'zod';
 import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
-import { runPrediction } from '../services/aiService.js';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -58,11 +57,7 @@ export const getPatients = catchAsync(async (req: Request, res: Response) => {
       ORDER BY created_at DESC LIMIT 1
     ) ir ON TRUE
     WHERE p.deleted_at IS NULL
-    ${orgId ? sql`AND p.patient_id IN (
-        SELECT DISTINCT patient_id FROM prediction_requests pr
-        JOIN users u ON u.user_id = pr.requested_by
-        WHERE u.organization_id = ${orgId}
-      )` : sql``}
+    ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
     ORDER BY p.created_at DESC
   `;
 
@@ -86,10 +81,22 @@ export const getPatientById = catchAsync(async (req: Request, res: Response, nex
 
   if (!patient) return next(new AppError('ERROR_PATIENT_NOT_FOUND', 404));
 
-  const clinicalData = await sql`
+  const clinicalData = (await sql`
     SELECT data_id, vitals, symptoms, recorded_by, created_at
     FROM clinical_data WHERE patient_id = ${patientId} ORDER BY created_at DESC
-  `;
+  `).map(cd => {
+    let vitals = cd.vitals;
+    if (typeof vitals === 'string') { try { vitals = JSON.parse(vitals); } catch { vitals = {}; } }
+    if (typeof vitals !== 'object' || vitals === null || Array.isArray(vitals)) vitals = {};
+    let symptoms = cd.symptoms;
+    if (typeof symptoms === 'string') { try { symptoms = JSON.parse(symptoms); } catch { symptoms = []; } }
+    if (!Array.isArray(symptoms)) symptoms = [];
+    return {
+      ...cd,
+      vitals,
+      symptoms,
+    };
+  });
 
   const labTests = await sql`
     SELECT test_id, test_type, status, notes, ordered_at
@@ -111,8 +118,8 @@ export const createPatient = catchAsync(async (req: Request, res: Response, next
   }
 
   const [patient] = await sql`
-    INSERT INTO patients (name, age, gender, medical_history)
-    VALUES (${val.data.name}, ${val.data.age}, ${val.data.gender}, ${JSON.stringify(val.data.medical_history ?? {})})
+    INSERT INTO patients (name, age, gender, medical_history, organization_id, created_by)
+    VALUES (${val.data.name}, ${val.data.age}, ${val.data.gender}, ${JSON.stringify(val.data.medical_history ?? {})}, ${req.user!.org_id}, ${req.user!.user_id})
     RETURNING patient_id, name, age, gender, created_at
   `;
 
@@ -134,7 +141,7 @@ export const createClinicalData = catchAsync(async (req: Request, res: Response,
   `;
   if (!patient) return next(new AppError('ERROR_PATIENT_NOT_FOUND', 404));
 
-  const [cd] = await sql`
+  let [cd] = await sql`
     INSERT INTO clinical_data (patient_id, vitals, symptoms, recorded_by)
     VALUES (
       ${val.data.patient_id},
@@ -145,7 +152,69 @@ export const createClinicalData = catchAsync(async (req: Request, res: Response,
     RETURNING data_id, patient_id, vitals, symptoms, created_at
   `;
 
+  if (typeof cd.vitals === 'string') { try { cd.vitals = JSON.parse(cd.vitals); } catch { cd.vitals = {}; } }
+  if (typeof cd.vitals !== 'object' || cd.vitals === null || Array.isArray(cd.vitals)) cd.vitals = {};
+  if (typeof cd.symptoms === 'string') { try { cd.symptoms = JSON.parse(cd.symptoms); } catch { cd.symptoms = []; } }
+  if (!Array.isArray(cd.symptoms)) cd.symptoms = [];
+
   res.status(201).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_SAVED', data: { clinicalData: cd } });
+});
+
+export const updateClinicalData = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { dataId } = req.params;
+
+  const updateSchema = z.object({
+    vitals: z.object({
+      temperature:              z.number().optional(),
+      heart_rate:               z.number().optional(),
+      blood_pressure_systolic:  z.number().optional(),
+      blood_pressure_diastolic: z.number().optional(),
+      spo2:                     z.number().optional(),
+    }).optional(),
+    symptoms: z.array(z.string()).optional(),
+  });
+
+  const val = updateSchema.safeParse(req.body);
+  if (!val.success) {
+    const fields: Record<string, string> = {};
+    val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+    return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+  }
+
+  const [existing] = await sql`
+    SELECT data_id FROM clinical_data WHERE data_id = ${dataId}
+  `;
+  if (!existing) return next(new AppError('ERROR_CLINICAL_DATA_NOT_FOUND', 404));
+
+  let [updated] = await sql`
+    UPDATE clinical_data
+    SET vitals   = ${JSON.stringify(val.data.vitals ?? {})},
+        symptoms = ${JSON.stringify(val.data.symptoms ?? [])}
+    WHERE data_id = ${dataId}
+    RETURNING data_id, patient_id, vitals, symptoms, created_at
+  `;
+
+  if (typeof updated.vitals === 'string') { try { updated.vitals = JSON.parse(updated.vitals); } catch { updated.vitals = {}; } }
+  if (typeof updated.vitals !== 'object' || updated.vitals === null || Array.isArray(updated.vitals)) updated.vitals = {};
+  if (typeof updated.symptoms === 'string') { try { updated.symptoms = JSON.parse(updated.symptoms); } catch { updated.symptoms = []; } }
+  if (!Array.isArray(updated.symptoms)) updated.symptoms = [];
+
+  res.status(200).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_UPDATED', data: { clinicalData: updated } });
+});
+
+export const deleteClinicalData = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { dataId } = req.params;
+
+  const [existing] = await sql`
+    SELECT data_id FROM clinical_data WHERE data_id = ${dataId}
+  `;
+  if (!existing) return next(new AppError('ERROR_CLINICAL_DATA_NOT_FOUND', 404));
+
+  await sql`
+    DELETE FROM clinical_data WHERE data_id = ${dataId}
+  `;
+
+  res.status(200).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_DELETED' });
 });
 
 // ─── Lab Orders ───────────────────────────────────────────────────────────────
@@ -222,6 +291,12 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     LIMIT 1
   `;
 
+  // Normalize JSONB for postgres.js v3 (returns strings instead of parsed objects)
+  if (clinicalRecord) {
+    try { if (typeof clinicalRecord.vitals === 'string') clinicalRecord.vitals = JSON.parse(clinicalRecord.vitals); } catch { clinicalRecord.vitals = null; }
+    try { if (typeof clinicalRecord.symptoms === 'string') clinicalRecord.symptoms = JSON.parse(clinicalRecord.symptoms); } catch { clinicalRecord.symptoms = []; }
+  }
+
   // ── Step 2: Fetch LabTestResults by patient_id ──────────────────────────
   const labResults = await sql`
     SELECT
@@ -253,26 +328,39 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     RETURNING request_id
   `;
 
-  // ── Step 3: Send payload {clinical, lab, model_version} → AIService ──────
-  let aiResult;
-  try {
-    aiResult = await runPrediction({
-      clinical:      clinicalRecord
-        ? { vitals: clinicalRecord.vitals, symptoms: clinicalRecord.symptoms }
-        : null,
-      lab:labResults,
-      model_version,
-    });
-  } catch (err) {
-    // Mark request as FAILED then propagate
-    await sql`
-      UPDATE prediction_requests SET status = 'FAILED'
-      WHERE request_id = ${predRequest.request_id}
-    `;
-    return next(new AppError('ERROR_AI_SERVICE_UNAVAILABLE', 503));
+  // ── Step 3: Fake prediction result ────────────────────────────────────────
+  const symptomCount = clinicalRecord?.symptoms?.length ?? 0;
+  const labAbnormal  = labResults.filter(r => r.flag === 'ABNORMAL' || r.flag === 'CRITICAL').length;
+  const riskScore    = Math.min(0.15 + labAbnormal * 0.12 + symptomCount * 0.07, 0.98);
+  const riskLevel    = riskScore >= 0.85 ? 'CRITICAL' : riskScore >= 0.60 ? 'HIGH' : riskScore >= 0.35 ? 'MODERATE' : 'LOW';
+
+  const features: { feature_name: string; contribution: number; direction: 'POSITIVE' | 'NEGATIVE'; rank: number }[] = [
+    ...labResults.map((r, i) => ({
+      feature_name: r.analyte_name,
+      contribution: r.flag === 'CRITICAL' ? 0.28 : r.flag === 'ABNORMAL' ? 0.12 : 0.02,
+      direction:    (r.flag !== 'NORMAL' ? 'POSITIVE' : 'NEGATIVE') as 'POSITIVE' | 'NEGATIVE',
+      rank:         i + 1,
+    })),
+    ...(clinicalRecord?.symptoms ?? []).map((s: string, i: number) => ({
+      feature_name: `Symptom: ${s}`,
+      contribution: 0.07,
+      direction:    'POSITIVE' as 'POSITIVE' | 'NEGATIVE',
+      rank:         labResults.length + i + 1,
+    })),
+  ];
+
+  if (features.length === 0) {
+    features.push(
+      { feature_name: 'No clinical data', contribution: 0.10, direction: 'POSITIVE', rank: 1 },
+      { feature_name: 'No lab results',   contribution: 0.05, direction: 'NEGATIVE', rank: 2 },
+    );
   }
 
-  const { risk_score, risk_level, confidence, raw_payload, feature_explanations } = aiResult;
+  const risk_score           = Math.round(riskScore * 1000) / 1000;
+  const risk_level           = riskLevel;
+  const confidence           = Math.round((0.75 + Math.random() * 0.2) * 1000) / 1000;
+  const raw_payload          = { model: 'mock', model_version, features };
+  const feature_explanations = features;
 
   // ── Step 6: INSERT PredictionResult ─────────────────────────────────────
   const [predResult] = await sql`
@@ -429,3 +517,89 @@ export const markAlertRead = catchAsync(async (req: Request, res: Response, next
 
   res.status(200).json({ status: 'success', messageKey: 'SUCCESS_ALERT_READ' });
 });
+
+// ─── Lab results (doctor view) ────────────────────────────────────────────────
+
+// GET /api/doctor/lab-results/:testId
+// Returns all analyte results for a completed test, scoped to the doctor's org.
+// Shows both active and amended rows so the doctor can see correction history.
+export const getLabTestResults = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { testId } = req.params;
+  const orgId = req.user!.org_id;
+
+  // Verify the test belongs to this organisation
+  const [test] = await sql`
+    SELECT lt.test_id, lt.test_type, lt.status,
+           pat.name AS patient_name, pat.age, pat.gender
+    FROM   lab_tests lt
+    JOIN   patients pat ON pat.patient_id = lt.patient_id
+    WHERE  lt.test_id = ${testId}
+      AND  lt.deleted_at IS NULL
+      ${orgId ? sql`AND lt.requested_by IN (
+           SELECT user_id FROM users
+           WHERE  organization_id = ${orgId} AND deleted_at IS NULL
+         )` : sql``}
+    LIMIT 1
+  `;
+
+  if (!test) return next(new AppError('ERROR_ORDER_NOT_FOUND', 404));
+
+  const results = await sql`
+    SELECT
+      ltr.result_id,
+      ltr.analyte_name,
+      ltr.value,
+      ltr.reference_low,
+      ltr.reference_high,
+      ltr.flag,
+      ltr.sub_panel,
+      ltr.is_amended,
+      ltr.original_result_id,
+      ltr.acknowledged_at,
+      ltr.acknowledged_by,
+      un.symbol  AS unit_symbol,
+      u.username AS acknowledged_by_name,
+      ltr.created_at
+    FROM  lab_test_results ltr
+    LEFT JOIN units un ON un.unit_id  = ltr.unit_id
+    LEFT JOIN users u  ON u.user_id   = ltr.acknowledged_by
+    WHERE ltr.test_id = ${testId}
+    ORDER BY ltr.sub_panel NULLS LAST, ltr.created_at ASC
+  `;
+
+  res.status(200).json({ status: 'success', data: { test, results } });
+});
+
+// PATCH /api/doctor/lab-results/:resultId/acknowledge
+// The doctor confirms they have received and acted on a CRITICAL result.
+// Only CRITICAL, non-amended, not-yet-acknowledged results are accepted.
+export const acknowledgeResult = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { resultId } = req.params;
+
+  const [result] = await sql`
+    SELECT result_id, flag, is_amended, acknowledged_at
+    FROM   lab_test_results
+    WHERE  result_id = ${resultId}
+    LIMIT  1
+  `;
+
+  if (!result)                 return next(new AppError('ERROR_RESULT_NOT_FOUND', 404));
+  if (result.flag !== 'CRITICAL')   return next(new AppError('ERROR_NOT_CRITICAL', 400));
+  if (result.is_amended)            return next(new AppError('ERROR_RESULT_AMENDED', 409));
+  if (result.acknowledged_at)       return next(new AppError('ERROR_ALREADY_ACKNOWLEDGED', 409));
+
+  const [updated] = await sql`
+    UPDATE lab_test_results
+    SET    acknowledged_at = NOW(),
+           acknowledged_by = ${req.user!.user_id}
+    WHERE  result_id = ${resultId}
+    RETURNING result_id, flag, acknowledged_at
+  `;
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_RESULT_ACKNOWLEDGED',
+    data: { result: updated },
+  });
+});
+

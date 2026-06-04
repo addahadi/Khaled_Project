@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import ApiManager  from '@/api/ApiManager';
 import apiClient   from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate } from '@/lib/formatDate';
+import { getRiskConfig } from '@/lib/riskConfig';
 
 interface Patient {
   patient_id: string; name: string; age: number;
@@ -28,16 +30,12 @@ interface Alert {
   is_read: boolean; created_at: string;
 }
 
-const RISK_STYLE: Record<string, string> = {
-  LOW:      'bg-green-100  text-green-800',
-  MODERATE: 'bg-yellow-100 text-yellow-800',
-  HIGH:     'bg-orange-100 text-orange-800',
-  CRITICAL: 'bg-red-100    text-red-800',
-};
 
 export default function DoctorDashboard() {
   const { user }    = useAuth();
   const navigate    = useNavigate();
+  const location     = useLocation();
+  const alertsRef    = useRef<HTMLDivElement>(null);
   const { isLoading: pLoading, startLoading: startP, stopLoading: stopP } = useDelayedLoading();
   const { isLoading: prLoading, startLoading: startPr, stopLoading: stopPr } = useDelayedLoading();
   const { isLoading: aLoading, startLoading: startA, stopLoading: stopA } = useDelayedLoading();
@@ -64,11 +62,23 @@ export default function DoctorDashboard() {
     ApiManager.execute({
       queryKey: ['doctor', 'alerts'],
       endpoint: '/doctor/alerts',
+      // DoctorLayout already fetches alerts for the bell badge — reuse cached
+      // data for 30s to avoid a duplicate HTTP request on mount.
+      staleTime: 30_000,
       onStart: startA,
       onSuccess: (d) => setAlerts((d as { alerts: Alert[] }).alerts),
       onFinal: stopA,
     });
-  }, []);
+  }, [startP, stopP, startPr, stopPr, startA, stopA]);
+
+  // Scroll to alerts section when navigated via bell icon
+  useEffect(() => {
+    if ((location.state as { scrollTo?: string })?.scrollTo === 'alerts' && alertsRef.current) {
+      alertsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Clear the state so re-renders don't re-scroll
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, aLoading]);
 
   const unreadAlerts    = alerts.filter(a => !a.is_read);
   const criticalPatients = patients.filter(p => p.risk_status === 'CRITICAL');
@@ -142,9 +152,17 @@ export default function DoctorDashboard() {
                   <p className="text-xs text-muted-foreground">{p.age} yrs</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {p.risk_status ? (
-                    <Badge className={`text-xs ${RISK_STYLE[p.risk_status] ?? ''}`}>{p.risk_status}</Badge>
-                  ) : (
+                  {p.risk_status ? (() => {
+                    const cfg = getRiskConfig(p.risk_status);
+                    if (!cfg) return <Badge variant="secondary" className="text-xs">—</Badge>;
+                    const RiskIcon = cfg.icon;
+                    return (
+                      <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
+                        <RiskIcon className="h-3 w-3" />
+                        {cfg.label}
+                      </Badge>
+                    );
+                  })() : (
                     <Badge variant="secondary" className="text-xs">No data</Badge>
                   )}
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -165,19 +183,27 @@ export default function DoctorDashboard() {
               {recentPredictions.map(pr => (
                 <Card key={pr.request_id}
                   className="cursor-pointer hover:shadow-sm hover:border-primary/30 transition-all"
-                  onClick={() => navigate('/doctor/predictions')}>
+                  onClick={() => navigate('/doctor/predictions', { state: { openPrediction: pr.request_id } })}>
                   <CardContent className="py-3 flex items-center justify-between">
                     <div>
                       <p className="font-medium text-sm">{pr.patient_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(pr.created_at).toLocaleDateString()}
+                        {formatDate(pr.created_at)}
                         {pr.risk_score !== null && ` · Score: ${Math.round(pr.risk_score * 100)}%`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {pr.risk_level && (
-                        <Badge className={`text-xs ${RISK_STYLE[pr.risk_level] ?? ''}`}>{pr.risk_level}</Badge>
-                      )}
+                      {pr.risk_level && (() => {
+                        const cfg = getRiskConfig(pr.risk_level);
+                        if (!cfg) return null;
+                        const RiskIcon = cfg.icon;
+                        return (
+                          <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
+                            <RiskIcon className="h-3 w-3" />
+                            {cfg.label}
+                          </Badge>
+                        );
+                      })()}
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardContent>
@@ -188,7 +214,7 @@ export default function DoctorDashboard() {
         </div>
 
         {/* Alerts panel */}
-        <div className="space-y-3">
+        <div className="space-y-3" ref={alertsRef}>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold flex items-center gap-2">
               Alerts
@@ -224,15 +250,19 @@ export default function DoctorDashboard() {
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(a.created_at).toLocaleDateString()}
+                      {formatDate(a.created_at)}
                     </p>
                   </div>
                   {!a.is_read && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-xs h-7 px-2"
+                      aria-label={`Mark alert from ${a.patient_name ?? 'System'} as read`}
                       onClick={() => markRead(a.alert_id)}
-                      className="shrink-0 h-4 w-4 rounded-full bg-primary mt-1"
-                      title="Mark as read"
-                    />
+                    >
+                      Mark read
+                    </Button>
                   )}
                 </div>
               </CardContent>

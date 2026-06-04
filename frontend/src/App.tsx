@@ -18,6 +18,7 @@ import About   from '@/pages/public/About';
 import Login                from '@/pages/auth/Login';
 import RegisterOrganization from '@/pages/auth/RegisterOrganization'; // only registration path
 import ActivateAccount      from '@/pages/auth/ActivateAccount';      // invitation activation
+import ForgotPassword       from '@/pages/auth/ForgotPassword';       // password reset stub
 
 // ─── Doctor pages ─────────────────────────────────────────────────────────────
 import DoctorDashboard   from '@/pages/doctor/Dashboard';
@@ -26,6 +27,8 @@ import PatientDetail     from '@/pages/doctor/PatientDetail';
 import NewPrediction     from '@/pages/doctor/NewPrediction';
 import PredictionHistory from '@/pages/doctor/PredictionHistory';
 import DoctorProfile     from '@/pages/doctor/Profile';
+import Alerts            from '@/pages/doctor/Alerts';
+import { AlertsProvider } from '@/contexts/AlertsContext';
 
 // ─── Lab Tech pages ───────────────────────────────────────────────────────────
 import LabDashboard from '@/pages/lab/LabDashboard';
@@ -77,10 +80,11 @@ export default function App() {
              */}
             <Route path="/register-organization"  element={<RegisterOrganization />} />
             <Route path="/activate/:token"        element={<ActivateAccount />} />
+            <Route path="/forgot-password"        element={<ForgotPassword />} />
 
             {/* ── Doctor panel ──────────────────────────────────────────── */}
             <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
-              <Route element={<DoctorLayout />}>
+              <Route element={<AlertsProvider><DoctorLayout /></AlertsProvider>}>
                 <Route path="/doctor"                        element={<Navigate to="/doctor/dashboard" replace />} />
                 <Route path="/doctor/dashboard"              element={<DoctorDashboard />} />
                 <Route path="/doctor/patients"               element={<Patients />} />
@@ -88,6 +92,7 @@ export default function App() {
                 <Route path="/doctor/predictions"            element={<PredictionHistory />} />
                 <Route path="/doctor/predictions/new"        element={<NewPrediction />} />
                 <Route path="/doctor/profile"                element={<DoctorProfile />} />
+                <Route path="/doctor/alerts"                 element={<Alerts />} />
               </Route>
             </Route>
 

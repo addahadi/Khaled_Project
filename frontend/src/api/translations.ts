@@ -39,6 +39,9 @@ export const dictionary: Record<string, Record<string, string>> = {
 
     // Clinical data
     SUCCESS_CLINICAL_DATA_SAVED:    'Clinical data saved successfully.',
+    SUCCESS_CLINICAL_DATA_UPDATED:  'Clinical data updated successfully.',
+    SUCCESS_CLINICAL_DATA_DELETED:  'Clinical data deleted successfully.',
+    ERROR_CLINICAL_DATA_NOT_FOUND:  'Clinical data record not found.',
 
     // Lab orders & results
     ERR_TEST_TYPE_REQUIRED:         'Test type is required.',
@@ -118,6 +121,9 @@ export const dictionary: Record<string, Record<string, string>> = {
     SUCCESS_PATIENT_CREATED:        'تم تسجيل المريض بنجاح.',
 
     SUCCESS_CLINICAL_DATA_SAVED:    'تم حفظ البيانات السريرية بنجاح.',
+    SUCCESS_CLINICAL_DATA_UPDATED:  'تم تحديث البيانات السريرية بنجاح.',
+    SUCCESS_CLINICAL_DATA_DELETED:  'تم حذف البيانات السريرية بنجاح.',
+    ERROR_CLINICAL_DATA_NOT_FOUND:  'سجل البيانات السريرية غير موجود.',
 
     ERR_TEST_TYPE_REQUIRED:         'نوع الفحص مطلوب.',
     ERR_TEST_INVALID:               'طلب فحص غير صالح.',

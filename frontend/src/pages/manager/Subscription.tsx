@@ -9,10 +9,11 @@ import {
   DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, CreditCard, Loader2, Zap, Shield, Building2 } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Zap, Shield, Building2, Download } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate } from '@/lib/formatDate';
 
 interface PlanFeature { name: string; is_enabled: boolean; value: number | null }
 
@@ -83,7 +84,7 @@ export default function Subscription() {
       },
       onFinal: stopPlans,
     });
-  }, []);
+  }, [startSub, stopSub, startPlans, stopPlans]);
 
   const handleSwitch = () => {
     if (!confirmPlan) return;
@@ -160,13 +161,13 @@ export default function Subscription() {
                 <div>
                   <span className="text-muted-foreground">Cycle Start:</span>
                   <span className="ml-2 font-medium">
-                    {new Date(subscription.current_cycle_start).toLocaleDateString()}
+                    {formatDate(subscription.current_cycle_start)}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Cycle End:</span>
                   <span className="ml-2 font-medium">
-                    {new Date(subscription.current_cycle_end).toLocaleDateString()}
+                    {formatDate(subscription.current_cycle_end)}
                   </span>
                 </div>
               </div>
@@ -286,22 +287,116 @@ export default function Subscription() {
         )}
       </div>
 
+      {/* Billing History (Placeholder) */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Billing History</h2>
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                <div className="space-y-1">
+                  <p className="font-medium text-sm">Invoice #{new Date().getFullYear()}-001</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(new Date().toISOString())} · {subscription?.plan_name || 'Standard'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="font-semibold text-sm">
+                    ${subscription?.price_monthly || 0}.00
+                  </span>
+                  <Button 
+                    variant="outline" size="sm" className="gap-2 h-8" 
+                    onClick={() => toast({ title: 'Invoice Downloaded', description: 'This is a placeholder PDF.' })}
+                  >
+                    <Download className="h-3.5 w-3.5" /> PDF
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Confirm switch dialog */}
       <Dialog open={!!confirmPlan} onOpenChange={() => setConfirmPlan(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Plan Switch</DialogTitle>
             <DialogDescription>
-              You are switching to the <strong>{confirmPlan?.name}</strong> plan.
+              Review the changes before switching plans.
               {subscription && ' Your current plan will be cancelled immediately and a new billing cycle will start.'}
             </DialogDescription>
           </DialogHeader>
-          {confirmPlan?.price_monthly && (
-            <div className="text-center py-4 border rounded-lg bg-muted/30">
-              <div className="text-3xl font-bold">${confirmPlan.price_monthly}</div>
-              <div className="text-sm text-muted-foreground">per month, starting today</div>
+
+          {/* Plan comparison */}
+          {subscription && confirmPlan && (
+            <div className="grid grid-cols-2 gap-3 py-2">
+              {/* Current */}
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current</p>
+                <p className="font-semibold text-sm">{subscription.plan_name}</p>
+                <p className="text-xl font-bold">
+                  {subscription.price_monthly ? `$${subscription.price_monthly}` : 'Free'}
+                  {subscription.price_monthly && <span className="text-xs font-normal text-muted-foreground">/mo</span>}
+                </p>
+              </div>
+              {/* New */}
+              <div className="rounded-lg border-2 border-primary p-3 bg-primary/5 space-y-2">
+                <p className="text-xs font-medium text-primary uppercase tracking-wide">New</p>
+                <p className="font-semibold text-sm">{confirmPlan.name}</p>
+                <p className="text-xl font-bold">
+                  {confirmPlan.price_monthly ? `$${confirmPlan.price_monthly}` : 'Free'}
+                  {confirmPlan.price_monthly && <span className="text-xs font-normal text-muted-foreground">/mo</span>}
+                </p>
+              </div>
             </div>
           )}
+
+          {/* Price difference */}
+          {subscription && confirmPlan && (() => {
+            const currentPrice = subscription.price_monthly ?? 0;
+            const newPrice = confirmPlan.price_monthly ?? 0;
+            const diff = newPrice - currentPrice;
+            if (diff === 0) return null;
+            return (
+              <div className={`text-center py-2 rounded-lg text-sm font-medium ${
+                diff > 0
+                  ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/20'
+                  : 'bg-green-50 text-green-700 dark:bg-green-950/20'
+              }`}>
+                {diff > 0 ? `+$${diff}/mo increase` : `−$${Math.abs(diff)}/mo savings`}
+              </div>
+            );
+          })()}
+
+          {/* Feature changes */}
+          {subscription && confirmPlan && (() => {
+            const currentFeatures = new Set(
+              subscription.features.filter(f => f.is_enabled).map(f => f.name)
+            );
+            const newFeatures = confirmPlan.features.filter(f => f.is_enabled);
+            const gained = newFeatures.filter(f => !currentFeatures.has(f.name));
+            const lost = subscription.features
+              .filter(f => f.is_enabled && !confirmPlan.features.find(nf => nf.name === f.name && nf.is_enabled));
+            if (gained.length === 0 && lost.length === 0) return null;
+            return (
+              <div className="text-xs space-y-1 py-1">
+                {gained.map(f => (
+                  <div key={f.name} className="flex items-center gap-1.5 text-green-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>+ {FEATURE_LABELS[f.name] ?? f.name}{f.value ? ` (${f.value})` : ''}</span>
+                  </div>
+                ))}
+                {lost.map(f => (
+                  <div key={f.name} className="flex items-center gap-1.5 text-destructive">
+                    <span className="h-3 w-3 flex items-center justify-center">✕</span>
+                    <span>− {FEATURE_LABELS[f.name] ?? f.name}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmPlan(null)}>Cancel</Button>
             <Button onClick={handleSwitch} disabled={switching}>

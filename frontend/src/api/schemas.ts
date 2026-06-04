@@ -58,6 +58,7 @@ export const addPatientSchema = z.object({
   age:    z.coerce.number({ message: 'Valid age required.' })
             .int().min(0, 'Valid age required.').max(150, 'Valid age required.'),
   gender: z.string().min(1, 'Gender is required.'),
+  medical_history: z.string().optional(),
 });
 
 export const labOrderSchema = z.object({
@@ -71,16 +72,19 @@ export const clinicalDataSchema = z.object({
   spo2:        z.string().optional(),
   bp_sys:      z.string().optional(),
   bp_dia:      z.string().optional(),
-  symptoms:    z.string().optional(),
+  symptoms:    z.array(z.string()).optional(),
 });
 
 // ── Lab ───────────────────────────────────────────────────────────────────────
-const labResultRowSchema = z.object({
-  analyte_name: z.string().min(1, 'Analyte name is required.'),
-  value:        z.string().min(1, 'Value is required.'),
+export const labResultRowSchema = z.object({
+  analyte_name:   z.string().min(1, 'Analyte name is required.'),
+  value:          z.string().min(1, 'Value is required.'),
   reference_low:  z.string().optional(),
   reference_high: z.string().optional(),
-  flag:           z.string().min(1, 'Flag is required.'),
+  sub_panel:      z.string().optional(),
+  // flag is computed server-side when reference range is provided.
+  // fallback_flag is only sent for qualitative results without a numeric range.
+  fallback_flag:  z.enum(['NORMAL', 'ABNORMAL', 'CRITICAL']).optional(),
 });
 
 export const labResultsSchema = z.object({
@@ -257,11 +261,16 @@ const labOrderResponseSchema = z.object({
   ordered_at:      z.string(),
   medical_history: z.record(z.string(), z.unknown()).optional(),
   results:         z.array(z.object({
-    result_id:    z.string(),
-    analyte_name: z.string(),
-    value:        z.string(),
-    flag:         z.string(),
-    unit_symbol:  z.string().default(''),
+    result_id:          z.string(),
+    analyte_name:       z.string(),
+    value:              z.string(),
+    flag:               z.string(),
+    sub_panel:          z.string().nullable().optional(),
+    is_amended:         z.boolean().default(false),
+    original_result_id: z.string().nullable().optional(),
+    acknowledged_at:    z.string().nullable().optional(),
+    acknowledged_by:    z.string().nullable().optional(),
+    unit_symbol:        z.string().default(''),
   })).default([]),
 });
 
@@ -271,6 +280,36 @@ export const apiLabOrdersResponseSchema = z.object({
 
 export const apiLabOrderDetailResponseSchema = z.object({
   order: labOrderResponseSchema,
+});
+
+// ── Doctor: lab-results detail view ──────────────────────────────────────────
+const labResultDetailSchema = z.object({
+  result_id:          z.string(),
+  analyte_name:       z.string(),
+  value:              z.string(),
+  reference_low:      z.number().nullable().optional(),
+  reference_high:     z.number().nullable().optional(),
+  flag:               z.string(),
+  sub_panel:          z.string().nullable().optional(),
+  is_amended:         z.boolean().default(false),
+  original_result_id: z.string().nullable().optional(),
+  acknowledged_at:    z.string().nullable().optional(),
+  acknowledged_by:    z.string().nullable().optional(),
+  acknowledged_by_name: z.string().nullable().optional(),
+  unit_symbol:        z.string().nullable().optional(),
+  created_at:         z.string(),
+});
+
+export const apiDoctorLabResultsResponseSchema = z.object({
+  test: z.object({
+    test_id:      z.string(),
+    test_type:    z.string(),
+    status:       z.string(),
+    patient_name: z.string(),
+    age:          z.number().optional(),
+    gender:       z.string().optional(),
+  }),
+  results: z.array(labResultDetailSchema).default([]),
 });
 
 // ── Lab Stats ─────────────────────────────────────────────────────────────────

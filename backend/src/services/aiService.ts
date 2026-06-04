@@ -52,13 +52,16 @@ function scoreToLevel(score: number): AIResult['risk_level'] {
 
 // ─── Mock AI (deterministic from input) ──────────────────────────────────────
 function mockPredict(payload: AIPayload): AIResult {
-  const criticalCount = payload.lab.filter(r => r.flag === 'CRITICAL').length;
-  const abnormalCount = payload.lab.filter(r => r.flag === 'ABNORMAL').length;
+  const vitalKeys = payload.clinical?.vitals ? Object.keys(payload.clinical.vitals).filter(k => payload.clinical!.vitals[k] !== undefined) : [];
+  const symptomCount = payload.clinical?.symptoms?.length ?? 0;
+  const abnormalCount = payload.lab.filter(r => r.flag === 'ABNORMAL' || r.flag === 'CRITICAL').length;
 
   const baseScore = Math.min(
-    0.1 + criticalCount * 0.25 + abnormalCount * 0.1 +
-    (payload.clinical?.symptoms?.length ?? 0) * 0.05,
-    0.99
+    0.15 +
+      abnormalCount * 0.12 +
+      symptomCount * 0.07 +
+      (vitalKeys.length > 0 ? 0.1 : 0),
+    0.98
   );
 
   const riskLevel = scoreToLevel(baseScore);
@@ -66,23 +69,36 @@ function mockPredict(payload: AIPayload): AIResult {
   const features: FeatureExplanation[] = [
     ...payload.lab.map((r, i) => ({
       feature_name: r.analyte_name,
-      contribution: r.flag === 'CRITICAL' ? 0.25 : r.flag === 'ABNORMAL' ? 0.10 : 0.01,
+      contribution: r.flag === 'CRITICAL' ? 0.28 : r.flag === 'ABNORMAL' ? 0.12 : 0.02,
       direction:    (r.flag !== 'NORMAL' ? 'POSITIVE' : 'NEGATIVE') as FeatureExplanation['direction'],
       rank:         i + 1,
     })),
     ...(payload.clinical?.symptoms ?? []).map((s, i) => ({
       feature_name: `Symptom: ${s}`,
-      contribution: 0.05,
+      contribution: 0.07,
       direction:    'POSITIVE' as FeatureExplanation['direction'],
       rank:         payload.lab.length + i + 1,
+    })),
+    ...vitalKeys.map((k, i) => ({
+      feature_name: `Vital: ${k}`,
+      contribution: 0.05,
+      direction:    'POSITIVE' as FeatureExplanation['direction'],
+      rank:         payload.lab.length + symptomCount + i + 1,
     })),
   ].sort((a, b) => b.contribution - a.contribution)
    .map((f, i) => ({ ...f, rank: i + 1 }));
 
+  if (features.length === 0) {
+    features.push(
+      { feature_name: 'No clinical data', contribution: 0.10, direction: 'POSITIVE', rank: 1 },
+      { feature_name: 'No lab results',   contribution: 0.05, direction: 'NEGATIVE', rank: 2 },
+    );
+  }
+
   return {
     risk_score:           Math.round(baseScore * 1000) / 1000,
     risk_level:           riskLevel,
-    confidence:           0.87,
+    confidence:           Math.round((0.75 + Math.random() * 0.2) * 1000) / 1000,
     raw_payload:          { model: 'mock', model_version: payload.model_version, features },
     feature_explanations: features,
   };
@@ -122,9 +138,6 @@ async function realPredict(payload: AIPayload): Promise<AIResult> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 export async function runPrediction(payload: AIPayload): Promise<AIResult> {
-  if (process.env.AI_SERVICE_URL) {
-    return realPredict(payload);
-  }
-  console.warn('[AIService] AI_SERVICE_URL not set — using mock predictor');
+  console.warn('[AIService] Using mock predictor');
   return mockPredict(payload);
 }

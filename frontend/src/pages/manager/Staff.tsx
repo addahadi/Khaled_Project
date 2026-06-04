@@ -1,18 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Users, MoreVertical, UserPlus, Loader2 } from 'lucide-react';
+import { Search, Users, MoreVertical, UserPlus, Loader2, AlertTriangle } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate } from '@/lib/formatDate';
 import InviteStaffDialog from '@/components/manager/InviteStaffDialog';
 
 interface StaffMember {
@@ -46,8 +53,12 @@ export default function Staff() {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    userId: string; username: string; status: StaffMember['status'];
+  } | null>(null);
+  const [suspendReason, setSuspendReason] = useState('');
 
-  const loadStaff = () => {
+  const loadStaff = useCallback(() => {
     ApiManager.execute({
       queryKey: ['manager', 'staff'],
       endpoint: '/manager/staff',
@@ -55,9 +66,9 @@ export default function Staff() {
       onSuccess: (data: unknown) => setStaff((data as { staff: StaffMember[] }).staff),
       onFinal:   stopLoading,
     });
-  };
+  }, [startLoading, stopLoading]);
 
-  useEffect(() => { loadStaff(); }, []);
+  useEffect(() => { loadStaff(); }, [loadStaff]);
 
   const updateStatus = (userId: string, status: StaffMember['status']) => {
     ApiManager.executeMutation({
@@ -86,7 +97,7 @@ export default function Staff() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Staff Management</h1>
-        {/* Image 4 Phase 3: invite button opens InviteStaffDialog */}
+        {/* Invite button opens InviteStaffDialog */}
         <Button className="gap-2" onClick={() => setInviteOpen(true)}>
           <UserPlus className="h-4 w-4" /> Invite Staff
         </Button>
@@ -178,7 +189,7 @@ export default function Staff() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {new Date(m.created_at).toLocaleDateString()}
+                      {formatDate(m.created_at)}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -198,14 +209,18 @@ export default function Staff() {
                             </DropdownMenuItem>
                           )}
                           {m.status !== 'INACTIVE' && (
-                            <DropdownMenuItem onClick={() => updateStatus(m.user_id, 'INACTIVE')}>
+                            <DropdownMenuItem onClick={() => setConfirmAction({
+                              userId: m.user_id, username: m.username, status: 'INACTIVE',
+                            })}>
                               Deactivate
                             </DropdownMenuItem>
                           )}
                           {m.status !== 'SUSPENDED' && (
                             <DropdownMenuItem
                               className="text-destructive"
-                              onClick={() => updateStatus(m.user_id, 'SUSPENDED')}
+                              onClick={() => setConfirmAction({
+                                userId: m.user_id, username: m.username, status: 'SUSPENDED',
+                              })}
                             >
                               Suspend
                             </DropdownMenuItem>
@@ -221,7 +236,59 @@ export default function Staff() {
         </CardContent>
       </Card>
 
-      {/* Image 3 + 4 Phase 3 — Invite staff dialog */}
+      {/* Staff status confirmation dialog (C5 fix) */}
+      <Dialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : 'Deactivate'} Staff Member
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.status === 'SUSPENDED'
+                ? <>Are you sure you want to suspend <strong>{confirmAction?.username}</strong>? They will <strong>immediately lose access</strong> to all platform features. This can be reversed from this page.</>
+                : <>Are you sure you want to deactivate <strong>{confirmAction?.username}</strong>? Their account will be set to inactive. This can be reversed from this page.</>}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-1">
+            <Label htmlFor="suspend-reason" className="text-sm">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Textarea
+              id="suspend-reason"
+              placeholder={confirmAction?.status === 'SUSPENDED' ? 'e.g. Pending HR review' : 'e.g. Employment ended'}
+              value={suspendReason}
+              onChange={e => setSuspendReason(e.target.value)}
+              rows={2}
+              className="resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirmAction(null); setSuspendReason(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={updatingId === confirmAction?.userId}
+              onClick={() => {
+                if (confirmAction) {
+                  updateStatus(confirmAction.userId, confirmAction.status);
+                  setConfirmAction(null);
+                  setSuspendReason('');
+                }
+              }}
+            >
+              {updatingId === confirmAction?.userId && (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              )}
+              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : 'Deactivate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite staff dialog */}
       <InviteStaffDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
