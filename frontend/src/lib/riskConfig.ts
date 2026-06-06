@@ -13,38 +13,44 @@ interface RiskConfigEntry {
   label:      string;       // Human-readable label
 }
 
+/**
+ * IBM Carbon semantic colors
+ * LOW      → success-green  (#24a148)
+ * MODERATE → warning-yellow (#f1c21b / amber)
+ * HIGH     → alert-orange   (#ff832b)
+ * CRITICAL → error-red      (#da1e28)
+ */
 export const RISK_CONFIG: Record<RiskLevel, RiskConfigEntry> = {
   LOW: {
     icon:       CheckCircle2,
-    color:      'text-green-600',
-    badgeClass: 'bg-green-100 text-green-800 border-green-200',
-    barClass:   '[&>div]:bg-green-500',
+    color:      'text-[#24a148]',
+    badgeClass: 'bg-[#defbe6] text-[#0e6027] border border-[#a7f0ba]',
+    barClass:   '[&>div]:bg-[#24a148]',
     label:      'Low',
   },
   MODERATE: {
     icon:       TrendingUp,
-    color:      'text-yellow-600',
-    badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    barClass:   '[&>div]:bg-yellow-500',
+    color:      'text-[#a2680a]',
+    badgeClass: 'bg-[#fdf1da] text-[#a2680a] border border-[#fdd13a]',
+    barClass:   '[&>div]:bg-[#f1c21b]',
     label:      'Moderate',
   },
   HIGH: {
     icon:       ShieldAlert,
-    color:      'text-orange-600',
-    badgeClass: 'bg-orange-100 text-orange-800 border-orange-200',
-    barClass:   '[&>div]:bg-orange-500',
+    color:      'text-[#ff832b]',
+    badgeClass: 'bg-[#fff2e8] text-[#8a3800] border border-[#ffb784]',
+    barClass:   '[&>div]:bg-[#ff832b]',
     label:      'High',
   },
   CRITICAL: {
     icon:       AlertTriangle,
-    color:      'text-red-600',
-    badgeClass: 'bg-red-100 text-red-800 border-red-200',
-    barClass:   '[&>div]:bg-red-500',
+    color:      'text-[#da1e28]',
+    badgeClass: 'bg-[#fff1f1] text-[#a2191f] border border-[#ffa4a9]',
+    barClass:   '[&>div]:bg-[#da1e28]',
     label:      'Critical',
   },
 };
 
-/** Safe lookup with fallback — avoids crashes on unknown risk values */
 export function getRiskConfig(level: string | null | undefined): RiskConfigEntry | null {
   if (!level) return null;
   return RISK_CONFIG[level as RiskLevel] ?? null;

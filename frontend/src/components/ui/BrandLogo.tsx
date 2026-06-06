@@ -1,28 +1,40 @@
-import { Microscope, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BrandLogoProps {
-  className?: string;
-  size?: 'sm' | 'md' | 'lg';
+ className?: string;
+ size?: 'sm' | 'md' | 'lg';
 }
 
+/**
+ * IBM Carbon brand mark — square, IBM Blue, cross/plus mark
+ * Carbon uses geometric, square marks. No rounded corners.
+ */
 export function BrandLogo({ className, size = 'md' }: BrandLogoProps) {
-  const containerClasses = {
-    sm: 'h-8 w-8 rounded-lg',
-    md: 'h-10 w-10 rounded-xl',
-    lg: 'h-12 w-12 rounded-2xl',
-  };
+ const dims = { sm: 28, md: 36, lg: 44 };
+ const d = dims[size];
 
-  const iconClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-5 w-5',
-    lg: 'h-6 w-6',
-  };
-
-  return (
-    <div className={cn("flex items-center justify-center bg-primary text-primary-foreground overflow-hidden relative", containerClasses[size], className)}>
-      <Microscope className={cn("absolute left-1/2 -translate-x-3", iconClasses[size])} />
-      <Brain className={cn("absolute right-1/2 translate-x-3 opacity-80", iconClasses[size])} />
-    </div>
-  );
+ return (
+ <div
+ className={cn(
+ "bg-primary text-primary-foreground flex items-center justify-center shrink-0",
+ className
+ )}
+ style={{ width: d, height: d }}
+ >
+ <svg
+ width={d * 0.55}
+ height={d * 0.55}
+ viewBox="0 0 20 20"
+ fill="none"
+ xmlns="http://www.w3.org/2000/svg"
+ aria-hidden="true"
+ >
+ {/* Carbon-inspired cross / diagnostic mark */}
+ <rect x="8.5" y="1" width="3" height="18" fill="white" />
+ <rect x="1" y="8.5" width="18" height="3" fill="white" />
+ <rect x="5" y="5" width="3" height="3" fill="white" opacity="0.5" />
+ <rect x="12" y="12" width="3" height="3" fill="white" opacity="0.5" />
+ </svg>
+ </div>
+ );
 }

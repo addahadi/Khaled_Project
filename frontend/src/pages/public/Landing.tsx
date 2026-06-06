@@ -1,249 +1,301 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Activity, Brain, FlaskConical, Shield, CheckCircle2,
-  Zap, Building2, ChevronRight, ArrowRight,
-} from 'lucide-react';
+import { ArrowRight, Brain, FlaskConical, Shield, Activity } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
 
 const FEATURES = [
-  {
-    icon: Brain,
-    title: 'AI-Powered Diagnosis',
-    description: 'Machine learning models trained on thousands of infectious disease cases provide real-time risk assessments with explainable AI insights.',
-    color: 'text-indigo-500',
-    bg: 'bg-indigo-50 dark:bg-indigo-950/20',
-  },
-  {
-    icon: FlaskConical,
-    title: 'Lab Integration',
-    description: 'Seamless bidirectional workflow between doctors and lab technicians. Orders, results, and alerts all in one platform.',
-    color: 'text-teal-500',
-    bg: 'bg-teal-50 dark:bg-teal-950/20',
-  },
-  {
-    icon: Shield,
-    title: 'Role-Based Security',
-    description: 'Doctors, lab techs, and managers each see exactly what they need. HIPAA-compliant access controls protect patient data.',
-    color: 'text-blue-500',
-    bg: 'bg-blue-50 dark:bg-blue-950/20',
-  },
-  {
-    icon: Activity,
-    title: 'Real-Time Alerts',
-    description: 'Critical lab results and high-risk predictions trigger instant notifications to the right clinicians without delay.',
-    color: 'text-red-500',
-    bg: 'bg-red-50 dark:bg-red-950/20',
-  },
-];
-
-const PLANS = [
-  {
-    name: 'Trial',
-    price: 'Free',
-    period: '14 days',
-    description: 'Evaluate the full platform with no commitment.',
-    icon: Zap,
-    color: 'text-yellow-500',
-    features: ['50 AI predictions', 'Up to 3 doctors', 'Lab integration', 'Basic support'],
-    cta: 'Start Free Trial',
-  },
-  {
-    name: 'Clinic',
-    price: '$299',
-    period: '/month',
-    description: 'Perfect for small to medium clinics.',
-    icon: Shield,
-    color: 'text-blue-500',
-    popular: true,
-    features: ['500 AI predictions', 'Up to 15 doctors', 'Full lab integration', 'XAI explanations', 'Priority support'],
-    cta: 'Get Started',
-  },
-  {
-    name: 'Hospital',
-    price: '$799',
-    period: '/month',
-    description: 'Enterprise-grade for large hospital networks.',
-    icon: Building2,
-    color: 'text-violet-500',
-    features: ['Unlimited predictions', 'Unlimited staff', 'Full lab integration', 'XAI explanations', 'Dedicated support', 'API access'],
-    cta: 'Contact Sales',
-  },
+ {
+ icon: Brain,
+ eyebrow: 'AI prediction',
+ title: 'Early risk assessment',
+ description:
+ 'Machine learning models (Random Forest, XGBoost, Neural Networks) trained on real infectious disease datasets deliver risk scores in under 2 seconds — before culture results are available.',
+ },
+ {
+ icon: FlaskConical,
+ eyebrow: 'Lab integration',
+ title: 'Seamless lab workflow',
+ description:
+ 'Bidirectional data flow between doctors and lab technicians. CRP, CBC, ESR, and NFS results link directly to patient records with anomaly alerts built in.',
+ },
+ {
+ icon: Shield,
+ eyebrow: 'Explainable AI',
+ title: 'Decisions you can trust',
+ description:
+ 'Every prediction comes with a ranked explanation of the contributing factors. Clinical trust requires transparency — not a black box.',
+ },
+ {
+ icon: Activity,
+ eyebrow: 'Role-based access',
+ title: 'Built for the whole team',
+ description:
+ 'Separate, optimised panels for doctors, lab technicians, and hospital managers. Each role sees exactly what it needs, nothing more.',
+ },
 ];
 
 const STATS = [
-  { value: '97%', label: 'Diagnostic Accuracy' },
-  { value: '< 2s', label: 'Prediction Response Time' },
-  { value: '50+', label: 'Supported Hospitals' },
-  { value: '200k+', label: 'Predictions Run' },
+ { value: '97%',  label: 'Model accuracy' },
+ { value: '< 2s',  label: 'Prediction time' },
+ { value: '50+',  label: 'Partner hospitals' },
+ { value: '200k+',  label: 'Predictions run' },
+];
+
+const PLANS = [
+ {
+ name: 'Trial',
+ price: 'Free',
+ period: '14 days',
+ description: 'Full platform access with no commitment.',
+ features: ['50 AI predictions', 'Up to 3 doctors', 'Lab integration', 'Email support'],
+ cta: 'Start free trial',
+ featured: false,
+ },
+ {
+ name: 'Clinic',
+ price: '$299',
+ period: '/month',
+ description: 'For small and medium clinics.',
+ features: ['500 AI predictions', 'Up to 15 doctors', 'Full lab integration', 'XAI explanations', 'Priority support'],
+ cta: 'Get started',
+ featured: true,
+ },
+ {
+ name: 'Hospital',
+ price: '$799',
+ period: '/month',
+ description: 'Enterprise-grade for hospital networks.',
+ features: ['Unlimited predictions', 'Unlimited staff', 'Full lab integration', 'XAI explanations', 'Dedicated support', 'API access'],
+ cta: 'Contact sales',
+ featured: false,
+ },
 ];
 
 export default function Landing() {
-  return (
-    <div className="min-h-screen">
-      <PublicNavbar />
+ return (
+ <div className="min-h-screen bg-background font-['IBM_Plex_Sans',Helvetica,Arial,sans-serif]">
+ <PublicNavbar />
 
-      {/* Hero */}
-      <section className="relative py-20 md:py-32 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-indigo-50/30 dark:to-indigo-950/10 pointer-events-none" />
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center max-w-4xl mx-auto">
-            <Badge className="mb-4 text-xs px-3 py-1" variant="secondary">
-              AI-Powered Clinical Decision Support
-            </Badge>
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
-              Diagnose Infectious Diseases{' '}
-              <span className="text-primary">Faster & Smarter</span>
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              DiagInfect combines AI prediction, real-time lab integration, and
-              explainable clinical insights to support your doctors where it matters most.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button size="lg" asChild className="gap-2">
-                <Link to="/register">
-                  Get Started Free <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link to="/about">Learn More</Link>
-              </Button>
-            </div>
-          </div>
+ {/* ── Hero ── */}
+ <section className="border-b border-border">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8">
+ <div className="py-20 md:py-28 max-w-3xl">
+ <p className="text-sm text-muted-foreground tracking-[0.16px] mb-4">
+ AI-powered clinical decision support
+ </p>
+ <h1 className="text-[42px] md:text-[60px] font-light leading-[1.17] text-foreground mb-6"
+ style={{ letterSpacing: '-0.4px' }}>
+ Detect infectious diseases <br className="hidden md:block" />
+ earlier. Act faster.
+ </h1>
+ <p className="text-lg text-muted-foreground leading-relaxed mb-10 max-w-xl">
+ DiagInfect analyses routine biological markers with AI to deliver
+ infection risk scores before culture results arrive — giving clinicians
+ a critical head start.
+ </p>
+ <div className="flex flex-col sm:flex-row gap-0">
+ <Button asChild size="lg" className="sm:mr-0">
+ <Link to="/register-organization">
+ Get started free <ArrowRight className="h-4 w-4" />
+ </Link>
+ </Button>
+ <Button asChild size="lg" variant="ghost" className="sm:ml-0">
+ <Link to="/about">Learn how it works</Link>
+ </Button>
+ </div>
+ </div>
+ </div>
+ </section>
 
-          {/* Stats row */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <div className="text-3xl font-bold text-primary">{value}</div>
-                <div className="text-sm text-muted-foreground mt-1">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+ {/* ── Stats row ── */}
+ <section className="bg-muted border-b border-border">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8">
+ <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border/60">
+ {STATS.map(({ value, label }) => (
+ <div key={label} className="py-8 px-6 first:pl-0">
+ <div className="text-[42px] font-light text-primary leading-none mb-2">
+ {value}
+ </div>
+ <div className="text-sm text-muted-foreground tracking-[0.16px]">
+ {label}
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ </section>
 
-      {/* Features */}
-      <section className="py-20 bg-muted/30" id="features">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-3">Everything your clinical team needs</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              A unified platform connecting doctors, lab technicians, and administrators
-              with the power of AI at every step.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            {FEATURES.map(({ icon: Icon, title, description, color, bg }) => (
-              <Card key={title} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="pt-6 flex gap-4">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-                    <Icon className={`h-6 w-6 ${color}`} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-base mb-1">{title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+ {/* ── Feature grid ── */}
+ <section className="border-b border-border" id="features">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8 py-16">
+ <div className="mb-12">
+ <p className="text-sm text-muted-foreground tracking-[0.16px] mb-3">
+ Platform capabilities
+ </p>
+ <h2 className="text-[32px] font-normal text-foreground">
+ Everything your clinical team needs
+ </h2>
+ </div>
 
-      {/* Pricing */}
-      <section className="py-20" id="pricing">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-3">Simple, transparent pricing</h2>
-            <p className="text-muted-foreground">Start free. Scale when you're ready.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {PLANS.map(({ name, price, period, description, icon: Icon, color, popular, features, cta }) => (
-              <Card
-                key={name}
-                className={`relative ${popular ? 'border-primary ring-1 ring-primary/40 shadow-lg scale-[1.02]' : ''}`}
-              >
-                {popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="text-xs shadow-sm">Most Popular</Badge>
-                  </div>
-                )}
-                <CardContent className="pt-8 pb-6 flex flex-col h-full">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${popular ? 'bg-primary' : 'bg-muted'}`}>
-                      <Icon className={`h-5 w-5 ${popular ? 'text-primary-foreground' : color}`} />
-                    </div>
-                    <div>
-                      <div className="font-bold text-base">{name}</div>
-                      <div className="text-xs text-muted-foreground">{description}</div>
-                    </div>
-                  </div>
-                  <div className="mb-5">
-                    <span className="text-4xl font-extrabold">{price}</span>
-                    <span className="text-muted-foreground text-sm ml-1">{period}</span>
-                  </div>
-                  <ul className="space-y-2 flex-1 mb-6">
-                    {features.map(f => (
-                      <li key={f} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    asChild
-                    variant={popular ? 'default' : 'outline'}
-                    className="w-full gap-2"
-                  >
-                    <Link to="/register">
-                      {cta} <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+ <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+ {FEATURES.map(({ icon: Icon, eyebrow, title, description }) => (
+ <div
+ key={title}
+ className="border-r border-b border-border p-6 bg-background hover:bg-muted transition-colors"
+ >
+ <div className="w-10 h-10 bg-primary/10 flex items-center justify-center mb-5">
+ <Icon className="h-5 w-5 text-primary" />
+ </div>
+ <p className="text-xs text-muted-foreground tracking-[0.32px] mb-2 uppercase">
+ {eyebrow}
+ </p>
+ <h3 className="text-base font-normal text-foreground mb-3">{title}</h3>
+ <p className="text-sm text-muted-foreground leading-relaxed tracking-[0.16px]">
+ {description}
+ </p>
+ </div>
+ ))}
+ </div>
+ </div>
+ </section>
 
-      {/* CTA Banner */}
-      <section className="py-16 bg-primary text-primary-foreground">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to transform your clinical workflow?</h2>
-          <p className="text-primary-foreground/80 mb-8">
-            Join 50+ hospitals already using DiagInfect to improve patient outcomes.
-          </p>
-          <Button size="lg" variant="secondary" asChild className="gap-2">
-            <Link to="/register">
-              Start Your Free Trial <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-      </section>
+ {/* ── Pricing ── */}
+ <section className="border-b border-border" id="pricing">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8 py-16">
+ <div className="mb-12">
+ <p className="text-sm text-muted-foreground tracking-[0.16px] mb-3">
+ Subscription plans
+ </p>
+ <h2 className="text-[32px] font-normal text-foreground mb-2">
+ Simple, transparent pricing
+ </h2>
+ <p className="text-muted-foreground">Start free. Scale when you are ready.</p>
+ </div>
 
-      {/* Footer */}
-      <footer className="border-t py-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-                <Activity className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="font-bold">DiagInfect</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} DiagInfect. All rights reserved.
-            </p>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              <Link to="/about" className="hover:text-foreground transition-colors">About</Link>
-              <Link to="/login"  className="hover:text-foreground transition-colors">Sign In</Link>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+ <div className="grid md:grid-cols-3 gap-5 max-w-5xl">
+ {PLANS.map(({ name, price, period, description, features, cta, featured }) => (
+ <div
+ key={name}
+ className={[
+ "border-r border-b border-border p-8 flex flex-col",
+ featured ? "bg-[#edf4ff]" : "bg-background",
+ ].join(" ")}
+ >
+ {featured && (
+ <span className="text-[11px] text-primary tracking-[0.32px] uppercase mb-4 font-normal">
+ Most popular
+ </span>
+ )}
+ <div className="mb-6">
+ <div className="text-base font-normal text-foreground mb-1">{name}</div>
+ <div className="text-sm text-muted-foreground tracking-[0.16px]">{description}</div>
+ </div>
+ <div className="mb-6">
+ <span className="text-[42px] font-light text-foreground">{price}</span>
+ <span className="text-sm text-muted-foreground ml-1">{period}</span>
+ </div>
+ <ul className="space-y-2 flex-1 mb-8">
+ {features.map(f => (
+ <li key={f} className="flex items-start gap-2 text-sm text-muted-foreground tracking-[0.16px]">
+ <span className="w-4 h-4 shrink-0 mt-0.5 text-primary text-xs flex items-center justify-center">✓</span>
+ {f}
+ </li>
+ ))}
+ </ul>
+ <Button
+ asChild
+ variant={featured ? "default" : "outline"}
+ className="w-full justify-between"
+ >
+ <Link to="/register-organization">
+ {cta} <ArrowRight className="h-4 w-4" />
+ </Link>
+ </Button>
+ </div>
+ ))}
+ </div>
+ </div>
+ </section>
+
+ {/* ── CTA banner — full-width IBM Blue ── */}
+ <section className="bg-primary">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8 py-16">
+ <div className="max-w-2xl">
+ <p className="text-sm text-primary-foreground/70 tracking-[0.16px] mb-4">
+ Ready to get started?
+ </p>
+ <h2 className="text-[32px] font-normal text-primary-foreground mb-4 leading-snug">
+ Transform your infectious disease diagnostic workflow today.
+ </h2>
+ <p className="text-primary-foreground/80 mb-8 text-lg">
+ Join 50+ hospitals already using DiagInfect to improve patient outcomes.
+ </p>
+ <div className="flex flex-col sm:flex-row gap-0">
+ <Button asChild size="lg"
+ className="bg-white text-primary hover:bg-[#f4f4f4] active:bg-[#e0e0e0]">
+ <Link to="/register-organization">
+ Start free trial <ArrowRight className="h-4 w-4" />
+ </Link>
+ </Button>
+ <Button asChild size="lg" variant="ghost"
+ className="text-white hover:bg-white/10 border-0">
+ <Link to="/about">Learn more</Link>
+ </Button>
+ </div>
+ </div>
+ </div>
+ </section>
+
+ {/* ── Footer — inverted charcoal ── */}
+ <footer className="bg-[#161616] text-[#c6c6c6]">
+ <div className="mx-auto max-w-[1584px] px-4 sm:px-8 py-16">
+ <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 pb-12 border-b border-[#393939]">
+ <div className="md:col-span-1">
+ <div className="flex items-center gap-3 mb-4">
+ <div className="w-8 h-8 bg-[#0f62fe] flex items-center justify-center">
+ <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+ <rect x="8.5" y="1" width="3" height="18" fill="white" />
+ <rect x="1" y="8.5" width="18" height="3" fill="white" />
+ </svg>
+ </div>
+ <span className="text-white text-base font-normal">DiagInfect</span>
+ </div>
+ <p className="text-sm text-[#c6c6c6] leading-relaxed tracking-[0.16px]">
+ AI-powered infectious disease diagnostic support for hospitals and clinics.
+ </p>
+ </div>
+ <div>
+ <p className="text-white text-sm font-normal mb-4 tracking-[0.16px]">Platform</p>
+ <ul className="space-y-2">
+ {['Features', 'Pricing', 'Security', 'Roadmap'].map(l => (
+ <li key={l}><Link to="/" className="text-sm text-[#c6c6c6] hover:text-white transition-colors tracking-[0.16px]">{l}</Link></li>
+ ))}
+ </ul>
+ </div>
+ <div>
+ <p className="text-white text-sm font-normal mb-4 tracking-[0.16px]">Company</p>
+ <ul className="space-y-2">
+ {['About', 'Contact', 'Privacy', 'Terms'].map(l => (
+ <li key={l}><Link to="/about" className="text-sm text-[#c6c6c6] hover:text-white transition-colors tracking-[0.16px]">{l}</Link></li>
+ ))}
+ </ul>
+ </div>
+ <div>
+ <p className="text-white text-sm font-normal mb-4 tracking-[0.16px]">Access</p>
+ <ul className="space-y-2">
+ <li><Link to="/login" className="text-sm text-[#c6c6c6] hover:text-white transition-colors tracking-[0.16px]">Sign in</Link></li>
+ <li><Link to="/register-organization" className="text-sm text-[#c6c6c6] hover:text-white transition-colors tracking-[0.16px]">Register organization</Link></li>
+ </ul>
+ </div>
+ </div>
+ <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+ <p className="text-xs text-[#8d8d8d] tracking-[0.32px]">
+ © {new Date().getFullYear()} DiagInfect — Ibn Khaldoun University of Tiaret. All rights reserved.
+ </p>
+ <p className="text-xs text-[#8d8d8d] tracking-[0.32px]">Built with Carbon Design System principles</p>
+ </div>
+ </div>
+ </footer>
+ </div>
+ );
 }

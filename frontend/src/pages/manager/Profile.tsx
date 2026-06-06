@@ -1,59 +1,98 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserCircle, Mail, Building2, MapPin, Calendar } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  UserCircle, Mail, Building2, Calendar, MapPin,
+  Pencil, Loader2, X, Check,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import ApiManager from '@/api/ApiManager';
+import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { formatDate } from '@/lib/formatDate';
 
 interface UserProfile {
-  user_id: string; username: string; email: string;
-  org_name: string | null; department_id: string | null;
+  user_id:        string; username: string; email: string;
+  org_name:       string | null; department_id: string | null;
   preferred_lang: string; status: string; role: string;
-  created_at?: string;
+  created_at?:    string;
 }
 
-const ROLE_COLOR: Record<string, string> = {
-  DOCTOR:   'bg-blue-100 text-blue-800',
-  LAB_TECH: 'bg-teal-100 text-teal-800',
-  MANAGER:  'bg-violet-100 text-violet-800',
-};
-
-export default function Profile() {
+export default function ManagerProfile() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  // Edit mode
+  const [editing, setEditing]   = useState(false);
+  const [editForm, setEditForm] = useState({ username: '', preferred_lang: 'en' });
+  const [saving, setSaving]     = useState(false);
 
   useEffect(() => {
     ApiManager.execute({
       queryKey: ['auth', 'me'],
       endpoint: '/auth/me',
-      onStart: startLoading,
+      onStart:   startLoading,
       onSuccess: (data: unknown) => setProfile((data as { user: UserProfile }).user),
-      onFinal: stopLoading,
+      onFinal:   stopLoading,
     });
   }, []);
 
-  const initials = profile?.username?.slice(0, 2).toUpperCase() ?? user?.username?.slice(0, 2).toUpperCase() ?? '??';
+  useEffect(() => {
+    if (profile && editing) {
+      setEditForm({ username: profile.username, preferred_lang: profile.preferred_lang });
+    }
+  }, [editing, profile]);
 
-  const Info = ({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value?: string | null }) => (
-    <div className="flex items-start gap-3">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted mt-0.5">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium">{value ?? '—'}</p>
-      </div>
-    </div>
-  );
+  const handleSave = () => {
+    if (!editForm.username.trim()) {
+      toast({ title: 'Validation Error', description: 'Username cannot be empty.', variant: 'destructive' });
+      return;
+    }
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.patch('/auth/profile', {
+        username:       editForm.username.trim(),
+        preferred_lang: editForm.preferred_lang,
+      }),
+      invalidateKeys: [['auth', 'me']],
+      onStart:   () => setSaving(true),
+      onSuccess: (_data: unknown, msg: string) => {
+        toast({ title: 'Profile updated', description: msg || 'Your profile has been saved.' });
+        setProfile(prev => prev
+          ? { ...prev, username: editForm.username.trim(), preferred_lang: editForm.preferred_lang }
+          : prev);
+        setEditing(false);
+      },
+      onError: ({ message }: { message: string }) => {
+        toast({ title: 'Error', description: message, variant: 'destructive' });
+      },
+      onFinal: () => setSaving(false),
+    });
+  };
+
+  const initials = profile?.username?.slice(0, 2).toUpperCase()
+    ?? user?.username?.slice(0, 2).toUpperCase() ?? 'MG';
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold">My Profile</h1>
+    <div className="space-y-6 max-w-xl">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">My Profile</h1>
+        {!editing && profile && (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
+            <Pencil className="h-3.5 w-3.5" /> Edit
+          </Button>
+        )}
+      </div>
 
+      {/* Avatar card */}
       <Card>
         <CardContent className="pt-6">
           {isLoading ? (
@@ -67,16 +106,14 @@ export default function Profile() {
           ) : (
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
+                <AvatarFallback className="text-xl font-bold bg-violet-600 text-white">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div>
                 <h2 className="text-xl font-bold">{profile?.username}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge className={`text-xs ${ROLE_COLOR[profile?.role ?? ''] ?? ''}`}>
-                    {profile?.role === 'LAB_TECH' ? 'Lab Technician' : profile?.role ?? '—'}
-                  </Badge>
+                  <Badge className="text-xs bg-violet-100 text-violet-800">Manager</Badge>
                   <Badge
                     variant={profile?.status === 'ACTIVE' ? 'default' : 'secondary'}
                     className="text-xs"
@@ -90,10 +127,11 @@ export default function Profile() {
         </CardContent>
       </Card>
 
+      {/* Details card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <UserCircle className="h-4 w-4" /> Account Information
+            <UserCircle className="h-4 w-4" /> Account Details
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -101,12 +139,88 @@ export default function Profile() {
             <div className="space-y-4">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
+          ) : editing ? (
+            /* ── Edit mode ── */
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-username">Username</Label>
+                <Input
+                  id="edit-username"
+                  value={editForm.username}
+                  onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="text-sm font-medium">{profile?.email ?? '—'}</p>
+                </div>
+                <Badge variant="secondary" className="ml-auto text-xs">Read-only</Badge>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Preferred Language</Label>
+                <Select
+                  value={editForm.preferred_lang}
+                  onValueChange={v => setEditForm(prev => ({ ...prev, preferred_lang: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="ar">العربية</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Organization</p>
+                  <p className="text-sm font-medium">{profile?.org_name ?? 'Not linked'}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline" className="flex-1 gap-1"
+                  onClick={() => setEditing(false)} disabled={saving}
+                >
+                  <X className="h-3.5 w-3.5" /> Cancel
+                </Button>
+                <Button className="flex-1 gap-1" onClick={handleSave} disabled={saving}>
+                  {saving
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Check className="h-3.5 w-3.5" />}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-6">
-              <Info icon={UserCircle} label="Username"     value={profile?.username} />
-              <Info icon={Mail}       label="Email"        value={profile?.email} />
-              <Info icon={Building2}  label="Organization" value={profile?.org_name} />
-              <Info icon={MapPin}     label="Language"     value={profile?.preferred_lang === 'ar' ? 'Arabic' : 'English'} />
+            /* ── View mode ── */
+            <div className="space-y-4">
+              {[
+                { icon: UserCircle, label: 'Username',     value: profile?.username },
+                { icon: Mail,       label: 'Email',        value: profile?.email },
+                { icon: Building2,  label: 'Organization', value: profile?.org_name ?? 'Not linked' },
+                { icon: MapPin,     label: 'Language',     value: profile?.preferred_lang === 'ar' ? 'Arabic' : 'English' },
+                ...(profile?.created_at ? [{ icon: Calendar, label: 'Member since', value: formatDate(profile.created_at) }] : []),
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm font-medium">{value ?? '—'}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

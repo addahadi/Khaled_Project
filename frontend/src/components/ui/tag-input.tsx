@@ -3,7 +3,6 @@ import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ── Curated symptom list for autocomplete ─────────────────────────────────────
 const COMMON_SYMPTOMS = [
   'Fever', 'Cough', 'Fatigue', 'Headache', 'Nausea', 'Vomiting',
   'Diarrhea', 'Shortness of breath', 'Chest pain', 'Sore throat',
@@ -31,19 +30,17 @@ interface TagInputProps {
 }
 
 function normalizeTag(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  const t = raw.trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : '';
 }
 
 export function TagInput({ value, onChange, placeholder = 'Type a symptom…', className }: TagInputProps) {
-  const [input, setInput]             = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [highlightIdx, setHighlightIdx]       = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [input, setInput]               = useState('');
+  const [showSuggestions, setShow]      = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const inputRef    = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filtered suggestions based on current input
   const suggestions = input.length >= 1
     ? COMMON_SYMPTOMS.filter(
         s => s.toLowerCase().includes(input.toLowerCase()) &&
@@ -51,25 +48,20 @@ export function TagInput({ value, onChange, placeholder = 'Type a symptom…', c
       ).slice(0, 8)
     : [];
 
-  // Close suggestions on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
+    const handle = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node))
+        setShow(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
   }, []);
 
   const addTag = useCallback((raw: string) => {
     const tag = normalizeTag(raw);
-    if (!tag) return;
-    if (value.some(v => v.toLowerCase() === tag.toLowerCase())) return;
+    if (!tag || value.some(v => v.toLowerCase() === tag.toLowerCase())) return;
     onChange([...value, tag]);
-    setInput('');
-    setHighlightIdx(-1);
-    setShowSuggestions(false);
+    setInput(''); setHighlightIdx(-1); setShow(false);
   }, [value, onChange]);
 
   const removeTag = useCallback((idx: number) => {
@@ -79,45 +71,40 @@ export function TagInput({ value, onChange, placeholder = 'Type a symptom…', c
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      if (highlightIdx >= 0 && highlightIdx < suggestions.length) {
-        addTag(suggestions[highlightIdx]);
-      } else if (input.trim()) {
-        addTag(input);
-      }
+      highlightIdx >= 0 && highlightIdx < suggestions.length
+        ? addTag(suggestions[highlightIdx])
+        : input.trim() && addTag(input);
     } else if (e.key === 'Backspace' && !input && value.length > 0) {
       removeTag(value.length - 1);
     } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightIdx(prev => Math.min(prev + 1, suggestions.length - 1));
+      e.preventDefault(); setHighlightIdx(p => Math.min(p + 1, suggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightIdx(prev => Math.max(prev - 1, -1));
+      e.preventDefault(); setHighlightIdx(p => Math.max(p - 1, -1));
     } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
+      setShow(false);
     }
   };
 
   return (
     <div ref={containerRef} className="relative">
+      {/* Input container */}
       <div
         className={cn(
-          'flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
-          'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-          className,
+          'flex flex-wrap items-center gap-1.5 min-h-12',
+          'rounded-lg border border-input bg-muted px-3 py-2 text-sm',
+          'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0',
+          'cursor-text transition-shadow',
+          className
         )}
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((tag, idx) => (
-          <Badge
-            key={`${tag}-${idx}`}
-            variant="secondary"
-            className="gap-1 pr-1 text-xs"
-          >
+          <Badge key={`${tag}-${idx}`} variant="secondary" className="gap-1 pr-1 text-xs rounded-md">
             {tag}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); removeTag(idx); }}
-              className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+              onClick={e => { e.stopPropagation(); removeTag(idx); }}
+              className="ml-0.5 rounded p-0.5 hover:bg-muted-foreground/20 transition-colors"
               aria-label={`Remove ${tag}`}
             >
               <X className="h-3 w-3" />
@@ -127,31 +114,33 @@ export function TagInput({ value, onChange, placeholder = 'Type a symptom…', c
         <input
           ref={inputRef}
           value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-            setShowSuggestions(true);
-            setHighlightIdx(-1);
-          }}
-          onFocus={() => { if (input.length >= 1) setShowSuggestions(true); }}
+          onChange={e => { setInput(e.target.value); setShow(true); setHighlightIdx(-1); }}
+          onFocus={() => { if (input.length >= 1) setShow(true); }}
           onKeyDown={handleKeyDown}
           placeholder={value.length === 0 ? placeholder : ''}
-          className="flex-1 min-w-[120px] bg-transparent outline-none placeholder:text-muted-foreground"
+          className="flex-1 min-w-[120px] bg-transparent outline-none placeholder:text-muted-foreground tracking-[0.16px]"
           aria-label="Add symptom"
         />
       </div>
 
-      {/* Suggestions dropdown */}
+      {/* Suggestions popover */}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-auto">
+        <div className={cn(
+          "absolute z-50 mt-1.5 w-full overflow-auto max-h-52",
+          "rounded-lg border border-border bg-popover",
+          "shadow-[0_8px_32px_-4px_rgba(0,0,0,0.12),0_2px_8px_-2px_rgba(0,0,0,0.08)]",
+        )}>
           {suggestions.map((s, idx) => (
             <button
               key={s}
               type="button"
               className={cn(
-                'w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors',
+                'w-full text-left px-3 py-2 text-sm tracking-[0.16px] transition-colors',
+                'hover:bg-accent hover:text-accent-foreground',
                 idx === highlightIdx && 'bg-accent text-accent-foreground',
+                idx !== suggestions.length - 1 && 'border-b border-border/50'
               )}
-              onMouseDown={(e) => { e.preventDefault(); addTag(s); }}
+              onMouseDown={e => { e.preventDefault(); addTag(s); }}
               onMouseEnter={() => setHighlightIdx(idx)}
             >
               {s}

@@ -1,20 +1,29 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
 
+/**
+ * IBM Carbon badge / tag
+ * - Square corners (2px only for small badges per Carbon spec)
+ * - No border by default on colored variants
+ */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center px-2.5 py-0.5 text-xs font-normal tracking-[0.32px] transition-colors",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+          "bg-primary text-primary-foreground border border-transparent",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-muted text-muted-foreground border border-border",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+          "bg-destructive/10 text-destructive border border-destructive/20",
+        outline:
+          "border border-border text-foreground bg-transparent",
+        success:
+          "bg-[#defbe6] text-[#0e6027] border border-[#a7f0ba]",
+        warning:
+          "bg-[#fdf1da] text-[#a2680a] border border-[#fdd13a]",
       },
     },
     defaultVariants: {
