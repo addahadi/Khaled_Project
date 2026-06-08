@@ -1,475 +1,299 @@
--- ============================================================
--- DiagInfect — Complete Database Schema
--- Fresh install on empty Supabase PostgreSQL
--- Run this file once, then you're done.
--- ============================================================
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- Enable UUID generation
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- ─────────────────────────────────────────────────────────────
--- 1. ORGANIZATIONS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE organizations (
-  organization_id  UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  name             TEXT         NOT NULL,
-  type             TEXT         NOT NULL CHECK (type IN ('HOSPITAL','CLINIC','LAB','OTHER')),
-  email            TEXT,
-  address          TEXT,
-  deleted_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+CREATE TABLE public.organizations (
+  organization_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['HOSPITAL'::text, 'CLINIC'::text, 'LAB'::text, 'OTHER'::text])),
+  email text,
+  address text,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organizations_pkey PRIMARY KEY (organization_id)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 2. DEPARTMENTS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE departments (
-  department_id    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id  UUID         NOT NULL REFERENCES organizations(organization_id) ON DELETE CASCADE,
-  name             TEXT         NOT NULL,
-  icon             TEXT         DEFAULT 'Building2',  -- Lucide icon name
-  deleted_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+CREATE TABLE public.departments (
+  department_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  icon text DEFAULT 'Building2'::text,
+  CONSTRAINT departments_pkey PRIMARY KEY (department_id),
+  CONSTRAINT departments_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id)
 );
-
-CREATE INDEX idx_departments_org ON departments(organization_id);
-
--- ─────────────────────────────────────────────────────────────
--- 3. USERS  (credentials live here — no separate auth table)
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE users (
-  user_id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  username             TEXT         NOT NULL,
-  email                TEXT         NOT NULL,
-  password_hash        TEXT,                          -- nullable until invitation is activated
-  organization_id      UUID         REFERENCES organizations(organization_id) ON DELETE SET NULL,
-  department_id        UUID         REFERENCES departments(department_id)     ON DELETE SET NULL,
-  preferred_lang       TEXT         NOT NULL DEFAULT 'en' CHECK (preferred_lang IN ('en','ar')),
-  status               TEXT         NOT NULL DEFAULT 'ACTIVE'
-                                    CHECK (status IN ('ACTIVE','INACTIVE','SUSPENDED')),
-  failed_login_count   INTEGER      NOT NULL DEFAULT 0,
-  locked_until         TIMESTAMPTZ,
-  last_login_at        TIMESTAMPTZ,
-  deleted_at           TIMESTAMPTZ,
-  created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+CREATE TABLE public.users (
+  user_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  username text NOT NULL,
+  email text NOT NULL,
+  password_hash text,
+  organization_id uuid,
+  department_id uuid,
+  preferred_lang text NOT NULL DEFAULT 'en'::text CHECK (preferred_lang = ANY (ARRAY['en'::text, 'ar'::text])),
+  status text NOT NULL DEFAULT 'ACTIVE'::text CHECK (status = ANY (ARRAY['ACTIVE'::text, 'INACTIVE'::text, 'SUSPENDED'::text])),
+  failed_login_count integer NOT NULL DEFAULT 0,
+  locked_until timestamp with time zone,
+  last_login_at timestamp with time zone,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT users_pkey PRIMARY KEY (user_id),
+  CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT users_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id)
 );
-
-CREATE UNIQUE INDEX idx_users_email    ON users(email)    WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX idx_users_username ON users(username) WHERE deleted_at IS NULL;
-CREATE INDEX        idx_users_org      ON users(organization_id);
-
--- ─────────────────────────────────────────────────────────────
--- 4. ROLE SUBTYPE TABLES
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE doctors (
-  doctor_id   UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID  NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.doctors (
+  doctor_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT doctors_pkey PRIMARY KEY (doctor_id),
+  CONSTRAINT doctors_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-
-CREATE TABLE lab_technicians (
-  technician_id  UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id        UUID  NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.lab_technicians (
+  technician_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT lab_technicians_pkey PRIMARY KEY (technician_id),
+  CONSTRAINT lab_technicians_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-
-CREATE TABLE hospital_managers (
-  manager_id  UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID  NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.hospital_managers (
+  manager_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT hospital_managers_pkey PRIMARY KEY (manager_id),
+  CONSTRAINT hospital_managers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 5. PLANS & FEATURES
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE plans (
-  plan_id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  name             TEXT          NOT NULL,
-  description      TEXT,
-  price_monthly    NUMERIC(10,2),
-  price_annually   NUMERIC(10,2),
-  is_trial         BOOLEAN       NOT NULL DEFAULT FALSE,
-  is_active        BOOLEAN       NOT NULL DEFAULT TRUE,
-  deleted_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+CREATE TABLE public.plans (
+  plan_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  price_monthly numeric,
+  price_annually numeric,
+  is_trial boolean NOT NULL DEFAULT false,
+  is_active boolean NOT NULL DEFAULT true,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plans_pkey PRIMARY KEY (plan_id)
 );
-
-CREATE TABLE plan_features (
-  feature_id   UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_id      UUID     NOT NULL REFERENCES plans(plan_id) ON DELETE CASCADE,
-  name         TEXT     NOT NULL,   -- e.g. 'predictions_per_month', 'users_limit', 'xai_explanations'
-  is_enabled   BOOLEAN  NOT NULL DEFAULT TRUE,
-  value        NUMERIC,             -- numeric limit (NULL = unlimited)
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (plan_id, name)
+CREATE TABLE public.plan_features (
+  feature_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plan_id uuid NOT NULL,
+  name text NOT NULL,
+  is_enabled boolean NOT NULL DEFAULT true,
+  value numeric,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plan_features_pkey PRIMARY KEY (feature_id),
+  CONSTRAINT plan_features_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.plans(plan_id)
 );
-
-CREATE INDEX idx_plan_features_plan ON plan_features(plan_id);
-
--- ─────────────────────────────────────────────────────────────
--- 6. SUBSCRIPTIONS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE subscriptions (
-  subscription_id       UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id       UUID   NOT NULL REFERENCES organizations(organization_id) ON DELETE CASCADE,
-  plan_id               UUID   NOT NULL REFERENCES plans(plan_id),
-  status                TEXT   NOT NULL DEFAULT 'ACTIVE'
-                                CHECK (status IN ('ACTIVE','CANCELLED','EXPIRED','PAST_DUE')),
-  current_cycle_start   DATE,
-  current_cycle_end     DATE,
-  trial_end_at          TIMESTAMPTZ,
-  external_payment_ref  TEXT,
-  cancelled_at          TIMESTAMPTZ,
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.subscriptions (
+  subscription_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  plan_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'ACTIVE'::text CHECK (status = ANY (ARRAY['ACTIVE'::text, 'CANCELLED'::text, 'EXPIRED'::text, 'PAST_DUE'::text])),
+  current_cycle_start date,
+  current_cycle_end date,
+  trial_end_at timestamp with time zone,
+  external_payment_ref text,
+  cancelled_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscriptions_pkey PRIMARY KEY (subscription_id),
+  CONSTRAINT subscriptions_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.plans(plan_id)
 );
-
-CREATE INDEX idx_subscriptions_org    ON subscriptions(organization_id);
-CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-
--- ─────────────────────────────────────────────────────────────
--- 7. USAGE RECORDS + OVERAGE EVENTS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE usage_records (
-  usage_id             UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  subscription_id      UUID    NOT NULL REFERENCES subscriptions(subscription_id) ON DELETE CASCADE,
-  cycle_start          DATE    NOT NULL,
-  cycle_end            DATE    NOT NULL,
-  prediction_used      INTEGER NOT NULL DEFAULT 0,
-  prediction_overage   INTEGER NOT NULL DEFAULT 0,
-  overage_notified     BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (subscription_id, cycle_start)
+CREATE TABLE public.usage_records (
+  usage_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subscription_id uuid NOT NULL,
+  cycle_start date NOT NULL,
+  cycle_end date NOT NULL,
+  prediction_used integer NOT NULL DEFAULT 0,
+  prediction_overage integer NOT NULL DEFAULT 0,
+  overage_notified boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT usage_records_pkey PRIMARY KEY (usage_id),
+  CONSTRAINT usage_records_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.subscriptions(subscription_id)
 );
-
-CREATE INDEX idx_usage_records_subscription ON usage_records(subscription_id);
-
-CREATE TABLE overage_events (
-  event_id    UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  usage_id    UUID  NOT NULL REFERENCES usage_records(usage_id) ON DELETE CASCADE,
-  event_type  TEXT  NOT NULL CHECK (event_type IN ('LIMIT_REACHED','OVERAGE_STARTED','USER_ADDED')),
-  metadata    JSONB,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.overage_events (
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  usage_id uuid NOT NULL,
+  event_type text NOT NULL CHECK (event_type = ANY (ARRAY['LIMIT_REACHED'::text, 'OVERAGE_STARTED'::text, 'USER_ADDED'::text])),
+  metadata jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT overage_events_pkey PRIMARY KEY (event_id),
+  CONSTRAINT overage_events_usage_id_fkey FOREIGN KEY (usage_id) REFERENCES public.usage_records(usage_id)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 8. PATIENTS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE patients (
-  patient_id       UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
-  name             TEXT   NOT NULL,
-  age              INTEGER CHECK (age >= 0 AND age <= 150),
-  gender           TEXT   CHECK (gender IN ('MALE','FEMALE','OTHER')),
-  medical_history  JSONB  NOT NULL DEFAULT '{}',
-  deleted_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.patients (
+  patient_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  age integer CHECK (age >= 0 AND age <= 150),
+  gender text CHECK (gender = ANY (ARRAY['MALE'::text, 'FEMALE'::text, 'OTHER'::text])),
+  medical_history jsonb NOT NULL DEFAULT '{}'::jsonb,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  organization_id uuid,
+  created_by uuid,
+  CONSTRAINT patients_pkey PRIMARY KEY (patient_id),
+  CONSTRAINT patients_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT patients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(user_id)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 9. CLINICAL DATA
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE clinical_data (
-  data_id      UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id   UUID  NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-  vitals       JSONB NOT NULL DEFAULT '{}',
-  symptoms     JSONB NOT NULL DEFAULT '[]',
-  recorded_by  UUID  REFERENCES users(user_id) ON DELETE SET NULL,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.clinical_data (
+  data_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  vitals jsonb NOT NULL DEFAULT '{}'::jsonb,
+  symptoms jsonb NOT NULL DEFAULT '[]'::jsonb,
+  recorded_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  recorded_at timestamp with time zone,
+  visit_date date,
+  deleted_at timestamp with time zone,
+  CONSTRAINT clinical_data_pkey PRIMARY KEY (data_id),
+  CONSTRAINT clinical_data_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
+  CONSTRAINT clinical_data_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_clinical_data_patient ON clinical_data(patient_id);
-
--- ─────────────────────────────────────────────────────────────
--- 10. UNITS (for lab result values)
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE units (
-  unit_id    UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       TEXT  NOT NULL,
-  symbol     TEXT  NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.units (
+  unit_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  symbol text NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT units_pkey PRIMARY KEY (unit_id)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 11. LAB TESTS + RESULTS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE lab_tests (
-  test_id       UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id    UUID  NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-  test_type     TEXT  NOT NULL,
-  status        TEXT  NOT NULL DEFAULT 'PENDING'
-                      CHECK (status IN ('PENDING','INPROGRESS','COMPLETED','CANCELLED')),
-  requested_by  UUID  REFERENCES users(user_id) ON DELETE SET NULL,
-  notes         TEXT,
-  ordered_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at    TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.lab_tests (
+  test_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  test_type text NOT NULL,
+  status text NOT NULL DEFAULT 'PENDING'::text CHECK (status = ANY (ARRAY['PENDING'::text, 'INPROGRESS'::text, 'COMPLETED'::text, 'CANCELLED'::text])),
+  requested_by uuid,
+  notes text,
+  ordered_at timestamp with time zone NOT NULL DEFAULT now(),
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  assigned_to uuid,
+  assigned_at timestamp with time zone,
+  CONSTRAINT lab_tests_pkey PRIMARY KEY (test_id),
+  CONSTRAINT lab_tests_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
+  CONSTRAINT lab_tests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(user_id),
+  CONSTRAINT lab_tests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.lab_technicians(technician_id)
 );
-
-CREATE INDEX idx_lab_tests_patient ON lab_tests(patient_id);
-CREATE INDEX idx_lab_tests_status  ON lab_tests(status);
-
-CREATE TABLE lab_test_results (
-  result_id      UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-  test_id        UUID     NOT NULL REFERENCES lab_tests(test_id) ON DELETE CASCADE,
-  analyte_name   TEXT     NOT NULL,
-  value          TEXT     NOT NULL,
-  unit_id        UUID     REFERENCES units(unit_id) ON DELETE SET NULL,
-  reference_low  NUMERIC,
-  reference_high NUMERIC,
-  flag           TEXT     NOT NULL CHECK (flag IN ('NORMAL','ABNORMAL','CRITICAL')),
-  entered_by     UUID     REFERENCES lab_technicians(technician_id) ON DELETE SET NULL,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.lab_test_results (
+  result_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  test_id uuid NOT NULL,
+  analyte_name text NOT NULL,
+  value text NOT NULL,
+  unit_id uuid,
+  reference_low numeric,
+  reference_high numeric,
+  flag text NOT NULL CHECK (flag = ANY (ARRAY['NORMAL'::text, 'ABNORMAL'::text, 'CRITICAL'::text])),
+  entered_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  sub_panel text,
+  is_amended boolean NOT NULL DEFAULT false,
+  original_result_id uuid,
+  acknowledged_at timestamp with time zone,
+  acknowledged_by uuid,
+  CONSTRAINT lab_test_results_pkey PRIMARY KEY (result_id),
+  CONSTRAINT lab_test_results_test_id_fkey FOREIGN KEY (test_id) REFERENCES public.lab_tests(test_id),
+  CONSTRAINT lab_test_results_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(unit_id),
+  CONSTRAINT lab_test_results_entered_by_fkey FOREIGN KEY (entered_by) REFERENCES public.lab_technicians(technician_id),
+  CONSTRAINT lab_test_results_original_result_id_fkey FOREIGN KEY (original_result_id) REFERENCES public.lab_test_results(result_id),
+  CONSTRAINT lab_test_results_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_lab_test_results_test ON lab_test_results(test_id);
-
--- ─────────────────────────────────────────────────────────────
--- 12. AI PREDICTION PIPELINE
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE prediction_requests (
-  request_id        UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id        UUID  NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-  clinical_data_id  UUID  REFERENCES clinical_data(data_id) ON DELETE SET NULL,
-  requested_by      UUID  REFERENCES users(user_id) ON DELETE SET NULL,
-  model_version     TEXT  NOT NULL DEFAULT 'v2.3.1',
-  status            TEXT  NOT NULL DEFAULT 'PENDING'
-                          CHECK (status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.prediction_requests (
+  request_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  clinical_data_id uuid,
+  requested_by uuid,
+  model_version text NOT NULL DEFAULT 'v2.3.1'::text,
+  status text NOT NULL DEFAULT 'PENDING'::text CHECK (status = ANY (ARRAY['PENDING'::text, 'PROCESSING'::text, 'COMPLETED'::text, 'FAILED'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT prediction_requests_pkey PRIMARY KEY (request_id),
+  CONSTRAINT prediction_requests_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
+  CONSTRAINT prediction_requests_clinical_data_id_fkey FOREIGN KEY (clinical_data_id) REFERENCES public.clinical_data(data_id),
+  CONSTRAINT prediction_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_prediction_requests_patient    ON prediction_requests(patient_id);
-CREATE INDEX idx_prediction_requests_requested  ON prediction_requests(requested_by);
-
-CREATE TABLE prediction_results (
-  result_id    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id   UUID          NOT NULL UNIQUE REFERENCES prediction_requests(request_id) ON DELETE CASCADE,
-  risk_score   NUMERIC(5,4)  NOT NULL CHECK (risk_score >= 0 AND risk_score <= 1),
-  risk_level   TEXT          NOT NULL CHECK (risk_level IN ('LOW','MODERATE','HIGH','CRITICAL')),
-  confidence   NUMERIC(5,4)  NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
-  raw_payload  JSONB,
-  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+CREATE TABLE public.prediction_results (
+  result_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL UNIQUE,
+  risk_score numeric NOT NULL CHECK (risk_score >= 0::numeric AND risk_score <= 1::numeric),
+  risk_level text NOT NULL CHECK (risk_level = ANY (ARRAY['LOW'::text, 'MODERATE'::text, 'HIGH'::text, 'CRITICAL'::text])),
+  confidence numeric NOT NULL CHECK (confidence >= 0::numeric AND confidence <= 1::numeric),
+  raw_payload jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT prediction_results_pkey PRIMARY KEY (result_id),
+  CONSTRAINT prediction_results_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.prediction_requests(request_id)
 );
-
-CREATE TABLE feature_explanations (
-  explanation_id  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  result_id       UUID          NOT NULL REFERENCES prediction_results(result_id) ON DELETE CASCADE,
-  feature_name    TEXT          NOT NULL,
-  contribution    NUMERIC(6,4)  NOT NULL,
-  direction       TEXT          NOT NULL CHECK (direction IN ('POSITIVE','NEGATIVE')),
-  rank            INTEGER       NOT NULL,
-  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+CREATE TABLE public.feature_explanations (
+  explanation_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  result_id uuid NOT NULL,
+  feature_name text NOT NULL,
+  contribution numeric NOT NULL,
+  direction text NOT NULL CHECK (direction = ANY (ARRAY['POSITIVE'::text, 'NEGATIVE'::text])),
+  rank integer NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT feature_explanations_pkey PRIMARY KEY (explanation_id),
+  CONSTRAINT feature_explanations_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.prediction_results(result_id)
 );
-
-CREATE INDEX idx_feature_explanations_result ON feature_explanations(result_id);
-
--- ─────────────────────────────────────────────────────────────
--- 13. INFECTION RISKS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE infection_risks (
-  risk_id        UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id     UUID          NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-  risk_score     NUMERIC(5,4)  NOT NULL CHECK (risk_score >= 0 AND risk_score <= 1),
-  risk_level     TEXT          NOT NULL CHECK (risk_level IN ('LOW','MODERATE','HIGH','CRITICAL')),
-  model_version  TEXT,
-  message        TEXT,
-  created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+CREATE TABLE public.infection_risks (
+  risk_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  risk_score numeric NOT NULL CHECK (risk_score >= 0::numeric AND risk_score <= 1::numeric),
+  risk_level text NOT NULL CHECK (risk_level = ANY (ARRAY['LOW'::text, 'MODERATE'::text, 'HIGH'::text, 'CRITICAL'::text])),
+  model_version text,
+  message text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT infection_risks_pkey PRIMARY KEY (risk_id),
+  CONSTRAINT infection_risks_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id)
 );
-
-CREATE INDEX idx_infection_risks_patient ON infection_risks(patient_id);
-
--- ─────────────────────────────────────────────────────────────
--- 14. AUTH — REFRESH TOKENS + BLACKLIST
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE refresh_tokens (
-  id           UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id      UUID   NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-  token_hash   TEXT   NOT NULL UNIQUE,
-  family       UUID   NOT NULL DEFAULT gen_random_uuid(),
-  device_info  JSONB,
-  ip_address   TEXT,
-  revoked_at   TIMESTAMPTZ,
-  expires_at   TIMESTAMPTZ NOT NULL,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.refresh_tokens (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  family uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_info jsonb,
+  ip_address text,
+  revoked_at timestamp with time zone,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id),
+  CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_refresh_tokens_hash   ON refresh_tokens(token_hash);
-CREATE INDEX idx_refresh_tokens_family ON refresh_tokens(family);
-CREATE INDEX idx_refresh_tokens_user   ON refresh_tokens(user_id);
-
-CREATE TABLE token_blacklist (
-  jti         TEXT        PRIMARY KEY,
-  expires_at  TIMESTAMPTZ NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.token_blacklist (
+  jti text NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT token_blacklist_pkey PRIMARY KEY (jti)
 );
-
--- ─────────────────────────────────────────────────────────────
--- 15. INVITATIONS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE invitations (
-  invitation_id    UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-  email            TEXT  NOT NULL,
-  role             TEXT  NOT NULL CHECK (role IN ('DOCTOR','LAB_TECH','MANAGER')),
-  organization_id  UUID  NOT NULL REFERENCES organizations(organization_id) ON DELETE CASCADE,
-  department_id    UUID  REFERENCES departments(department_id) ON DELETE SET NULL,
-  invited_by       UUID  NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-  token_hash       TEXT  NOT NULL UNIQUE,
-  activated_at     TIMESTAMPTZ,
-  activated_by     UUID  REFERENCES users(user_id) ON DELETE SET NULL,
-  expires_at       TIMESTAMPTZ NOT NULL,
-  deleted_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.invitations (
+  invitation_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['DOCTOR'::text, 'LAB_TECH'::text, 'MANAGER'::text])),
+  organization_id uuid NOT NULL,
+  department_id uuid,
+  invited_by uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  activated_at timestamp with time zone,
+  activated_by uuid,
+  expires_at timestamp with time zone NOT NULL,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT invitations_pkey PRIMARY KEY (invitation_id),
+  CONSTRAINT invitations_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT invitations_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
+  CONSTRAINT invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(user_id),
+  CONSTRAINT invitations_activated_by_fkey FOREIGN KEY (activated_by) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_invitations_token_hash ON invitations(token_hash);
-CREATE INDEX idx_invitations_org        ON invitations(organization_id);
-CREATE INDEX idx_invitations_email      ON invitations(email);
-
--- ─────────────────────────────────────────────────────────────
--- 16. ALERTS
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE alerts (
-  alert_id      UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id    UUID    REFERENCES patients(patient_id) ON DELETE CASCADE,  -- nullable for system alerts
-  recipient_id  UUID    NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-  alert_type    TEXT    NOT NULL,
-  message       TEXT    NOT NULL,
-  is_read       BOOLEAN NOT NULL DEFAULT FALSE,
-  read_at       TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.alerts (
+  alert_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid,
+  recipient_id uuid NOT NULL,
+  alert_type text NOT NULL,
+  message text NOT NULL,
+  is_read boolean NOT NULL DEFAULT false,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT alerts_pkey PRIMARY KEY (alert_id),
+  CONSTRAINT alerts_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
+  CONSTRAINT alerts_recipient_id_fkey FOREIGN KEY (recipient_id) REFERENCES public.users(user_id)
 );
-
-CREATE INDEX idx_alerts_recipient ON alerts(recipient_id);
-CREATE INDEX idx_alerts_patient   ON alerts(patient_id);
-CREATE INDEX idx_alerts_is_read   ON alerts(recipient_id, is_read);
-
--- ─────────────────────────────────────────────────────────────
--- 17. updated_at TRIGGERS
--- ─────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_organizations_updated_at
-  BEFORE UPDATE ON organizations
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_users_updated_at
-  BEFORE UPDATE ON users
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_subscriptions_updated_at
-  BEFORE UPDATE ON subscriptions
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_usage_records_updated_at
-  BEFORE UPDATE ON usage_records
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_patients_updated_at
-  BEFORE UPDATE ON patients
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_lab_tests_updated_at
-  BEFORE UPDATE ON lab_tests
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_prediction_requests_updated_at
-  BEFORE UPDATE ON prediction_requests
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
--- ─────────────────────────────────────────────────────────────
--- 18. SEED DATA — Units
--- ─────────────────────────────────────────────────────────────
-INSERT INTO units (name, symbol) VALUES
-  ('Cells per microliter',      'cells/μL'),
-  ('Grams per deciliter',       'g/dL'),
-  ('Milligrams per deciliter',  'mg/dL'),
-  ('Millimoles per liter',      'mmol/L'),
-  ('International units/liter', 'IU/L'),
-  ('Millimeters of mercury',    'mmHg'),
-  ('Beats per minute',          'bpm'),
-  ('Degrees Celsius',           '°C'),
-  ('Percentage',                '%'),
-  ('Milliseconds',              'ms'),
-  ('Micrograms per liter',      'μg/L'),
-  ('Nanograms per milliliter',  'ng/mL')
-ON CONFLICT (symbol) DO NOTHING;
-
--- ─────────────────────────────────────────────────────────────
--- 19. SEED DATA — Plans + Features
--- ─────────────────────────────────────────────────────────────
-INSERT INTO plans (plan_id, name, description, price_monthly, price_annually, is_trial, is_active)
-VALUES
-  (
-    '11111111-1111-1111-1111-111111111111',
-    'Trial',
-    'Full platform access for 14 days. No credit card required.',
-    NULL, NULL, TRUE, TRUE
-  ),
-  (
-    '22222222-2222-2222-2222-222222222222',
-    'Clinic',
-    'Ideal for small to medium clinics with up to 15 staff members.',
-    299.00, 2868.00, FALSE, TRUE
-  ),
-  (
-    '33333333-3333-3333-3333-333333333333',
-    'Hospital',
-    'Enterprise-grade plan for large hospital networks with unlimited usage.',
-    799.00, 7668.00, FALSE, TRUE
-  );
-
--- Trial plan features
-INSERT INTO plan_features (plan_id, name, is_enabled, value) VALUES
-  ('11111111-1111-1111-1111-111111111111', 'predictions_per_month', TRUE,  50),
-  ('11111111-1111-1111-1111-111111111111', 'users_limit',           TRUE,  5),
-  ('11111111-1111-1111-1111-111111111111', 'xai_explanations',      FALSE, NULL),
-  ('11111111-1111-1111-1111-111111111111', 'priority_support',      FALSE, NULL),
-  ('11111111-1111-1111-1111-111111111111', 'api_access',            FALSE, NULL);
-
--- Clinic plan features
-INSERT INTO plan_features (plan_id, name, is_enabled, value) VALUES
-  ('22222222-2222-2222-2222-222222222222', 'predictions_per_month', TRUE,  500),
-  ('22222222-2222-2222-2222-222222222222', 'users_limit',           TRUE,  20),
-  ('22222222-2222-2222-2222-222222222222', 'xai_explanations',      TRUE,  NULL),
-  ('22222222-2222-2222-2222-222222222222', 'priority_support',      TRUE,  NULL),
-  ('22222222-2222-2222-2222-222222222222', 'api_access',            FALSE, NULL);
-
--- Hospital plan features
-INSERT INTO plan_features (plan_id, name, is_enabled, value) VALUES
-  ('33333333-3333-3333-3333-333333333333', 'predictions_per_month', TRUE,  NULL),
-  ('33333333-3333-3333-3333-333333333333', 'users_limit',           TRUE,  NULL),
-  ('33333333-3333-3333-3333-333333333333', 'xai_explanations',      TRUE,  NULL),
-  ('33333333-3333-3333-3333-333333333333', 'priority_support',      TRUE,  NULL),
-  ('33333333-3333-3333-3333-333333333333', 'api_access',            TRUE,  NULL);
-
--- ─────────────────────────────────────────────────────────────
--- DONE
--- ─────────────────────────────────────────────────────────────
--- Tables created:
---   organizations, departments, users
---   doctors, lab_technicians, hospital_managers
---   plans, plan_features
---   subscriptions, usage_records, overage_events
---   patients, clinical_data
---   units, lab_tests, lab_test_results
---   prediction_requests, prediction_results, feature_explanations
---   infection_risks
---   refresh_tokens, token_blacklist
---   invitations, alerts
---
--- Seed data inserted:
---   12 common medical units
---   3 plans: Trial / Clinic / Hospital
---   15 plan features (5 per plan)
--- ─────────────────────────────────────────────────────────────

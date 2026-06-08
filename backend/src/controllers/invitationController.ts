@@ -72,7 +72,7 @@ export const inviteStaff = catchAsync(
         INSERT INTO overage_events (usage_id, event_type, metadata)
         SELECT ur.usage_id,
                'USER_ADDED',
-               ${JSON.stringify({ role, qty: 1 })}
+               ${JSON.stringify({ role, qty: 1 })}::jsonb
         FROM usage_records ur
         JOIN subscriptions s ON s.subscription_id = ur.subscription_id
         WHERE s.organization_id = ${req.user.org_id}

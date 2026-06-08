@@ -4,7 +4,38 @@ import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
-// ─── Schemas ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+const STALE_THRESHOLD_MS  = 72 * 60 * 60 * 1000; // 72 hours
+const LAB_RECENCY_DAYS    = 90;                    // lab results older than this are excluded
+const DUPLICATE_WINDOW_MS = 30 * 60 * 1000;       // 30-minute duplicate guard
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** True when a clinical record's observation time exceeds the stale threshold. */
+function isRecordStale(recordedAt: string | null, createdAt: string): boolean {
+  const observedAt = recordedAt ?? createdAt;
+  return Date.now() - new Date(observedAt).getTime() > STALE_THRESHOLD_MS;
+}
+
+/** Normalize JSONB fields that postgres.js v3 sometimes returns as strings. */
+function normalizeCd(cd: Record<string, unknown>) {
+  let vitals = cd.vitals;
+  if (typeof vitals === 'string') { try { vitals = JSON.parse(vitals); } catch { vitals = {}; } }
+  if (typeof vitals !== 'object' || vitals === null || Array.isArray(vitals)) vitals = {};
+  let symptoms = cd.symptoms;
+  if (typeof symptoms === 'string') { try { symptoms = JSON.parse(symptoms); } catch { symptoms = []; } }
+  if (!Array.isArray(symptoms)) symptoms = [];
+  return { ...cd, vitals, symptoms } as Record<string, unknown>;
+}
+
+/** Org-scope subquery: patient must belong to the requesting doctor's org. */
+function patientOrgFilter(orgId: string | null) {
+  return orgId
+    ? sql`AND p.organization_id = ${orgId}`
+    : sql``;
+}
+
+// ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const patientSchema = z.object({
   name:            z.string().min(2, { message: 'ERR_NAME_TOO_SHORT' }),
@@ -22,7 +53,22 @@ const clinicalDataSchema = z.object({
     blood_pressure_diastolic: z.number().optional(),
     spo2:                     z.number().optional(),
   }),
-  symptoms: z.array(z.string()),
+  symptoms:    z.array(z.string()),
+  recorded_at: z.string(),
+  visit_date:  z.string(),
+});
+
+const updateClinicalSchema = z.object({
+  vitals: z.object({
+    temperature:              z.number().optional(),
+    heart_rate:               z.number().optional(),
+    blood_pressure_systolic:  z.number().optional(),
+    blood_pressure_diastolic: z.number().optional(),
+    spo2:                     z.number().optional(),
+  }).optional(),
+  symptoms:    z.array(z.string()).optional(),
+  recorded_at: z.string().datetime({ offset: true }).optional(),
+  visit_date:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 const labOrderSchema = z.object({
@@ -43,21 +89,26 @@ export const getPatients = catchAsync(async (req: Request, res: Response) => {
 
   const patients = await sql`
     SELECT
-      p.patient_id,
-      p.name,
-      p.age,
-      p.gender,
-      p.created_at,
-      ir.risk_level AS risk_status,
-      ir.risk_score
+      p.patient_id, p.name, p.age, p.gender, p.created_at,
+      ir.risk_level AS risk_status, ir.risk_score,
+      -- Latest clinical record staleness hint for patient list
+      CASE
+        WHEN cd.created_at IS NULL THEN 'NO_DATA'
+        WHEN COALESCE(cd.recorded_at, cd.created_at) < NOW() - INTERVAL '72 hours' THEN 'STALE'
+        ELSE 'FRESH'
+      END AS clinical_data_status
     FROM patients p
     LEFT JOIN LATERAL (
       SELECT risk_level, risk_score FROM infection_risks
-      WHERE patient_id = p.patient_id
-      ORDER BY created_at DESC LIMIT 1
+      WHERE patient_id = p.patient_id ORDER BY created_at DESC LIMIT 1
     ) ir ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT created_at, recorded_at FROM clinical_data
+      WHERE patient_id = p.patient_id AND deleted_at IS NULL
+      ORDER BY COALESCE(recorded_at, created_at) DESC LIMIT 1
+    ) cd ON TRUE
     WHERE p.deleted_at IS NULL
-    ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
+    ${patientOrgFilter(orgId)}
     ORDER BY p.created_at DESC
   `;
 
@@ -66,6 +117,7 @@ export const getPatients = catchAsync(async (req: Request, res: Response) => {
 
 export const getPatientById = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { patientId } = req.params;
+  const orgId = req.user!.org_id;
 
   const [patient] = await sql`
     SELECT p.patient_id, p.name, p.age, p.gender, p.medical_history, p.created_at,
@@ -75,32 +127,41 @@ export const getPatientById = catchAsync(async (req: Request, res: Response, nex
       SELECT risk_level, risk_score FROM infection_risks
       WHERE patient_id = p.patient_id ORDER BY created_at DESC LIMIT 1
     ) ir ON TRUE
-    WHERE p.patient_id = ${patientId} AND p.deleted_at IS NULL
+    WHERE p.patient_id = ${patientId}
+      AND p.deleted_at IS NULL
+      ${patientOrgFilter(orgId)}
     LIMIT 1
   `;
 
   if (!patient) return next(new AppError('ERROR_PATIENT_NOT_FOUND', 404));
 
+  // All active clinical records, newest first, with staleness + prediction link count
   const clinicalData = (await sql`
-    SELECT data_id, vitals, symptoms, recorded_by, created_at
-    FROM clinical_data WHERE patient_id = ${patientId} ORDER BY created_at DESC
-  `).map(cd => {
-    let vitals = cd.vitals;
-    if (typeof vitals === 'string') { try { vitals = JSON.parse(vitals); } catch { vitals = {}; } }
-    if (typeof vitals !== 'object' || vitals === null || Array.isArray(vitals)) vitals = {};
-    let symptoms = cd.symptoms;
-    if (typeof symptoms === 'string') { try { symptoms = JSON.parse(symptoms); } catch { symptoms = []; } }
-    if (!Array.isArray(symptoms)) symptoms = [];
-    return {
-      ...cd,
-      vitals,
-      symptoms,
-    };
-  });
+    SELECT
+      cd.data_id,
+      cd.vitals,
+      cd.symptoms,
+      cd.recorded_at,
+      cd.visit_date,
+      cd.created_at,
+      cd.recorded_by,
+      -- Staleness: observation > 72h ago?
+      (COALESCE(cd.recorded_at, cd.created_at) < NOW() - INTERVAL '72 hours') AS is_stale,
+      -- How many COMPLETED predictions used this snapshot?
+      (
+        SELECT COUNT(*) FROM prediction_requests pr
+        WHERE pr.clinical_data_id = cd.data_id AND pr.status = 'COMPLETED'
+      ) AS linked_prediction_count
+    FROM clinical_data cd
+    WHERE cd.patient_id = ${patientId}
+      AND cd.deleted_at IS NULL
+    ORDER BY COALESCE(cd.recorded_at, cd.created_at) DESC
+  `).map(normalizeCd);
 
   const labTests = await sql`
     SELECT test_id, test_type, status, notes, ordered_at
-    FROM lab_tests WHERE patient_id = ${patientId} AND deleted_at IS NULL ORDER BY ordered_at DESC
+    FROM lab_tests WHERE patient_id = ${patientId} AND deleted_at IS NULL
+    ORDER BY ordered_at DESC
   `;
 
   res.status(200).json({
@@ -119,7 +180,11 @@ export const createPatient = catchAsync(async (req: Request, res: Response, next
 
   const [patient] = await sql`
     INSERT INTO patients (name, age, gender, medical_history, organization_id, created_by)
-    VALUES (${val.data.name}, ${val.data.age}, ${val.data.gender}, ${JSON.stringify(val.data.medical_history ?? {})}, ${req.user!.org_id}, ${req.user!.user_id})
+    VALUES (
+      ${val.data.name}, ${val.data.age}, ${val.data.gender},
+      ${JSON.stringify(val.data.medical_history ?? {})}::jsonb,
+      ${req.user!.org_id}, ${req.user!.user_id}
+    )
     RETURNING patient_id, name, age, gender, created_at
   `;
 
@@ -127,6 +192,60 @@ export const createPatient = catchAsync(async (req: Request, res: Response, next
 });
 
 // ─── Clinical Data ────────────────────────────────────────────────────────────
+
+// GET /api/doctor/clinical-data/patient/:patientId   (paginated history)
+export const getClinicalDataHistory = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { patientId } = req.params;
+  const orgId  = req.user!.org_id;
+  const page   = Math.max(1, parseInt(String(req.query.page  ?? '1'),  10));
+  const limit  = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '10'), 10)));
+  const offset = (page - 1) * limit;
+
+  // Org-scope guard
+  const [patient] = await sql`
+    SELECT patient_id FROM patients p
+    WHERE p.patient_id = ${patientId}
+      AND p.deleted_at IS NULL
+      ${patientOrgFilter(orgId)}
+    LIMIT 1
+  `;
+  if (!patient) return next(new AppError('ERROR_PATIENT_NOT_FOUND', 404));
+
+  const records = (await sql`
+    SELECT
+      cd.data_id, cd.vitals, cd.symptoms,
+      cd.recorded_at, cd.visit_date, cd.created_at, cd.recorded_by,
+      (COALESCE(cd.recorded_at, cd.created_at) < NOW() - INTERVAL '72 hours') AS is_stale,
+      (
+        SELECT COUNT(*) FROM prediction_requests pr
+        WHERE pr.clinical_data_id = cd.data_id AND pr.status = 'COMPLETED'
+      ) AS linked_prediction_count,
+      u.username AS recorded_by_name
+    FROM clinical_data cd
+    LEFT JOIN users u ON u.user_id = cd.recorded_by
+    WHERE cd.patient_id = ${patientId}
+      AND cd.deleted_at IS NULL
+    ORDER BY COALESCE(cd.recorded_at, cd.created_at) DESC
+    LIMIT ${limit} OFFSET ${offset}
+  `).map(normalizeCd);
+
+  const [countRow] = await sql`
+    SELECT COUNT(*) AS total FROM clinical_data
+    WHERE patient_id = ${patientId} AND deleted_at IS NULL
+  `;
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      records,
+      pagination: {
+        page, limit,
+        total: Number(countRow.total),
+        pages: Math.ceil(Number(countRow.total) / limit),
+      },
+    },
+  });
+});
 
 export const createClinicalData = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const val = clinicalDataSchema.safeParse(req.body);
@@ -136,85 +255,159 @@ export const createClinicalData = catchAsync(async (req: Request, res: Response,
     return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
   }
 
+  const { patient_id, vitals, symptoms, recorded_at, visit_date } = val.data;
+  const orgId = req.user!.org_id;
+
+  // Org-scope: patient must belong to doctor's org
   const [patient] = await sql`
-    SELECT patient_id FROM patients WHERE patient_id = ${val.data.patient_id} AND deleted_at IS NULL
+    SELECT patient_id FROM patients p
+    WHERE p.patient_id = ${patient_id}
+      AND p.deleted_at IS NULL
+      ${patientOrgFilter(orgId)}
+    LIMIT 1
   `;
   if (!patient) return next(new AppError('ERROR_PATIENT_NOT_FOUND', 404));
 
-  let [cd] = await sql`
-    INSERT INTO clinical_data (patient_id, vitals, symptoms, recorded_by)
-    VALUES (
-      ${val.data.patient_id},
-      ${JSON.stringify(val.data.vitals)},
-      ${JSON.stringify(val.data.symptoms)},
-      ${req.user!.user_id}
-    )
-    RETURNING data_id, patient_id, vitals, symptoms, created_at
+  // Duplicate guard: same doctor, same patient, within the last 30 min
+  const [recent] = await sql`
+    SELECT data_id FROM clinical_data
+    WHERE patient_id  = ${patient_id}
+      AND recorded_by = ${req.user!.user_id}
+      AND COALESCE(recorded_at, created_at) > NOW() - INTERVAL '30 minutes'
+      AND deleted_at IS NULL
+    LIMIT 1
   `;
+  if (recent) return next(new AppError('ERROR_CLINICAL_DATA_DUPLICATE', 409));
 
-  if (typeof cd.vitals === 'string') { try { cd.vitals = JSON.parse(cd.vitals); } catch { cd.vitals = {}; } }
-  if (typeof cd.vitals !== 'object' || cd.vitals === null || Array.isArray(cd.vitals)) cd.vitals = {};
-  if (typeof cd.symptoms === 'string') { try { cd.symptoms = JSON.parse(cd.symptoms); } catch { cd.symptoms = []; } }
-  if (!Array.isArray(cd.symptoms)) cd.symptoms = [];
+  const observedAt  = recorded_at ?? null;
+  const visitDay    = visit_date  ?? null;
 
-  res.status(201).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_SAVED', data: { clinicalData: cd } });
+  let [cd] = await sql`
+    INSERT INTO clinical_data (patient_id, vitals, symptoms, recorded_by, recorded_at, visit_date)
+    VALUES (
+      ${patient_id},
+      ${JSON.stringify(vitals)}::jsonb,
+      ${JSON.stringify(symptoms)}::jsonb,
+      ${req.user!.user_id},
+      ${observedAt},
+      ${visitDay}
+    )
+    RETURNING data_id, patient_id, vitals, symptoms, recorded_at, visit_date, created_at
+  `;
+  cd = normalizeCd(cd as Record<string, unknown>);
+
+  res.status(201).json({
+    status: 'success',
+    messageKey: 'SUCCESS_CLINICAL_DATA_SAVED',
+    data: { clinicalData: cd },
+  });
 });
 
 export const updateClinicalData = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { dataId } = req.params;
+  const orgId = req.user!.org_id;
 
-  const updateSchema = z.object({
-    vitals: z.object({
-      temperature:              z.number().optional(),
-      heart_rate:               z.number().optional(),
-      blood_pressure_systolic:  z.number().optional(),
-      blood_pressure_diastolic: z.number().optional(),
-      spo2:                     z.number().optional(),
-    }).optional(),
-    symptoms: z.array(z.string()).optional(),
-  });
-
-  const val = updateSchema.safeParse(req.body);
+  const val = updateClinicalSchema.safeParse(req.body);
   if (!val.success) {
     const fields: Record<string, string> = {};
     val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
     return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
   }
 
+  if (!val.data.vitals && !val.data.symptoms && !val.data.recorded_at && !val.data.visit_date) {
+    return next(new AppError('ERROR_NOTHING_TO_UPDATE', 400));
+  }
+
+  // Org-scope + existence check
   const [existing] = await sql`
-    SELECT data_id FROM clinical_data WHERE data_id = ${dataId}
+    SELECT cd.data_id, cd.patient_id,
+      (SELECT COUNT(*) FROM prediction_requests pr
+       WHERE pr.clinical_data_id = cd.data_id AND pr.status = 'COMPLETED') AS linked_count
+    FROM clinical_data cd
+    JOIN patients p ON p.patient_id = cd.patient_id
+    WHERE cd.data_id    = ${dataId}
+      AND cd.deleted_at IS NULL
+      ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
+    LIMIT 1
   `;
   if (!existing) return next(new AppError('ERROR_CLINICAL_DATA_NOT_FOUND', 404));
 
+  // Warn if this snapshot was used by completed predictions (still allow edit — doctors may correct typos)
+  const isLinked = Number(existing.linked_count) > 0;
+
+  // ── JSONB merge for vitals (partial update), full replace for symptoms ──
+  // When a field is not provided we SET it to itself (no-op), avoiding overwrite.
+  const vitalsJson   = val.data.vitals    !== undefined ? JSON.stringify(val.data.vitals)   : null;
+  const symptomsJson = val.data.symptoms  !== undefined ? JSON.stringify(val.data.symptoms) : null;
+
   let [updated] = await sql`
     UPDATE clinical_data
-    SET vitals   = ${JSON.stringify(val.data.vitals ?? {})},
-        symptoms = ${JSON.stringify(val.data.symptoms ?? [])}
-    WHERE data_id = ${dataId}
-    RETURNING data_id, patient_id, vitals, symptoms, created_at
+    SET
+      vitals      = ${vitalsJson !== null
+                      ? sql`vitals || ${vitalsJson}::jsonb`
+                      : sql`vitals`},
+      symptoms    = ${symptomsJson !== null
+                      ? sql`${symptomsJson}::jsonb`
+                      : sql`symptoms`},
+      recorded_at = ${val.data.recorded_at !== undefined
+                      ? sql`${val.data.recorded_at}`
+                      : sql`recorded_at`},
+      visit_date  = ${val.data.visit_date !== undefined
+                      ? sql`${val.data.visit_date}`
+                      : sql`visit_date`}
+    WHERE data_id    = ${dataId}
+      AND deleted_at IS NULL
+    RETURNING data_id, patient_id, vitals, symptoms, recorded_at, visit_date, created_at
   `;
+  updated = normalizeCd(updated as Record<string, unknown>);
 
-  if (typeof updated.vitals === 'string') { try { updated.vitals = JSON.parse(updated.vitals); } catch { updated.vitals = {}; } }
-  if (typeof updated.vitals !== 'object' || updated.vitals === null || Array.isArray(updated.vitals)) updated.vitals = {};
-  if (typeof updated.symptoms === 'string') { try { updated.symptoms = JSON.parse(updated.symptoms); } catch { updated.symptoms = []; } }
-  if (!Array.isArray(updated.symptoms)) updated.symptoms = [];
-
-  res.status(200).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_UPDATED', data: { clinicalData: updated } });
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_CLINICAL_DATA_UPDATED',
+    data: {
+      clinicalData: updated,
+      ...(isLinked && {
+        warning: 'This record was already used in completed predictions. Those historical predictions now reference updated data.',
+      }),
+    },
+  });
 });
 
 export const deleteClinicalData = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { dataId } = req.params;
+  const orgId = req.user!.org_id;
 
+  // Org-scope + existence check
   const [existing] = await sql`
-    SELECT data_id FROM clinical_data WHERE data_id = ${dataId}
+    SELECT cd.data_id,
+      (SELECT COUNT(*) FROM prediction_requests pr
+       WHERE pr.clinical_data_id = cd.data_id AND pr.status = 'COMPLETED') AS linked_count
+    FROM clinical_data cd
+    JOIN patients p ON p.patient_id = cd.patient_id
+    WHERE cd.data_id    = ${dataId}
+      AND cd.deleted_at IS NULL
+      ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
+    LIMIT 1
   `;
   if (!existing) return next(new AppError('ERROR_CLINICAL_DATA_NOT_FOUND', 404));
 
+  // Soft delete — preserves the snapshot for historical predictions
   await sql`
-    DELETE FROM clinical_data WHERE data_id = ${dataId}
+    UPDATE clinical_data SET deleted_at = NOW() WHERE data_id = ${dataId}
   `;
 
-  res.status(200).json({ status: 'success', messageKey: 'SUCCESS_CLINICAL_DATA_DELETED' });
+  const linkedCount = Number(existing.linked_count);
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_CLINICAL_DATA_DELETED',
+    data: {
+      archived: true,
+      ...(linkedCount > 0 && {
+        note: `This record was used in ${linkedCount} completed prediction(s). It has been archived and is no longer included in future predictions.`,
+      }),
+    },
+  });
 });
 
 // ─── Lab Orders ───────────────────────────────────────────────────────────────
@@ -235,7 +428,6 @@ export const createLabOrder = catchAsync(async (req: Request, res: Response, nex
     RETURNING test_id, patient_id, test_type, status, ordered_at
   `;
 
-  // Alert lab techs in same org
   if (req.user?.org_id) {
     const techs = await sql`
       SELECT u.user_id FROM users u
@@ -253,24 +445,8 @@ export const createLabOrder = catchAsync(async (req: Request, res: Response, nex
   res.status(201).json({ status: 'success', messageKey: 'SUCCESS_LAB_ORDER_CREATED', data: { labTest: test } });
 });
 
-// ─── Predictions (Image 2 pipeline) ──────────────────────────────────────────
+// ─── Predictions ──────────────────────────────────────────────────────────────
 
-/**
- * POST /api/doctor/predictions
- *
- * Image 2 sequence:
- *   1. Fetch ClinicalData by patient_id
- *   2. Fetch LabTestResults by patient_id
- *   3. Send payload {clinical, lab, model_version} → AIService
- *   4. AIService runs Random Forest / XGBoost / NN
- *   5. Receive {risk_score, risk_level, confidence, raw_payload}
- *   6. INSERT PredictionResult
- *   7. INSERT FeatureExplanation rows (from raw_payload)
- *   8. INSERT InfectionRisk record
- *   9. INCREMENT predictions_used
- *  10. Return 201 {request_id, risk_level, confidence}
- *      + overage warning if isOverage (Image 1)
- */
 export const createPrediction = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const val = predictionSchema.safeParse(req.body);
   if (!val.success) {
@@ -282,36 +458,80 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
   const { patient_id, model_version } = val.data;
   const ctx = req.subscriptionCtx;
 
-  // ── Step 1: Fetch ClinicalData by patient_id ────────────────────────────
-  const [clinicalRecord] = await sql`
-    SELECT data_id, vitals, symptoms
+  // ── Step 1: Latest ACTIVE clinical record ────────────────────────────────
+  const [rawClinical] = await sql`
+    SELECT data_id, vitals, symptoms, recorded_at, created_at
     FROM clinical_data
     WHERE patient_id = ${patient_id}
-    ORDER BY created_at DESC
+      AND deleted_at IS NULL
+    ORDER BY COALESCE(recorded_at, created_at) DESC
     LIMIT 1
   `;
 
-  // Normalize JSONB for postgres.js v3 (returns strings instead of parsed objects)
-  if (clinicalRecord) {
-    try { if (typeof clinicalRecord.vitals === 'string') clinicalRecord.vitals = JSON.parse(clinicalRecord.vitals); } catch { clinicalRecord.vitals = null; }
-    try { if (typeof clinicalRecord.symptoms === 'string') clinicalRecord.symptoms = JSON.parse(clinicalRecord.symptoms); } catch { clinicalRecord.symptoms = []; }
-  }
+  const clinicalRecord = rawClinical ? normalizeCd(rawClinical as Record<string, unknown>) : null;
 
-  // ── Step 2: Fetch LabTestResults by patient_id ──────────────────────────
+  // ── Step 2: Recent lab results (last LAB_RECENCY_DAYS days only) ─────────
   const labResults = await sql`
-    SELECT
-      ltr.analyte_name,
-      ltr.value,
-      ltr.flag,
-      ltr.reference_low,
-      ltr.reference_high
+    SELECT ltr.analyte_name, ltr.value, ltr.flag, ltr.reference_low, ltr.reference_high
     FROM lab_test_results ltr
     JOIN lab_tests lt ON lt.test_id = ltr.test_id
-    WHERE lt.patient_id = ${patient_id}
-      AND lt.status = 'COMPLETED'
-      AND lt.deleted_at IS NULL
+    WHERE lt.patient_id  = ${patient_id}
+      AND lt.status      = 'COMPLETED'
+      AND lt.deleted_at  IS NULL
+      AND ltr.is_amended = FALSE
+      AND lt.updated_at  >= NOW() - INTERVAL '90 days'
     ORDER BY ltr.created_at DESC
   `;
+
+  // Fallback: if no recent results, check if there are older ones
+  const hasAnyLabResults = labResults.length === 0
+    ? (await sql`
+        SELECT COUNT(*) AS c FROM lab_test_results ltr
+        JOIN lab_tests lt ON lt.test_id = ltr.test_id
+        WHERE lt.patient_id = ${patient_id} AND lt.status = 'COMPLETED' AND lt.deleted_at IS NULL
+      `)[0]?.c > 0
+    : true;
+
+  // ── Build data_warnings ───────────────────────────────────────────────────
+  type WarnType = 'NO_CLINICAL_DATA' | 'STALE_CLINICAL_DATA' | 'NO_LAB_RESULTS' | 'NO_RECENT_LAB_RESULTS';
+  const dataWarnings: Array<{ type: WarnType; message: string }> = [];
+
+  let clinicalDataStale = false;
+
+  if (!clinicalRecord) {
+    dataWarnings.push({
+      type: 'NO_CLINICAL_DATA',
+      message: 'No clinical data found. Prediction accuracy will be reduced.',
+    });
+  } else {
+    clinicalDataStale = isRecordStale(
+      (clinicalRecord as Record<string, unknown>)['recorded_at'] as string | null,
+      (clinicalRecord as Record<string, unknown>)['created_at'] as string,
+    );
+    if (clinicalDataStale) {
+      const cd_ = clinicalRecord as Record<string, unknown>;
+      const observedAt = (cd_['recorded_at'] ?? cd_['created_at']) as string;
+      const hoursAgo   = Math.round((Date.now() - new Date(observedAt).getTime()) / 3_600_000);
+      dataWarnings.push({
+        type: 'STALE_CLINICAL_DATA',
+        message: `Clinical data is ${hoursAgo}h old (threshold: 72h). Consider recording a fresh observation before running this prediction.`,
+      });
+    }
+  }
+
+  if (labResults.length === 0) {
+    if (hasAnyLabResults) {
+      dataWarnings.push({
+        type: 'NO_RECENT_LAB_RESULTS',
+        message: `No lab results found within the last ${LAB_RECENCY_DAYS} days. Older results were excluded to avoid stale data influence.`,
+      });
+    } else {
+      dataWarnings.push({
+        type: 'NO_LAB_RESULTS',
+        message: 'No completed lab results found for this patient.',
+      });
+    }
+  }
 
   // ── Step 3: Create pending request record ────────────────────────────────
   const [predRequest] = await sql`
@@ -320,7 +540,7 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     )
     VALUES (
       ${patient_id},
-      ${clinicalRecord?.data_id ?? null},
+      ${clinicalRecord ? (clinicalRecord as Record<string, unknown>)['data_id'] as string : null},
       ${req.user!.user_id},
       ${model_version},
       'PROCESSING'
@@ -328,23 +548,30 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     RETURNING request_id
   `;
 
-  // ── Step 3: Fake prediction result ────────────────────────────────────────
-  const symptomCount = clinicalRecord?.symptoms?.length ?? 0;
-  const labAbnormal  = labResults.filter(r => r.flag === 'ABNORMAL' || r.flag === 'CRITICAL').length;
+  // ── Step 4: Mock prediction (pending real ML integration) ────────────────
+  const symptomCount = (clinicalRecord?.symptoms as string[] | null)?.length ?? 0;
+  const labAbnormal  = labResults.filter((r: Record<string, unknown>) =>
+    r.flag === 'ABNORMAL' || r.flag === 'CRITICAL').length;
   const riskScore    = Math.min(0.15 + labAbnormal * 0.12 + symptomCount * 0.07, 0.98);
-  const riskLevel    = riskScore >= 0.85 ? 'CRITICAL' : riskScore >= 0.60 ? 'HIGH' : riskScore >= 0.35 ? 'MODERATE' : 'LOW';
+  const riskLevel    = riskScore >= 0.85 ? 'CRITICAL'
+                     : riskScore >= 0.60 ? 'HIGH'
+                     : riskScore >= 0.35 ? 'MODERATE'
+                     : 'LOW';
 
-  const features: { feature_name: string; contribution: number; direction: 'POSITIVE' | 'NEGATIVE'; rank: number }[] = [
-    ...labResults.map((r, i) => ({
-      feature_name: r.analyte_name,
+  const features: Array<{
+    feature_name: string; contribution: number;
+    direction: 'POSITIVE' | 'NEGATIVE'; rank: number;
+  }> = [
+    ...(labResults as Array<Record<string, unknown>>).map((r, i) => ({
+      feature_name: String(r.analyte_name),
       contribution: r.flag === 'CRITICAL' ? 0.28 : r.flag === 'ABNORMAL' ? 0.12 : 0.02,
       direction:    (r.flag !== 'NORMAL' ? 'POSITIVE' : 'NEGATIVE') as 'POSITIVE' | 'NEGATIVE',
       rank:         i + 1,
     })),
-    ...(clinicalRecord?.symptoms ?? []).map((s: string, i: number) => ({
+    ...((clinicalRecord?.symptoms as string[]) ?? []).map((s: string, i: number) => ({
       feature_name: `Symptom: ${s}`,
       contribution: 0.07,
-      direction:    'POSITIVE' as 'POSITIVE' | 'NEGATIVE',
+      direction:    'POSITIVE' as const,
       rank:         labResults.length + i + 1,
     })),
   ];
@@ -356,72 +583,55 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     );
   }
 
-  const risk_score           = Math.round(riskScore * 1000) / 1000;
-  const risk_level           = riskLevel;
-  const confidence           = Math.round((0.75 + Math.random() * 0.2) * 1000) / 1000;
-  const raw_payload          = { model: 'mock', model_version, features };
-  const feature_explanations = features;
+  const risk_score  = Math.round(riskScore * 1000) / 1000;
+  // Deterministic confidence: based on data completeness rather than Math.random()
+  const dataScore   = (clinicalRecord ? 0.5 : 0) + (labResults.length > 0 ? 0.3 : 0) +
+                      (!clinicalDataStale ? 0.2 : 0);
+  const confidence  = Math.round((0.55 + dataScore * 0.4) * 1000) / 1000;
+  const raw_payload = { model: 'mock', model_version, features };
 
-  // ── Step 6: INSERT PredictionResult ─────────────────────────────────────
+  // ── Step 5: INSERT PredictionResult ─────────────────────────────────────
   const [predResult] = await sql`
     INSERT INTO prediction_results (request_id, risk_score, risk_level, confidence, raw_payload)
-    VALUES (${predRequest.request_id}, ${risk_score}, ${risk_level}, ${confidence}, ${JSON.stringify(raw_payload)})
+    VALUES (${predRequest.request_id}, ${risk_score}, ${riskLevel}, ${confidence}, ${JSON.stringify(raw_payload)}::jsonb)
     RETURNING result_id
   `;
 
-  // ── Step 7: INSERT FeatureExplanation rows (from raw_payload) ────────────
-  for (const fe of feature_explanations) {
+  for (const fe of features) {
     await sql`
       INSERT INTO feature_explanations (result_id, feature_name, contribution, direction, rank)
-      VALUES (
-        ${predResult.result_id},
-        ${fe.feature_name},
-        ${fe.contribution},
-        ${fe.direction},
-        ${fe.rank}
-      )
+      VALUES (${predResult.result_id}, ${fe.feature_name}, ${fe.contribution}, ${fe.direction}, ${fe.rank})
     `;
   }
 
-  // ── Step 8: INSERT InfectionRisk record ──────────────────────────────────
   await sql`
     INSERT INTO infection_risks (patient_id, risk_score, risk_level, model_version, message)
     VALUES (
-      ${patient_id},
-      ${risk_score},
-      ${risk_level},
-      ${model_version},
-      ${`AI prediction: ${risk_level} infection risk (confidence ${Math.round(confidence * 100)}%)`}
+      ${patient_id}, ${risk_score}, ${riskLevel}, ${model_version},
+      ${`AI prediction: ${riskLevel} infection risk (confidence ${Math.round(confidence * 100)}%)`}
     )
   `;
 
-  // ── Step 9: UPDATE request status + INCREMENT predictions_used ───────────
-  await sql`
-    UPDATE prediction_requests SET status = 'COMPLETED'
-    WHERE request_id = ${predRequest.request_id}
-  `;
+  await sql`UPDATE prediction_requests SET status = 'COMPLETED' WHERE request_id = ${predRequest.request_id}`;
 
   if (ctx?.usage_id) {
-    await sql`
-      UPDATE usage_records
-      SET prediction_used = prediction_used + 1
-      WHERE usage_id = ${ctx.usage_id}
-    `;
+    await sql`UPDATE usage_records SET prediction_used = prediction_used + 1 WHERE usage_id = ${ctx.usage_id}`;
   }
 
-  // ── Step 10: Return 201 {request_id, risk_level, confidence} ─────────────
-  // Image 1: if isOverage → include overage_warning in response
   res.status(201).json({
     status: 'success',
     messageKey: ctx?.isOverage ? 'SUCCESS_PREDICTION_OVERAGE' : 'SUCCESS_PREDICTION_REQUESTED',
     data: {
       predictionRequest: {
-        request_id:    predRequest.request_id,
-        risk_level,
+        request_id: predRequest.request_id,
+        risk_level: riskLevel,
         risk_score,
         confidence,
         model_version,
       },
+      // Surface data quality flags so the UI can show contextual warnings
+      clinical_data_stale: clinicalDataStale,
+      data_warnings:       dataWarnings,
       ...(ctx?.isOverage && {
         overage_warning: {
           message:             'Monthly prediction limit exceeded. Overage billing applies.',
@@ -435,18 +645,18 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
 export const getPredictions = catchAsync(async (req: Request, res: Response) => {
   const predictions = await sql`
     SELECT
-      pr.request_id,
-      pr.patient_id,
-      p.name  AS patient_name,
-      pr.model_version,
-      pr.status,
-      pr.created_at,
-      pres.risk_score,
-      pres.risk_level,
-      pres.confidence
+      pr.request_id, pr.patient_id, p.name AS patient_name,
+      pr.model_version, pr.status, pr.created_at,
+      pres.risk_score, pres.risk_level, pres.confidence,
+      -- Was the clinical snapshot stale when prediction was run?
+      (
+        cd.data_id IS NULL
+        OR COALESCE(cd.recorded_at, cd.created_at) < pr.created_at - INTERVAL '72 hours'
+      ) AS clinical_data_stale
     FROM prediction_requests pr
     JOIN patients p ON p.patient_id = pr.patient_id
     LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
+    LEFT JOIN clinical_data cd ON cd.data_id = pr.clinical_data_id
     WHERE pr.requested_by = ${req.user!.user_id}
     ORDER BY pr.created_at DESC
   `;
@@ -462,6 +672,16 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
       pr.request_id, pr.patient_id, p.name AS patient_name,
       pr.model_version, pr.status, pr.created_at,
       pres.result_id, pres.risk_score, pres.risk_level, pres.confidence, pres.raw_payload,
+      -- Clinical data snapshot metadata
+      cd.data_id         AS clinical_data_id,
+      cd.recorded_at     AS clinical_recorded_at,
+      cd.visit_date      AS clinical_visit_date,
+      cd.created_at      AS clinical_created_at,
+      cd.deleted_at      AS clinical_deleted_at,
+      (
+        cd.data_id IS NULL
+        OR COALESCE(cd.recorded_at, cd.created_at) < pr.created_at - INTERVAL '72 hours'
+      ) AS clinical_data_stale,
       COALESCE(
         JSON_AGG(
           JSON_BUILD_OBJECT(
@@ -476,9 +696,10 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
     FROM prediction_requests pr
     JOIN patients p ON p.patient_id = pr.patient_id
     LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
+    LEFT JOIN clinical_data cd ON cd.data_id = pr.clinical_data_id
     LEFT JOIN feature_explanations fe ON fe.result_id = pres.result_id
     WHERE pr.request_id = ${predictionId}
-    GROUP BY pr.request_id, p.name, pres.result_id
+    GROUP BY pr.request_id, p.name, pres.result_id, cd.data_id
     LIMIT 1
   `;
 
@@ -491,78 +712,59 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
 
 export const getAlerts = catchAsync(async (req: Request, res: Response) => {
   const alerts = await sql`
-    SELECT
-      a.alert_id, a.patient_id, pat.name AS patient_name,
-      a.alert_type, a.message, a.is_read, a.read_at, a.created_at
+    SELECT a.alert_id, a.patient_id, pat.name AS patient_name,
+           a.alert_type, a.message, a.is_read, a.read_at, a.created_at
     FROM alerts a
     LEFT JOIN patients pat ON pat.patient_id = a.patient_id
     WHERE a.recipient_id = ${req.user!.user_id}
     ORDER BY a.created_at DESC
     LIMIT 50
   `;
-
   res.status(200).json({ status: 'success', data: { alerts } });
 });
 
 export const markAlertRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { alertId } = req.params;
-
   const [alert] = await sql`
     UPDATE alerts SET is_read = TRUE, read_at = NOW()
     WHERE alert_id = ${alertId} AND recipient_id = ${req.user!.user_id}
     RETURNING alert_id
   `;
-
   if (!alert) return next(new AppError('ERROR_ALERT_NOT_FOUND', 404));
-
   res.status(200).json({ status: 'success', messageKey: 'SUCCESS_ALERT_READ' });
 });
 
 // ─── Lab results (doctor view) ────────────────────────────────────────────────
 
-// GET /api/doctor/lab-results/:testId
-// Returns all analyte results for a completed test, scoped to the doctor's org.
-// Shows both active and amended rows so the doctor can see correction history.
 export const getLabTestResults = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { testId } = req.params;
   const orgId = req.user!.org_id;
 
-  // Verify the test belongs to this organisation
   const [test] = await sql`
     SELECT lt.test_id, lt.test_type, lt.status,
            pat.name AS patient_name, pat.age, pat.gender
-    FROM   lab_tests lt
-    JOIN   patients pat ON pat.patient_id = lt.patient_id
-    WHERE  lt.test_id = ${testId}
-      AND  lt.deleted_at IS NULL
+    FROM lab_tests lt
+    JOIN patients pat ON pat.patient_id = lt.patient_id
+    WHERE lt.test_id    = ${testId}
+      AND lt.deleted_at IS NULL
       ${orgId ? sql`AND lt.requested_by IN (
-           SELECT user_id FROM users
-           WHERE  organization_id = ${orgId} AND deleted_at IS NULL
+           SELECT user_id FROM users WHERE organization_id = ${orgId} AND deleted_at IS NULL
          )` : sql``}
     LIMIT 1
   `;
-
   if (!test) return next(new AppError('ERROR_ORDER_NOT_FOUND', 404));
 
   const results = await sql`
-    SELECT
-      ltr.result_id,
-      ltr.analyte_name,
-      ltr.value,
-      ltr.reference_low,
-      ltr.reference_high,
-      ltr.flag,
-      ltr.sub_panel,
-      ltr.is_amended,
-      ltr.original_result_id,
-      ltr.acknowledged_at,
-      ltr.acknowledged_by,
-      un.symbol  AS unit_symbol,
-      u.username AS acknowledged_by_name,
-      ltr.created_at
-    FROM  lab_test_results ltr
-    LEFT JOIN units un ON un.unit_id  = ltr.unit_id
-    LEFT JOIN users u  ON u.user_id   = ltr.acknowledged_by
+    SELECT ltr.result_id, ltr.analyte_name, ltr.value,
+           ltr.reference_low, ltr.reference_high, ltr.flag,
+           ltr.sub_panel, ltr.is_amended, ltr.original_result_id,
+           ltr.acknowledged_at, ltr.acknowledged_by,
+           un.symbol AS unit_symbol,
+           u.username AS acknowledged_by_name,
+           ltr.created_at
+    FROM lab_test_results ltr
+    LEFT JOIN units un ON un.unit_id = ltr.unit_id
+    LEFT JOIN users u  ON u.user_id  = ltr.acknowledged_by
     WHERE ltr.test_id = ${testId}
     ORDER BY ltr.sub_panel NULLS LAST, ltr.created_at ASC
   `;
@@ -570,29 +772,22 @@ export const getLabTestResults = catchAsync(async (req: Request, res: Response, 
   res.status(200).json({ status: 'success', data: { test, results } });
 });
 
-// PATCH /api/doctor/lab-results/:resultId/acknowledge
-// The doctor confirms they have received and acted on a CRITICAL result.
-// Only CRITICAL, non-amended, not-yet-acknowledged results are accepted.
 export const acknowledgeResult = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { resultId } = req.params;
 
   const [result] = await sql`
-    SELECT result_id, flag, is_amended, acknowledged_at
-    FROM   lab_test_results
-    WHERE  result_id = ${resultId}
-    LIMIT  1
+    SELECT result_id, flag, is_amended, acknowledged_at FROM lab_test_results
+    WHERE result_id = ${resultId} LIMIT 1
   `;
-
-  if (!result)                 return next(new AppError('ERROR_RESULT_NOT_FOUND', 404));
-  if (result.flag !== 'CRITICAL')   return next(new AppError('ERROR_NOT_CRITICAL', 400));
-  if (result.is_amended)            return next(new AppError('ERROR_RESULT_AMENDED', 409));
-  if (result.acknowledged_at)       return next(new AppError('ERROR_ALREADY_ACKNOWLEDGED', 409));
+  if (!result)               return next(new AppError('ERROR_RESULT_NOT_FOUND', 404));
+  if (result.flag !== 'CRITICAL')  return next(new AppError('ERROR_NOT_CRITICAL', 400));
+  if (result.is_amended)           return next(new AppError('ERROR_RESULT_AMENDED', 409));
+  if (result.acknowledged_at)      return next(new AppError('ERROR_ALREADY_ACKNOWLEDGED', 409));
 
   const [updated] = await sql`
     UPDATE lab_test_results
-    SET    acknowledged_at = NOW(),
-           acknowledged_by = ${req.user!.user_id}
-    WHERE  result_id = ${resultId}
+    SET acknowledged_at = NOW(), acknowledged_by = ${req.user!.user_id}
+    WHERE result_id = ${resultId}
     RETURNING result_id, flag, acknowledged_at
   `;
 
@@ -602,4 +797,3 @@ export const acknowledgeResult = catchAsync(async (req: Request, res: Response, 
     data: { result: updated },
   });
 });
-

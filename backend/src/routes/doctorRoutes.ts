@@ -4,6 +4,7 @@ import { requireRole }        from '../middleware/requireRole.js';
 import { checkSubscription, checkPredictionLimit } from '../middleware/checkSubscription.js';
 import {
   getPatients, getPatientById, createPatient,
+  getClinicalDataHistory,
   createClinicalData, updateClinicalData, deleteClinicalData,
   createLabOrder,
   createPrediction, getPredictions, getPredictionById,
@@ -22,21 +23,17 @@ router.get('/patients/:patientId',       getPatientById);
 router.post('/patients',                 checkSubscription, createPatient);
 
 // Clinical data
-router.post('/clinical-data',            checkSubscription, createClinicalData);
-router.patch('/clinical-data/:dataId',   checkSubscription, updateClinicalData);
-router.delete('/clinical-data/:dataId',  checkSubscription, deleteClinicalData);
+// NOTE: /clinical-data/patient/:patientId must come BEFORE /clinical-data/:dataId
+// so the literal "patient" segment doesn't get matched as a dataId UUID.
+router.get('/clinical-data/patient/:patientId', getClinicalDataHistory);
+router.post('/clinical-data',                   checkSubscription, createClinicalData);
+router.patch('/clinical-data/:dataId',          updateClinicalData);
+router.delete('/clinical-data/:dataId',         deleteClinicalData);
 
 // Lab orders
 router.post('/lab-orders',               checkSubscription, createLabOrder);
 
-/**
- * Predictions — Image 1 checkPredictionLimit middleware:
- *   - Trial + limit reached  → 402
- *   - Paid  + limit reached  → overage path → proceed with isOverage=true
- *   - Within limit           → proceed with isOverage=false
- *
- * Image 2 pipeline happens inside createPrediction controller.
- */
+// Predictions
 router.get('/predictions',               getPredictions);
 router.get('/predictions/:predictionId', getPredictionById);
 router.post('/predictions',              checkPredictionLimit, createPrediction);
@@ -46,7 +43,7 @@ router.get('/alerts',                    getAlerts);
 router.patch('/alerts/:alertId/read',    markAlertRead);
 
 // Lab results (doctor read + acknowledge)
-router.get('/lab-results/:testId',                      getLabTestResults);
-router.patch('/lab-results/:resultId/acknowledge',      acknowledgeResult);
+router.get('/lab-results/:testId',                  getLabTestResults);
+router.patch('/lab-results/:resultId/acknowledge',  acknowledgeResult);
 
 export default router;

@@ -131,7 +131,7 @@ export const checkPredictionLimit = catchAsync(
               plan_id:         row.plan_id,
               max_predictions: maxPredictions,
               predictions_used: used,
-            })}
+            })}::jsonb
           )
         `;
 

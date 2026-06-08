@@ -34,6 +34,7 @@ import { AlertsProvider } from '@/contexts/AlertsContext';
 import LabDashboard from '@/pages/lab/LabDashboard';
 import LabOrders    from '@/pages/lab/LabOrders';
 import EnterResults from '@/pages/lab/EnterResults';
+import LabAlerts    from '@/pages/lab/LabAlerts';
 import LabProfile   from '@/pages/manager/Profile';
 
 // ─── Manager pages ────────────────────────────────────────────────────────────
@@ -104,6 +105,7 @@ export default function App() {
                 <Route path="/lab/orders"             element={<LabOrders />} />
                 <Route path="/lab/orders/:testId"     element={<EnterResults />} />
                 <Route path="/lab/results"            element={<EnterResults />} />
+                <Route path="/lab/alerts"             element={<LabAlerts />} />
                 <Route path="/lab/profile"            element={<LabProfile />} />
               </Route>
             </Route>

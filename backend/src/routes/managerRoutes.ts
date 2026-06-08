@@ -5,6 +5,7 @@ import {
   getOrganization,
   getStaff, updateStaffStatus,
   getReports,
+  reassignLabOrder,
 } from '../controllers/managerController.js';
 import {
   createDepartment,
@@ -34,6 +35,9 @@ router.delete('/departments/:departmentId',         deleteDepartment);
 router.get('/departments/:departmentId/members',    getDepartmentMembers);
 
 // Reports
-router.get('/reports',                   getReports);
+router.get('/reports',                              getReports);
+
+// Lab order management
+router.patch('/lab-orders/:testId/reassign',        reassignLabOrder);
 
 export default router;

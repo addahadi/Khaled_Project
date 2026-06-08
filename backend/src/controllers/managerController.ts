@@ -215,3 +215,77 @@ export const getReports = catchAsync(async (req: Request, res: Response, next: N
     },
   });
 });
+
+// ─── Lab order reassignment ───────────────────────────────────────────────────
+
+const reassignSchema = z.object({
+  technician_id: z.string().uuid({ message: 'ERR_TECH_INVALID' }),
+});
+
+// PATCH /api/manager/lab-orders/:testId/reassign
+// Allows a manager to assign or reassign a lab order to a specific technician.
+export const reassignLabOrder = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const { testId } = req.params;
+  const orgId = req.user.org_id;
+
+  const val = reassignSchema.safeParse(req.body);
+  if (!val.success) {
+    const fields: Record<string, string> = {};
+    val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+    return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+  }
+
+  const { technician_id } = val.data;
+
+  // Verify the tech belongs to the same org
+  const [tech] = await sql`
+    SELECT lt.technician_id, u.user_id
+    FROM lab_technicians lt
+    JOIN users u ON u.user_id = lt.user_id
+    WHERE lt.technician_id = ${technician_id}
+      AND u.organization_id = ${orgId}
+      AND u.deleted_at IS NULL
+    LIMIT 1
+  `;
+  if (!tech) return next(new AppError('ERROR_TECH_NOT_FOUND', 404));
+
+  // Verify the test belongs to the org and is not yet completed/cancelled
+  const [existing] = await sql`
+    SELECT test_id, status FROM lab_tests lt
+    WHERE lt.test_id = ${testId}
+      AND lt.deleted_at IS NULL
+      AND lt.requested_by IN (
+          SELECT user_id FROM users WHERE organization_id = ${orgId} AND deleted_at IS NULL
+        )
+    LIMIT 1
+  `;
+  if (!existing) return next(new AppError('ERROR_ORDER_NOT_FOUND', 404));
+  if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
+    return next(new AppError('ERROR_ORDER_NOT_CLAIMABLE', 409));
+  }
+
+  const [order] = await sql`
+    UPDATE lab_tests
+    SET assigned_to = ${technician_id},
+        assigned_at = NOW(),
+        status      = CASE WHEN status = 'PENDING' THEN 'INPROGRESS' ELSE status END
+    WHERE test_id = ${testId}
+    RETURNING test_id, status, assigned_to, assigned_at
+  `;
+
+  // Notify the newly assigned tech
+  await sql`
+    INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
+    SELECT lt.patient_id, ${tech.user_id}, 'NEW_LAB_ORDER',
+           ${'A lab order has been assigned to you by the manager.'}
+    FROM lab_tests lt WHERE lt.test_id = ${testId}
+  `;
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_ORDER_REASSIGNED',
+    data: { order },
+  });
+});

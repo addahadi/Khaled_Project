@@ -40,7 +40,10 @@ export const dictionary: Record<string, Record<string, string>> = {
     // Clinical data
     SUCCESS_CLINICAL_DATA_SAVED:    'Clinical data saved successfully.',
     SUCCESS_CLINICAL_DATA_UPDATED:  'Clinical data updated successfully.',
-    SUCCESS_CLINICAL_DATA_DELETED:  'Clinical data deleted successfully.',
+    SUCCESS_CLINICAL_DATA_DELETED:  'Clinical record archived successfully.',
+    ERROR_CLINICAL_DATA_NOT_FOUND:   'Clinical record not found.',
+    ERROR_CLINICAL_DATA_DUPLICATE:   'A record was already submitted for this patient within the last 30 minutes.',
+    ERROR_NOTHING_TO_UPDATE:         'No fields provided to update.',
     ERROR_CLINICAL_DATA_NOT_FOUND:  'Clinical data record not found.',
 
     // Lab orders & results
@@ -122,7 +125,10 @@ export const dictionary: Record<string, Record<string, string>> = {
 
     SUCCESS_CLINICAL_DATA_SAVED:    'تم حفظ البيانات السريرية بنجاح.',
     SUCCESS_CLINICAL_DATA_UPDATED:  'تم تحديث البيانات السريرية بنجاح.',
-    SUCCESS_CLINICAL_DATA_DELETED:  'تم حذف البيانات السريرية بنجاح.',
+    SUCCESS_CLINICAL_DATA_DELETED:  'تم أرشفة السجل السريري بنجاح.',
+    ERROR_CLINICAL_DATA_NOT_FOUND:   'السجل السريري غير موجود.',
+    ERROR_CLINICAL_DATA_DUPLICATE:   'تم إدخال سجل لهذا المريض خلال الـ 30 دقيقة الماضية.',
+    ERROR_NOTHING_TO_UPDATE:         'لم يتم تقديم أي حقول للتحديث.',
     ERROR_CLINICAL_DATA_NOT_FOUND:  'سجل البيانات السريرية غير موجود.',
 
     ERR_TEST_TYPE_REQUIRED:         'نوع الفحص مطلوب.',

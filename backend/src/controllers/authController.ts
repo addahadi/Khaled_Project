@@ -212,7 +212,7 @@ export const login = catchAsync(
       VALUES (
         ${user.user_id},
         ${hash},
-        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })},
+        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })}::jsonb,
         ${req.ip ?? null},
         NOW() + INTERVAL '7 days'
       )
@@ -296,7 +296,7 @@ export const refresh = catchAsync(
       INSERT INTO refresh_tokens (user_id, token_hash, family, device_info, ip_address, expires_at)
       VALUES (
         ${user.user_id}, ${newHash}, ${stored.family},
-        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })},
+        ${JSON.stringify({ userAgent: req.headers['user-agent'] ?? null })}::jsonb,
         ${req.ip ?? null},
         NOW() + INTERVAL '7 days'
       )
