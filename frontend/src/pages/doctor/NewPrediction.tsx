@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Brain, FlaskConical, Activity,
   Loader2, AlertTriangle, CheckCircle2,
-  TrendingUp, Zap, Info, Clock, Database, XCircle,
+  TrendingUp, Zap, Info, Clock, Database, XCircle, Search
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient  from '@/api/apiClient';
@@ -89,6 +90,9 @@ export default function NewPrediction() {
 
   const [patients,       setPatients]       = useState<Patient[]>([]);
   const [selectedId,     setSelectedId]     = useState(preselectedId);
+  const [searchTerm,     setSearchTerm]     = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [modelVersion,   setModelVersion]   = useState('v2.3.1');
   const [submitting,     setSubmitting]     = useState(false);
   const [result,         setResult]         = useState<PredictionResult | null>(null);
@@ -101,14 +105,20 @@ export default function NewPrediction() {
 
   // ── Load patients ──────────────────────────────────────────────────────
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const endpoint = `/doctor/patients${debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''}`;
     ApiManager.execute({
-      queryKey: ['doctor', 'patients'],
-      endpoint: '/doctor/patients',
+      queryKey: ['doctor', 'patients', debouncedSearch],
+      endpoint,
       onStart:   startLoading,
       onSuccess: (d) => setPatients((d as { patients: Patient[] }).patients),
       onFinal:   stopLoading,
     });
-  }, []);
+  }, [debouncedSearch]);
 
   // ── Fetch latest clinical record when patient changes ─────────────────
   const fetchLatestClinical = useCallback((patientId: string) => {
@@ -153,7 +163,7 @@ export default function NewPrediction() {
       return;
     }
     ApiManager.executeMutation({
-      mutationFn: () => apiClient.post('/doctor/predictions', { patient_id: selectedId, model_version }),
+      mutationFn: () => apiClient.post('/doctor/predictions', { patient_id: selectedId, model_version: modelVersion }),
       invalidateKeys: [['doctor', 'predictions'], ['doctor', 'patients']],
       onStart: () => { setSubmitting(true); setResult(null); setDataWarnings([]); setOverageWarn(null); },
       onSuccess: (data) => {
@@ -208,39 +218,69 @@ export default function NewPrediction() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Patient selector */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 relative">
             <Label>Patient</Label>
-            {patientsLoading ? (
-              <Skeleton className="h-10 w-full" />
-            ) : patients.length === 0 ? (
-              <div className="rounded-md border p-4 text-center text-sm text-muted-foreground bg-muted/20">
-                No patients registered yet.{' '}
-                <Button variant="link" className="p-0 h-auto font-medium" onClick={() => navigate('/doctor/patients')}>
-                  Register a patient first
-                </Button>
-              </div>
-            ) : (
-              <Select value={selectedId} onValueChange={setSelectedId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a patient…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {patients.map(p => (
-                    <SelectItem key={p.patient_id} value={p.patient_id}>
-                      <span>{p.name}</span>
-                      <span className="ml-2 text-muted-foreground text-xs">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search patient by name..."
+                value={selectedId ? (selectedPatient?.name || '') : searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setSelectedId('');
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+              />
+              {selectedId && (
+                <XCircle 
+                  className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" 
+                  onClick={() => {
+                    setSelectedId('');
+                    setSearchTerm('');
+                    setLatestClinical('loading');
+                  }}
+                />
+              )}
+            </div>
+            
+            {isDropdownOpen && !selectedId && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover text-popover-foreground border rounded-md shadow-md max-h-60 overflow-auto">
+                {patientsLoading ? (
+                  <div className="p-3 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+                  </div>
+                ) : patients.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground bg-muted/20">
+                    No patients found.{' '}
+                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => navigate('/doctor/patients')}>
+                      Register new patient
+                    </Button>
+                  </div>
+                ) : (
+                  patients.map(p => (
+                    <div
+                      key={p.patient_id}
+                      className="p-2 px-3 hover:bg-muted cursor-pointer flex flex-col border-b last:border-b-0"
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // prevent blur
+                        setSelectedId(p.patient_id);
+                        setSearchTerm('');
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      <span className="font-medium text-sm">{p.name}</span>
+                      <span className="text-muted-foreground text-xs mt-0.5">
                         {p.age} yrs, {p.gender.charAt(0) + p.gender.slice(1).toLowerCase()}
+                        {p.clinical_data_status === 'STALE' && <span className="ml-2 text-yellow-600">· stale vitals</span>}
+                        {p.clinical_data_status === 'NO_DATA' && <span className="ml-2 text-red-500">· no clinical data</span>}
                       </span>
-                      {p.clinical_data_status === 'STALE' && (
-                        <span className="ml-2 text-yellow-600 text-xs">· stale vitals</span>
-                      )}
-                      {p.clinical_data_status === 'NO_DATA' && (
-                        <span className="ml-2 text-red-500 text-xs">· no clinical data</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
 

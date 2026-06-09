@@ -4,53 +4,51 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 /**
- * IBM Carbon button system
- * Corners: 0px (square) — enforced by --radius: 0rem
- * Padding: 12px 64px 12px 16px (Carbon spec: extra right padding for the arrow icon space)
- * Font: 14px weight-400 letter-spacing 0.16px
+ * DiagInfect Modern SaaS button system
+ * Corners: var(--radius) = 10px
+ * Font: 14px weight-500 Inter
+ * Shadows on primary for depth
  */
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
-    "text-sm font-normal tracking-[0.16px]",
-    "transition-colors duration-100",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
+    "text-sm font-medium",
+    "rounded-[var(--radius)]",
+    "transition-all duration-150",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   ].join(" "),
   {
     variants: {
       variant: {
-        /* button-primary: IBM Blue solid */
+        /* Primary — brand blue with shadow */
         default:
-          "bg-primary text-primary-foreground hover:bg-[#0050e6] active:bg-[#002d9c]",
+          "bg-primary text-primary-foreground shadow-sm hover:bg-[#0a5f9e] active:bg-[#085490] shadow-primary/20",
 
-        /* button-danger: Carbon red-60 */
+        /* Danger */
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-[#ba1b23] active:bg-[#750e13]",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-[#a01f26] active:bg-[#8a1a20]",
 
-        /* button-tertiary: white bg, IBM Blue border + text */
+        /* Outlined — border + brand text */
         outline:
-          "border border-primary bg-background text-primary hover:bg-primary hover:text-primary-foreground active:bg-[#002d9c]",
+          "border border-primary bg-transparent text-primary hover:bg-primary/8 active:bg-primary/15",
 
-        /* button-secondary: charcoal */
+        /* Secondary — dark slate */
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[#393939] active:bg-[#262626]",
+          "bg-secondary text-secondary-foreground shadow-sm hover:bg-[#2d3d56] active:bg-[#151f2e]",
 
-        /* button-ghost: transparent until hover */
+        /* Ghost — subtle hover tint */
         ghost:
-          "text-primary bg-transparent hover:bg-primary/10 active:bg-primary/20",
+          "text-foreground bg-transparent hover:bg-muted hover:text-foreground active:bg-muted/80",
 
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        /* Carbon default: 48px touch target */
-        default: "h-12 px-4 py-3",
-        /* Carbon small: 32px */
+        default: "h-10 px-4 py-2",
         sm:      "h-8 px-3 text-xs",
-        /* Carbon large: 64px */
-        lg:      "h-16 px-6 text-base",
-        icon:    "h-12 w-12",
+        lg:      "h-11 px-6 text-base",
+        icon:    "h-10 w-10",
       },
     },
     defaultVariants: {

@@ -27,6 +27,10 @@ const updateDeptSchema = z.object({
   icon: z.string().optional(),
 });
 
+const assignDeptMembersSchema = z.object({
+  user_ids: z.array(z.string().uuid({ message: 'ERR_USER_INVALID' })),
+});
+
 export const registerOrganization = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const val = registerOrgSchema.safeParse(req.body);
@@ -214,6 +218,15 @@ export const deleteDepartment = catchAsync(
 
     if (!dept) return next(new AppError('ERROR_DEPT_NOT_FOUND', 404));
 
+    // Bug-fix: clear department_id on users so they don't reference a deleted department
+    await sql`
+      UPDATE users
+      SET department_id = NULL
+      WHERE department_id = ${departmentId}
+        AND organization_id = ${req.user.org_id}
+        AND deleted_at IS NULL
+    `;
+
     res.status(200).json({
       status: 'success', messageKey: 'SUCCESS_DEPT_DELETED',
     });
@@ -257,5 +270,44 @@ export const getDepartmentMembers = catchAsync(
     `;
 
     res.status(200).json({ status: 'success', data: { members } });
+  }
+);
+
+export const assignDepartmentMembers = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+    const { departmentId } = req.params;
+    const val = assignDeptMembersSchema.safeParse(req.body);
+    if (!val.success) {
+      const fields: Record<string, string> = {};
+      val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+      return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+    }
+
+    const { user_ids } = val.data;
+
+    // Verify dept belongs to this org
+    const [dept] = await sql`
+      SELECT department_id FROM departments
+      WHERE department_id   = ${departmentId}
+        AND organization_id = ${req.user.org_id}
+        AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (!dept) return next(new AppError('ERROR_DEPT_NOT_FOUND', 404));
+
+    if (user_ids.length > 0) {
+      // Update users to have this department_id, ONLY if they belong to the org and are not deleted
+      await sql`
+        UPDATE users
+        SET department_id = ${departmentId}
+        WHERE user_id IN ${sql(user_ids)}
+          AND organization_id = ${req.user.org_id}
+          AND deleted_at IS NULL
+      `;
+    }
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_MEMBERS_ASSIGNED' });
   }
 );

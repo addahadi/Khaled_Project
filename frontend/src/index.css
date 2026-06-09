@@ -4,85 +4,92 @@
 
 @layer base {
   :root {
-    /* ── IBM Carbon: White Canvas + Charcoal Ink + IBM Blue ── */
+    /* ── DiagInfect Modern SaaS — Inter + Blue #0d72b9 ── */
 
     /* Surfaces */
-    --background:           0 0% 100%;      /* #ffffff   canvas         */
-    --card:                 0 0% 100%;      /* #ffffff   feature-card   */
-    --card-foreground:      0 0% 9%;        /* #161616   ink            */
+    --background:           210 40% 98%;    /* #f8fafc   page canvas        */
+    --card:                 0 0% 100%;      /* #ffffff   card surface        */
+    --card-foreground:      222 47% 11%;    /* #0f172a   slate-900           */
     --popover:              0 0% 100%;
-    --popover-foreground:   0 0% 9%;
+    --popover-foreground:   222 47% 11%;
 
     /* Text */
-    --foreground:           0 0% 9%;        /* #161616   ink            */
-    --muted-foreground:     0 0% 32%;       /* #525252   ink-muted      */
+    --foreground:           222 47% 11%;    /* #0f172a   slate-900 ink       */
+    --muted-foreground:     215 16% 47%;    /* #64748b   slate-500 ink-muted */
 
-    /* Brand accent — IBM Blue #0f62fe */
-    --primary:              221 99% 53%;
-    --primary-foreground:   0 0% 100%;      /* #ffffff   on-primary     */
+    /* Brand — #0d72b9 */
+    --primary:              204 88% 39%;    /* #0d72b9   brand blue          */
+    --primary-foreground:   0 0% 100%;      /* #ffffff   on-primary          */
 
-    /* Secondary — charcoal button #161616 */
-    --secondary:            0 0% 9%;
+    /* Secondary — slate-800 */
+    --secondary:            217 33% 17%;    /* #1e293b   slate-800           */
     --secondary-foreground: 0 0% 100%;
 
-    /* Surface-1 #f4f4f4 → muted/input/accent */
-    --muted:                0 0% 96%;       /* #f4f4f4   surface-1      */
-    --accent:               0 0% 96%;
-    --accent-foreground:    0 0% 9%;
+    /* Surface-1 — slate-100 */
+    --muted:                210 40% 96%;    /* #f1f5f9   slate-100           */
+    --accent:               210 40% 96%;
+    --accent-foreground:    222 47% 11%;
 
     /* Semantic */
-    --destructive:          357 73% 49%;    /* #da1e28   semantic-error */
+    --destructive:          0 84% 40%;      /* #c0272d   logo red            */
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders — blue-tinted, not pure gray */
-    --border:               214 28% 88%;    /* #dae2ec   structural hairline   */
-    --input:                213 22% 76%;    /* #b8c5d4   form field border     */
-    --ring:                 221 99% 53%;    /* IBM Blue  focus ring            */
+    /* Borders */
+    --border:               214 32% 91%;    /* #e2e8f0   slate-200           */
+    --input:                214 32% 84%;    /* #cbd5e1   slate-300           */
+    --ring:                 204 88% 39%;    /* brand blue focus ring         */
 
-    /* Modern SaaS roundness — Carbon colors, softer geometry */
-    --radius:               0.5rem;
+    /* Geometry — 10px rounded modern SaaS */
+    --radius:               0.625rem;       /* 10px                          */
 
-    /* Sidebar — Carbon white panel */
+    /* Sidebar — light, white */
     --sidebar-background:           0 0% 100%;
-    --sidebar-foreground:           0 0% 9%;
-    --sidebar-primary:              221 99% 53%;
+    --sidebar-foreground:           222 47% 11%;
+    --sidebar-primary:              204 88% 39%;
     --sidebar-primary-foreground:   0 0% 100%;
-    --sidebar-accent:               0 0% 96%;
-    --sidebar-accent-foreground:    0 0% 9%;
-    --sidebar-border:               214 28% 88%;
-    --sidebar-ring:                 221 99% 53%;
+    --sidebar-accent:               210 40% 96%;
+    --sidebar-accent-foreground:    222 47% 11%;
+    --sidebar-border:               214 32% 91%;
+    --sidebar-ring:                 204 88% 39%;
+
+    /* Logo palette semantic tokens */
+    --color-sky:            199 73% 62%;    /* #5db1e3                       */
+    --color-teal:           176 100% 33%;   /* #00a89c   success/low-risk    */
+    --color-navy:           234 53% 37%;    /* #2e368f   deep accent         */
+    --color-lime:           93 55% 51%;     /* #88c540   healthy/good        */
+    --color-amber:          40 95% 60%;     /* #faaf3a   warning             */
+    --color-red:            358 65% 45%;    /* #c0272d   critical/danger     */
   }
 
   .dark {
-    /* Carbon Gray-100 theme (rare — only footer inverts in Carbon marketing) */
-    --background:           0 0% 9%;
-    --foreground:           0 0% 100%;
-    --card:                 0 0% 15%;
-    --card-foreground:      0 0% 100%;
-    --popover:              0 0% 15%;
-    --popover-foreground:   0 0% 100%;
-    --primary:              221 99% 65%;
-    --primary-foreground:   0 0% 9%;
-    --secondary:            0 0% 24%;
-    --secondary-foreground: 0 0% 100%;
-    --muted:                0 0% 24%;
-    --muted-foreground:     0 0% 78%;
-    --accent:               0 0% 24%;
-    --accent-foreground:    0 0% 100%;
-    --destructive:          357 73% 49%;
+    --background:           222 47% 9%;     /* #0f172a   slate-900           */
+    --foreground:           210 40% 98%;    /* #f8fafc   slate-50            */
+    --card:                 217 33% 13%;    /* #1a2235   slate-850           */
+    --card-foreground:      210 40% 98%;
+    --popover:              217 33% 13%;
+    --popover-foreground:   210 40% 98%;
+    --primary:              204 80% 52%;    /* #2590d4   lighter brand blue  */
+    --primary-foreground:   0 0% 100%;
+    --secondary:            217 33% 22%;
+    --secondary-foreground: 210 40% 98%;
+    --muted:                217 33% 17%;    /* #1e293b   slate-800           */
+    --muted-foreground:     215 20% 65%;    /* #94a3b8   slate-400           */
+    --accent:               217 33% 17%;
+    --accent-foreground:    210 40% 98%;
+    --destructive:          0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border:               214 16% 28%;    /* dark blue-gray structural  */
-    --input:                213 18% 36%;    /* dark blue-gray form border */
-    --ring:                 221 99% 65%;
+    --border:               217 33% 22%;    /* #1e293b   dark border         */
+    --input:                217 33% 28%;
+    --ring:                 204 80% 52%;
 
-    --sidebar-background:           0 0% 9%;
-    --sidebar-foreground:           0 0% 100%;
-    --sidebar-primary:              221 99% 65%;
-    --sidebar-primary-foreground:   0 0% 9%;
-    --sidebar-accent:               0 0% 15%;
-    --sidebar-accent-foreground:    0 0% 100%;
-    --sidebar-border:               214 16% 28%;
-    --sidebar-ring:                 221 99% 65%;
+    --sidebar-background:   222 47% 9%;
+    --sidebar-foreground:   210 40% 98%;
+    --sidebar-primary:      204 80% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:       217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border:       217 33% 22%;
+    --sidebar-ring:         204 80% 52%;
   }
 }
 
@@ -92,21 +99,22 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 16px;
     font-weight: 400;
     line-height: 1.5;
-    letter-spacing: 0.16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5, h6 {
-    letter-spacing: 0;
-    font-weight: 400;
+    letter-spacing: -0.02em;
+    font-weight: 600;
   }
 }
 
-/* Carbon focus treatment — no ring offset, clean IBM Blue outline */
+/* Smooth focus ring */
 @layer utilities {
-  .carbon-focus {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-0;
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 }

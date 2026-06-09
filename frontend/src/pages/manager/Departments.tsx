@@ -9,13 +9,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Building2, Search, Plus, Loader2, Pencil, Trash2,
   ChevronDown, ChevronUp, Stethoscope, FlaskConical,
   Users, HeartPulse, Microscope, Pill, Brain, Baby,
   Bone, Eye, Ear, Activity, Thermometer, ShieldPlus,
   Truck, Dna, Syringe, ClipboardList, BedDouble,
-  LayoutGrid,
+  LayoutGrid, UserPlus,
 } from 'lucide-react';
 import apiClient from '@/api/apiClient';
 import ApiManager from '@/api/ApiManager';
@@ -84,8 +85,8 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    (apiClient.get(`/manager/departments/${departmentId}/members`) as Promise<{ members: Member[] }>)
-      .then(res => { if (!cancelled) setMembers(res.members); })
+    (apiClient.get(`/manager/departments/${departmentId}/members`) as Promise<{ data: { members: Member[] } }>)
+      .then(res => { if (!cancelled) setMembers(res.data.members); })
       .catch(() => {
         if (!cancelled) {
           toast({ title: 'Error', description: 'Failed to load members.', variant: 'destructive' });
@@ -221,10 +222,12 @@ function DepartmentCard({
   dept,
   onEdit,
   onDelete,
+  onAssign,
 }: {
   dept:     Department;
   onEdit:   (d: Department) => void;
   onDelete: (d: Department) => void;
+  onAssign: (d: Department) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -268,20 +271,32 @@ function DepartmentCard({
       </CardHeader>
 
       <CardContent className="pt-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between text-muted-foreground hover:text-foreground -mx-1 px-1 h-8"
-          onClick={() => setExpanded(e => !e)}
-        >
-          <span className="flex items-center gap-1.5 text-xs">
-            <Users className="h-3.5 w-3.5" />
-            View staff members
-          </span>
-          {expanded
-            ? <ChevronUp className="h-3.5 w-3.5" />
-            : <ChevronDown className="h-3.5 w-3.5" />}
-        </Button>
+        <div className="flex items-center justify-between mt-2 mb-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1 justify-between text-muted-foreground hover:text-foreground -ml-1 px-1 h-8"
+            onClick={() => setExpanded(e => !e)}
+          >
+            <span className="flex items-center gap-1.5 text-xs">
+              <Users className="h-3.5 w-3.5" />
+              Staff members
+            </span>
+            {expanded
+              ? <ChevronUp className="h-3.5 w-3.5" />
+              : <ChevronDown className="h-3.5 w-3.5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs text-muted-foreground hover:text-primary shrink-0"
+            onClick={() => onAssign(dept)}
+            title="Assign staff to department"
+          >
+            <UserPlus className="h-3.5 w-3.5 mr-1" />
+            Assign
+          </Button>
+        </div>
 
         {expanded && <DepartmentMembers departmentId={dept.department_id} />}
       </CardContent>
@@ -377,6 +392,155 @@ function DepartmentDialog({
   );
 }
 
+// ─── Assign Staff Dialog ──────────────────────────────────────────────────────
+
+function AssignStaffDialog({
+  open,
+  onOpenChange,
+  department,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  department: Department | null;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [allStaff, setAllStaff] = useState<Member[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && department) {
+      setLoading(true);
+      Promise.all([
+        apiClient.get('/manager/staff') as Promise<{ data: { staff: Member[] } }>,
+        apiClient.get(`/manager/departments/${department.department_id}/members`) as Promise<{ data: { members: Member[] } }>
+      ])
+        .then(([staffRes, membersRes]) => {
+          setAllStaff(staffRes.data.staff);
+          setSelectedIds(new Set(membersRes.data.members.map(m => m.user_id)));
+        })
+        .catch(() => toast({ title: 'Error', description: 'Failed to load staff data.', variant: 'destructive' }))
+        .finally(() => setLoading(false));
+    }
+  }, [open, department, toast]);
+
+  const handleToggle = (userId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!department) return;
+    setSaving(true);
+    try {
+      await apiClient.patch(`/manager/departments/${department.department_id}/members`, {
+        user_ids: Array.from(selectedIds),
+      });
+      toast({ title: 'Success', description: 'Department members assigned successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
+      onSaved();
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to assign members.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const doctors = allStaff.filter(m => m.role === 'DOCTOR');
+  const labTechs = allStaff.filter(m => m.role === 'LAB_TECH');
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Assign Staff</DialogTitle>
+          <DialogDescription>
+            Assign or remove staff members for <strong>{department?.name}</strong>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-4">
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : (
+            <>
+              {doctors.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Doctors</h4>
+                  <div className="space-y-2">
+                    {doctors.map(m => (
+                      <div key={m.user_id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50 border">
+                        <Checkbox
+                          id={m.user_id}
+                          checked={selectedIds.has(m.user_id)}
+                          onCheckedChange={() => handleToggle(m.user_id)}
+                        />
+                        <label htmlFor={m.user_id} className="flex-1 cursor-pointer flex items-center justify-between">
+                          <div className="text-sm font-medium">{m.username}</div>
+                          <Badge variant={m.status === 'ACTIVE' ? 'default' : 'secondary'} className="text-[10px]">
+                            {m.status}
+                          </Badge>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {labTechs.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Lab Technicians</h4>
+                  <div className="space-y-2">
+                    {labTechs.map(m => (
+                      <div key={m.user_id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50 border">
+                        <Checkbox
+                          id={m.user_id}
+                          checked={selectedIds.has(m.user_id)}
+                          onCheckedChange={() => handleToggle(m.user_id)}
+                        />
+                        <label htmlFor={m.user_id} className="flex-1 cursor-pointer flex items-center justify-between">
+                          <div className="text-sm font-medium">{m.username}</div>
+                          <Badge variant={m.status === 'ACTIVE' ? 'default' : 'secondary'} className="text-[10px]">
+                            {m.status}
+                          </Badge>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {allStaff.length === 0 && (
+                <p className="text-sm text-center text-muted-foreground">No staff members found.</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="pt-4 mt-auto border-t">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving || loading}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Assignments
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Departments() {
@@ -389,6 +553,10 @@ export default function Departments() {
   // Dialog state
   const [dialogOpen, setDialogOpen]   = useState(false);
   const [editing, setEditing]         = useState<Department | null>(null);
+
+  // Assign dialog state
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<Department | null>(null);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
@@ -431,6 +599,7 @@ export default function Departments() {
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit   = (d: Department) => { setEditing(d); setDialogOpen(true); };
+  const openAssign = (d: Department) => { setAssignTarget(d); setAssignOpen(true); };
 
   const filtered = departments.filter(d =>
     d.name.toLowerCase().includes(search.toLowerCase())
@@ -513,6 +682,7 @@ export default function Departments() {
               dept={dept}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              onAssign={openAssign}
             />
           ))}
         </div>
@@ -523,6 +693,14 @@ export default function Departments() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         department={editing}
+        onSaved={handleSaved}
+      />
+
+      {/* Assign Staff Dialog */}
+      <AssignStaffDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        department={assignTarget}
         onSaved={handleSaved}
       />
 

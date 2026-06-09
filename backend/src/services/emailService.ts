@@ -28,6 +28,11 @@ interface WelcomeEmailOpts {
   org_name: string;
 }
 
+interface PasswordResetEmailOpts {
+  to: string;
+  reset_url: string;
+}
+
 // ─── Role label helper ────────────────────────────────────────────────────────
 function roleLabel(role: string): string {
   return role === 'LAB_TECH' ? 'Lab Technician'
@@ -142,6 +147,37 @@ function welcomeHtml(opts: WelcomeEmailOpts): string {
 </html>`;
 }
 
+function passwordResetHtml(opts: PasswordResetEmailOpts): string {
+  const { reset_url } = opts;
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Reset Your Password</title></head>
+<body style="font-family:Inter,Arial,sans-serif;background:#f9fafb;margin:0;padding:32px 0;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+              border:1px solid #e5e7eb;overflow:hidden;">
+    <div style="background:#1d4ed8;padding:28px 32px;">
+      <span style="color:#fff;font-size:20px;font-weight:700;">DiagInfect</span>
+    </div>
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 8px;font-size:22px;color:#111827;">Reset Your Password</h1>
+      <p style="color:#6b7280;font-size:15px;line-height:1.6;margin:0 0 24px;">
+        We received a request to reset your password. Click the button below to set a new password.
+      </p>
+      <a href="${reset_url}"
+         style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;
+                font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px;">
+        Reset Password
+      </a>
+      <p style="color:#9ca3af;font-size:13px;margin:24px 0 0;">
+        If you didn't request a password reset, you can safely ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 // ─── Send via Nodemailer (or console.log in dev) ──────────────────────────────
 async function send(opts: { to: string; subject: string; html: string }): Promise<void> {
   const mailer = getTransporter();
@@ -178,5 +214,13 @@ export async function sendWelcomeEmail(opts: WelcomeEmailOpts): Promise<void> {
     to:      opts.to,
     subject: `Welcome to DiagInfect — your account is ready`,
     html:    welcomeHtml(opts),
+  });
+}
+
+export async function sendPasswordResetEmail(opts: PasswordResetEmailOpts): Promise<void> {
+  await send({
+    to:      opts.to,
+    subject: `Reset your DiagInfect password`,
+    html:    passwordResetHtml(opts),
   });
 }

@@ -21,6 +21,8 @@ import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
 import InviteStaffDialog from '@/components/manager/InviteStaffDialog';
+import EditStaffDialog from '@/components/manager/EditStaffDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface StaffMember {
   user_id:         string;
@@ -28,6 +30,7 @@ interface StaffMember {
   email:           string;
   role:            'DOCTOR' | 'LAB_TECH' | 'MANAGER';
   status:          'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  department_id:   string | null;
   department_name: string | null;
   created_at:      string;
 }
@@ -46,6 +49,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function Staff() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
 
   const [staff, setStaff]           = useState<StaffMember[]>([]);
@@ -54,9 +58,10 @@ export default function Staff() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    userId: string; username: string; status: StaffMember['status'];
+    userId: string; username: string; status: StaffMember['status'] | 'DELETE';
   } | null>(null);
   const [suspendReason, setSuspendReason] = useState('');
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   const loadStaff = useCallback(() => {
     ApiManager.execute({
@@ -78,6 +83,21 @@ export default function Staff() {
       onSuccess: (_d: unknown, msg: string) => {
         setStaff(prev => prev.map(m => m.user_id === userId ? { ...m, status } : m));
         toast({ title: 'Status updated', description: msg });
+      },
+      onError: ({ message }: { message: string }) =>
+        toast({ title: 'Error', description: message, variant: 'destructive' }),
+      onFinal: () => setUpdatingId(null),
+    });
+  };
+
+  const deleteStaff = (userId: string) => {
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.delete(`/manager/staff/${userId}`),
+      invalidateKeys: [['manager', 'staff'], ['manager', 'reports']],
+      onStart: () => setUpdatingId(userId),
+      onSuccess: (_d: unknown, msg: string) => {
+        setStaff(prev => prev.filter(m => m.user_id !== userId));
+        toast({ title: 'Staff deleted', description: msg });
       },
       onError: ({ message }: { message: string }) =>
         toast({ title: 'Error', description: message, variant: 'destructive' }),
@@ -208,14 +228,14 @@ export default function Staff() {
                               Activate
                             </DropdownMenuItem>
                           )}
-                          {m.status !== 'INACTIVE' && (
+                          {m.user_id !== user?.user_id && m.status !== 'INACTIVE' && (
                             <DropdownMenuItem onClick={() => setConfirmAction({
                               userId: m.user_id, username: m.username, status: 'INACTIVE',
                             })}>
                               Deactivate
                             </DropdownMenuItem>
                           )}
-                          {m.status !== 'SUSPENDED' && (
+                          {m.user_id !== user?.user_id && m.status !== 'SUSPENDED' && (
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => setConfirmAction({
@@ -225,6 +245,19 @@ export default function Staff() {
                               Suspend
                             </DropdownMenuItem>
                           )}
+                          {m.user_id !== user?.user_id && (
+                            <DropdownMenuItem
+                              className="text-destructive font-semibold focus:text-destructive"
+                              onClick={() => setConfirmAction({
+                                userId: m.user_id, username: m.username, status: 'DELETE',
+                              })}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => setEditingStaff(m)}>
+                            Edit Profile
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -236,7 +269,7 @@ export default function Staff() {
         </CardContent>
       </Card>
 
-      {/* Staff status confirmation dialog (C5 fix) */}
+      {/* Staff status confirmation dialog */}
       <Dialog
         open={confirmAction !== null}
         onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
@@ -245,25 +278,31 @@ export default function Staff() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : 'Deactivate'} Staff Member
+              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : confirmAction?.status === 'DELETE' ? 'Delete' : 'Deactivate'} Staff Member
             </DialogTitle>
             <DialogDescription>
               {confirmAction?.status === 'SUSPENDED'
                 ? <>Are you sure you want to suspend <strong>{confirmAction?.username}</strong>? They will <strong>immediately lose access</strong> to all platform features. This can be reversed from this page.</>
+                : confirmAction?.status === 'DELETE'
+                ? <>Are you sure you want to permanently delete <strong>{confirmAction?.username}</strong>? This action cannot be undone.</>
                 : <>Are you sure you want to deactivate <strong>{confirmAction?.username}</strong>? Their account will be set to inactive. This can be reversed from this page.</>}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5 py-1">
-            <Label htmlFor="suspend-reason" className="text-sm">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea
-              id="suspend-reason"
-              placeholder={confirmAction?.status === 'SUSPENDED' ? 'e.g. Pending HR review' : 'e.g. Employment ended'}
-              value={suspendReason}
-              onChange={e => setSuspendReason(e.target.value)}
-              rows={2}
-              className="resize-none"
-            />
-          </div>
+          
+          {confirmAction?.status !== 'DELETE' && (
+            <div className="space-y-1.5 py-1">
+              <Label htmlFor="suspend-reason" className="text-sm">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Textarea
+                id="suspend-reason"
+                placeholder={confirmAction?.status === 'SUSPENDED' ? 'e.g. Pending HR review' : 'e.g. Employment ended'}
+                value={suspendReason}
+                onChange={e => setSuspendReason(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => { setConfirmAction(null); setSuspendReason(''); }}>
               Cancel
@@ -273,7 +312,11 @@ export default function Staff() {
               disabled={updatingId === confirmAction?.userId}
               onClick={() => {
                 if (confirmAction) {
-                  updateStatus(confirmAction.userId, confirmAction.status);
+                  if (confirmAction.status === 'DELETE') {
+                    deleteStaff(confirmAction.userId);
+                  } else {
+                    updateStatus(confirmAction.userId, confirmAction.status);
+                  }
                   setConfirmAction(null);
                   setSuspendReason('');
                 }
@@ -282,11 +325,19 @@ export default function Staff() {
               {updatingId === confirmAction?.userId && (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               )}
-              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : 'Deactivate'}
+              {confirmAction?.status === 'SUSPENDED' ? 'Suspend' : confirmAction?.status === 'DELETE' ? 'Delete' : 'Deactivate'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit staff dialog */}
+      <EditStaffDialog
+        open={editingStaff !== null}
+        onClose={() => setEditingStaff(null)}
+        onSaved={loadStaff}
+        staff={editingStaff}
+      />
 
       {/* Invite staff dialog */}
       <InviteStaffDialog

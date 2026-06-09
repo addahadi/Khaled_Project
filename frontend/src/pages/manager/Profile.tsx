@@ -25,16 +25,31 @@ interface UserProfile {
   created_at?:    string;
 }
 
+interface OrganizationProfile {
+  organization_id: string;
+  name: string;
+  type: string;
+  email: string;
+  address: string;
+  created_at: string;
+}
+
 export default function ManagerProfile() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
 
-  // Edit mode
+  // Edit mode for Manager
   const [editing, setEditing]   = useState(false);
   const [editForm, setEditForm] = useState({ username: '', preferred_lang: 'en' });
   const [saving, setSaving]     = useState(false);
+
+  // Edit mode for Org
+  const [orgEditing, setOrgEditing] = useState(false);
+  const [orgEditForm, setOrgEditForm] = useState({ name: '', type: '', email: '', address: '' });
+  const [orgSaving, setOrgSaving] = useState(false);
 
   useEffect(() => {
     ApiManager.execute({
@@ -44,6 +59,11 @@ export default function ManagerProfile() {
       onSuccess: (data: unknown) => setProfile((data as { user: UserProfile }).user),
       onFinal:   stopLoading,
     });
+    ApiManager.execute({
+      queryKey: ['manager', 'organization'],
+      endpoint: '/manager/organization',
+      onSuccess: (data: unknown) => setOrgProfile((data as { organization: OrganizationProfile }).organization),
+    });
   }, []);
 
   useEffect(() => {
@@ -51,6 +71,17 @@ export default function ManagerProfile() {
       setEditForm({ username: profile.username, preferred_lang: profile.preferred_lang });
     }
   }, [editing, profile]);
+
+  useEffect(() => {
+    if (orgProfile && orgEditing) {
+      setOrgEditForm({
+        name: orgProfile.name || '',
+        type: orgProfile.type || '',
+        email: orgProfile.email || '',
+        address: orgProfile.address || '',
+      });
+    }
+  }, [orgEditing, orgProfile]);
 
   const handleSave = () => {
     if (!editForm.username.trim()) {
@@ -75,6 +106,32 @@ export default function ManagerProfile() {
         toast({ title: 'Error', description: message, variant: 'destructive' });
       },
       onFinal: () => setSaving(false),
+    });
+  };
+
+  const handleOrgSave = () => {
+    if (!orgEditForm.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Organization name cannot be empty.', variant: 'destructive' });
+      return;
+    }
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.patch('/manager/organization', {
+        name: orgEditForm.name.trim(),
+        type: orgEditForm.type,
+        email: orgEditForm.email.trim(),
+        address: orgEditForm.address.trim(),
+      }),
+      invalidateKeys: [['manager', 'organization']],
+      onStart: () => setOrgSaving(true),
+      onSuccess: (data: unknown, msg: string) => {
+        toast({ title: 'Organization updated', description: msg || 'Organization profile has been saved.' });
+        setOrgProfile((data as { organization: OrganizationProfile }).organization);
+        setOrgEditing(false);
+      },
+      onError: ({ message }: { message: string }) => {
+        toast({ title: 'Error', description: message, variant: 'destructive' });
+      },
+      onFinal: () => setOrgSaving(false),
     });
   };
 
@@ -218,6 +275,109 @@ export default function ManagerProfile() {
                   <div>
                     <p className="text-xs text-muted-foreground">{label}</p>
                     <p className="text-sm font-medium">{value ?? '—'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Organization Details Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Building2 className="h-4 w-4" /> Organization Details
+          </CardTitle>
+          {!orgEditing && orgProfile && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setOrgEditing(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {isLoading && !orgProfile ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : orgEditing ? (
+            /* ── Org Edit mode ── */
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-org-name">Organization Name</Label>
+                <Input
+                  id="edit-org-name"
+                  value={orgEditForm.name}
+                  onChange={e => setOrgEditForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Organization Type</Label>
+                <Select
+                  value={orgEditForm.type}
+                  onValueChange={v => setOrgEditForm(prev => ({ ...prev, type: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HOSPITAL">Hospital</SelectItem>
+                    <SelectItem value="CLINIC">Clinic</SelectItem>
+                    <SelectItem value="LAB">Laboratory</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-org-email">Contact Email</Label>
+                <Input
+                  id="edit-org-email"
+                  type="email"
+                  value={orgEditForm.email}
+                  onChange={e => setOrgEditForm(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-org-address">Address</Label>
+                <Input
+                  id="edit-org-address"
+                  value={orgEditForm.address}
+                  onChange={e => setOrgEditForm(prev => ({ ...prev, address: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline" className="flex-1 gap-1"
+                  onClick={() => setOrgEditing(false)} disabled={orgSaving}
+                >
+                  <X className="h-3.5 w-3.5" /> Cancel
+                </Button>
+                <Button className="flex-1 gap-1" onClick={handleOrgSave} disabled={orgSaving}>
+                  {orgSaving
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Check className="h-3.5 w-3.5" />}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* ── Org View mode ── */
+            <div className="space-y-4">
+              {[
+                { icon: Building2, label: 'Organization Name', value: orgProfile?.name },
+                { icon: Building2, label: 'Type',              value: orgProfile?.type === 'HOSPITAL' ? 'Hospital' : orgProfile?.type === 'CLINIC' ? 'Clinic' : orgProfile?.type === 'LAB' ? 'Laboratory' : 'Other' },
+                { icon: Mail,      label: 'Contact Email',     value: orgProfile?.email },
+                { icon: MapPin,    label: 'Address',           value: orgProfile?.address },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm font-medium">{value || '—'}</p>
                   </div>
                 </div>
               ))}

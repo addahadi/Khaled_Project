@@ -19,6 +19,7 @@ import Login                from '@/pages/auth/Login';
 import RegisterOrganization from '@/pages/auth/RegisterOrganization'; // only registration path
 import ActivateAccount      from '@/pages/auth/ActivateAccount';      // invitation activation
 import ForgotPassword       from '@/pages/auth/ForgotPassword';       // password reset stub
+import ResetPassword        from '@/pages/auth/ResetPassword';
 
 // ─── Doctor pages ─────────────────────────────────────────────────────────────
 import DoctorDashboard   from '@/pages/doctor/Dashboard';
@@ -82,6 +83,7 @@ export default function App() {
             <Route path="/register-organization"  element={<RegisterOrganization />} />
             <Route path="/activate/:token"        element={<ActivateAccount />} />
             <Route path="/forgot-password"        element={<ForgotPassword />} />
+            <Route path="/reset-password"         element={<ResetPassword />} />
 
             {/* ── Doctor panel ──────────────────────────────────────────── */}
             <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>

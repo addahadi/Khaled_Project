@@ -14,6 +14,18 @@ const updateUserStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED'], { message: 'ERR_STATUS_INVALID' }),
 });
 
+const updateProfileSchema = z.object({
+  username: z.string().min(3, { message: 'ERR_USERNAME_TOO_SHORT' }).optional(),
+  department_id: z.string().uuid({ message: 'ERR_DEPT_INVALID' }).nullable().optional(),
+});
+
+const updateOrganizationSchema = z.object({
+  name: z.string().min(2, { message: 'ERR_NAME_TOO_SHORT' }).optional(),
+  type: z.enum(['HOSPITAL', 'CLINIC', 'LAB', 'OTHER'], { message: 'ERR_TYPE_INVALID' }).optional(),
+  email: z.string().email({ message: 'ERR_EMAIL_INVALID' }).optional(),
+  address: z.string().optional(),
+});
+
 // ─── Organization ─────────────────────────────────────────────────────────────
 
 export const getOrganization = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
@@ -43,6 +55,39 @@ export const getOrganization = catchAsync(async (req: Request, res: Response, ne
   if (!org) return next(new AppError('ERROR_ORG_NOT_FOUND', 404));
 
   res.status(200).json({ status: 'success', data: { organization: org } });
+});
+
+export const updateOrganization = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const val = updateOrganizationSchema.safeParse(req.body);
+  if (!val.success) {
+    const fields: Record<string, string> = {};
+    val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+    return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+  }
+
+  const { name, type, email, address } = val.data;
+
+  const [org] = await sql`
+    UPDATE organizations
+    SET
+      name = COALESCE(${name ?? null}, name),
+      type = COALESCE(${type ?? null}, type),
+      email = COALESCE(${email ?? null}, email),
+      address = COALESCE(${address ?? null}, address)
+    WHERE organization_id = ${req.user.org_id}
+      AND deleted_at IS NULL
+    RETURNING organization_id, name, type, email, address
+  `;
+
+  if (!org) return next(new AppError('ERROR_ORG_NOT_FOUND', 404));
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_ORG_UPDATED',
+    data: { organization: org },
+  });
 });
 
 // ─── Staff ────────────────────────────────────────────────────────────────────
@@ -89,6 +134,35 @@ export const updateStaffStatus = catchAsync(async (req: Request, res: Response, 
     return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
   }
 
+  // Bug-fix: prevent a manager from changing their own status (self-lockout)
+  if (userId === req.user.user_id) {
+    return next(new AppError('ERROR_CANNOT_UPDATE_OWN_STATUS', 403));
+  }
+
+  // Bug-fix: prevent deactivating/suspending the last active manager in the org
+  if (val.data.status !== 'ACTIVE') {
+    const [targetManager] = await sql`
+      SELECT manager_id FROM hospital_managers
+      WHERE user_id = ${userId} LIMIT 1
+    `;
+
+    if (targetManager) {
+      const [{ count }] = await sql`
+        SELECT COUNT(*)::int AS count
+        FROM hospital_managers hm
+        JOIN users u ON u.user_id = hm.user_id
+        WHERE u.organization_id = ${req.user.org_id}
+          AND u.status = 'ACTIVE'
+          AND u.deleted_at IS NULL
+          AND u.user_id != ${userId}
+      `;
+
+      if (count === 0) {
+        return next(new AppError('ERROR_LAST_ACTIVE_MANAGER', 409));
+      }
+    }
+  }
+
   // Ensure user belongs to the same org
   const [user] = await sql`
     UPDATE users SET status = ${val.data.status}
@@ -105,6 +179,89 @@ export const updateStaffStatus = catchAsync(async (req: Request, res: Response, 
     messageKey: 'SUCCESS_STATUS_UPDATED',
     data: { user },
   });
+});
+
+export const deleteStaff = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const { userId } = req.params;
+
+  if (userId === req.user.user_id) {
+    return next(new AppError('ERROR_CANNOT_DELETE_SELF', 403)); // Will need translation if required
+  }
+
+  // Check if target is last manager
+  const [targetManager] = await sql`
+    SELECT manager_id FROM hospital_managers
+    WHERE user_id = ${userId} LIMIT 1
+  `;
+
+  if (targetManager) {
+    const [{ count }] = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM hospital_managers hm
+      JOIN users u ON u.user_id = hm.user_id
+      WHERE u.organization_id = ${req.user.org_id}
+        AND u.status = 'ACTIVE'
+        AND u.deleted_at IS NULL
+        AND u.user_id != ${userId}
+    `;
+
+    if (count === 0) {
+      return next(new AppError('ERROR_LAST_ACTIVE_MANAGER', 409));
+    }
+  }
+
+  const [user] = await sql`
+    UPDATE users SET deleted_at = NOW()
+    WHERE user_id = ${userId}
+      AND organization_id = ${req.user.org_id}
+      AND deleted_at IS NULL
+    RETURNING user_id
+  `;
+
+  if (!user) return next(new AppError('ERROR_USER_NOT_FOUND', 404));
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_DELETED',
+  });
+});
+
+export const updateStaffProfile = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const { userId } = req.params;
+  const val = updateProfileSchema.safeParse(req.body);
+  if (!val.success) {
+    const fields: Record<string, string> = {};
+    val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+    return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+  }
+
+  const { username, department_id } = val.data;
+
+  // Check if user exists
+  const [user] = await sql`
+    SELECT user_id FROM users
+    WHERE user_id = ${userId} AND organization_id = ${req.user.org_id} AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  if (!user) return next(new AppError('ERROR_USER_NOT_FOUND', 404));
+
+  await sql.begin(async (tx) => {
+    if (username !== undefined || department_id !== undefined) {
+      if (username !== undefined && department_id !== undefined) {
+        await tx`UPDATE users SET username = ${username}, department_id = ${department_id} WHERE user_id = ${userId}`;
+      } else if (username !== undefined) {
+        await tx`UPDATE users SET username = ${username} WHERE user_id = ${userId}`;
+      } else if (department_id !== undefined) {
+        await tx`UPDATE users SET department_id = ${department_id} WHERE user_id = ${userId}`;
+      }
+    }
+  });
+
+  res.status(200).json({ status: 'success', messageKey: 'SUCCESS_SAVED' });
 });
 
 // ─── Departments ──────────────────────────────────────────────────────────────

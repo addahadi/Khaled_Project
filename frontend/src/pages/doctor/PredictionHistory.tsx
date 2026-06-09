@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
- Brain, Search, CheckCircle2,
- ChevronRight, Zap, TrendingUp, Calendar,
+  Brain, Search, CheckCircle2,
+  ChevronRight, Zap, TrendingUp, Calendar,
+  User, Building2,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
@@ -89,19 +90,27 @@ export default function PredictionHistory() {
  const [predictions, setPredictions] = useState<Prediction[]>([]);
  const [search,  setSearch]  = useState('');
  const [riskFilter,  setRiskFilter]  = useState('ALL');
- const [dateFilter,  setDateFilter]  = useState('ALL');
- const [detail,  setDetail]  = useState<PredictionDetail | null>(null);
- const [sheetOpen,  setSheetOpen]  = useState(false);
+  const [dateFilter,  setDateFilter]  = useState('ALL');
+  const [detail,  setDetail]  = useState<PredictionDetail | null>(null);
+  const [sheetOpen,  setSheetOpen]  = useState(false);
+  const [scope, setScope] = useState<'mine' | 'org'>(
+    () => (localStorage.getItem('diaginfect_prediction_scope') as 'mine' | 'org' | null) ?? 'org'
+  );
 
- useEffect(() => {
- ApiManager.execute({
- queryKey: ['doctor', 'predictions'],
- endpoint:  '/doctor/predictions',
- onStart:  startLoading,
- onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
- onFinal:  stopLoading,
- });
- }, [startLoading, stopLoading]);
+  const handleScopeChange = (val: 'mine' | 'org') => {
+    setScope(val);
+    localStorage.setItem('diaginfect_prediction_scope', val);
+  };
+
+  useEffect(() => {
+    ApiManager.execute({
+      queryKey: ['doctor', 'predictions', scope],
+      endpoint:  `/doctor/predictions?scope=${scope}`,
+      onStart:  startLoading,
+      onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
+      onFinal:  stopLoading,
+    });
+  }, [scope, startLoading, stopLoading]);
 
  // Auto-open a specific prediction detail when navigated from Dashboard
  useEffect(() => {
@@ -154,12 +163,38 @@ export default function PredictionHistory() {
  <h1 className="text-[28px] font-light">Prediction History</h1>
  <p className="text-muted-foreground text-sm">{predictions.length} total predictions</p>
  </div>
- <Button className="gap-2" onClick={() => navigate('/doctor/predictions/new')}>
- <Brain className="h-4 w-4" /> New Prediction
- </Button>
- </div>
+  <Button className="gap-2" onClick={() => navigate('/doctor/predictions/new')}>
+  <Brain className="h-4 w-4" /> New Prediction
+  </Button>
+  </div>
 
- {/* Summary row */}
+  {/* Scope toggle */}
+  <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+    <button
+      onClick={() => handleScopeChange('mine')}
+      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+        scope === 'mine'
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <User className="h-3.5 w-3.5" />
+      My Predictions
+    </button>
+    <button
+      onClick={() => handleScopeChange('org')}
+      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+        scope === 'org'
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <Building2 className="h-3.5 w-3.5" />
+      All Predictions
+    </button>
+  </div>
+
+  {/* Summary row */}
  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
  {([
  { level: 'CRITICAL', color: 'text-[#da1e28]',  bg: 'bg-red-50 dark:bg-red-950/10',  border: 'border-red-200' },

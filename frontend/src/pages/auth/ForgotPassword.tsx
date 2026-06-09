@@ -5,18 +5,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import ApiManager from '@/api/ApiManager';
+import apiClient from '@/api/apiClient';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ForgotPassword() {
- const [email, setEmail]  = useState('');
- const [loading, setLoading] = useState(false);
- const [sent, setSent]  = useState(false);
+  const [email, setEmail]  = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent]  = useState(false);
+  const { toast } = useToast();
 
- const handleSubmit = (e: React.FormEvent) => {
- e.preventDefault();
- if (!email) return;
- setLoading(true);
- setTimeout(() => { setLoading(false); setSent(true); }, 1200);
- };
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.post('/auth/forgot-password', { email }),
+      onStart: () => setLoading(true),
+      onSuccess: () => setSent(true),
+      onError: ({ message }) => {
+        toast({ title: 'Request failed', description: message, variant: 'destructive' });
+      },
+      onFinal: () => setLoading(false),
+    });
+  };
 
  return (
  <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">

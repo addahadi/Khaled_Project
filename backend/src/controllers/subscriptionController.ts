@@ -100,6 +100,11 @@ export const createSubscription = catchAsync(async (req: Request, res: Response,
   `;
   if (!plan) return next(new AppError('ERROR_PLAN_NOT_FOUND', 404));
 
+  // Bug-fix: trial plans are only allowed at org registration, not via this endpoint
+  if (plan.is_trial) {
+    return next(new AppError('ERROR_TRIAL_NOT_ALLOWED', 403));
+  }
+
   // Cancel any existing active subscriptions
   await sql`
     UPDATE subscriptions
@@ -165,48 +170,78 @@ export const changePlan = catchAsync(async (req: Request, res: Response, next: N
   const { plan_id, external_payment_ref } = val.data;
 
   const [plan] = await sql`
-    SELECT plan_id FROM plans
+    SELECT plan_id, is_trial FROM plans
     WHERE plan_id = ${plan_id} AND is_active = TRUE AND deleted_at IS NULL
     LIMIT 1
   `;
   if (!plan) return next(new AppError('ERROR_PLAN_NOT_FOUND', 404));
 
-  // Cancel current
-  await sql`
-    UPDATE subscriptions
-    SET status = 'CANCELLED', cancelled_at = NOW()
-    WHERE organization_id = ${req.user.org_id} AND status = 'ACTIVE'
-  `;
+  // Bug-fix: trial plans cannot be selected via changePlan (prevents infinite trial extension)
+  if (plan.is_trial) {
+    return next(new AppError('ERROR_TRIAL_NOT_ALLOWED', 403));
+  }
 
-  // Create new
-  const [subscription] = await sql`
-    INSERT INTO subscriptions (
-      organization_id, plan_id, status,
-      current_cycle_start, current_cycle_end, external_payment_ref
-    )
-    VALUES (
-      ${req.user.org_id},
-      ${plan_id},
-      'ACTIVE',
-      NOW()::DATE,
-      NOW()::DATE + INTERVAL '30 days',
-      ${external_payment_ref ?? null}
-    )
-    RETURNING subscription_id, plan_id, status, current_cycle_start, current_cycle_end
-  `;
+  // Bug-fix: wrap cancel + create + usage insert in a transaction to prevent orphaned orgs
+  const subscription = await sql.begin(async (tx) => {
+    // Cancel current
+    await tx`
+      UPDATE subscriptions
+      SET status = 'CANCELLED', cancelled_at = NOW()
+      WHERE organization_id = ${req.user!.org_id} AND status = 'ACTIVE'
+    `;
 
-  await sql`
-    INSERT INTO usage_records (subscription_id, cycle_start, cycle_end)
-    VALUES (
-      ${subscription.subscription_id},
-      ${subscription.current_cycle_start},
-      ${subscription.current_cycle_end}
-    )
-  `;
+    // Create new
+    const [sub] = await tx`
+      INSERT INTO subscriptions (
+        organization_id, plan_id, status,
+        current_cycle_start, current_cycle_end, external_payment_ref
+      )
+      VALUES (
+        ${req.user!.org_id},
+        ${plan_id},
+        'ACTIVE',
+        NOW()::DATE,
+        NOW()::DATE + INTERVAL '30 days',
+        ${external_payment_ref ?? null}
+      )
+      RETURNING subscription_id, plan_id, status, current_cycle_start, current_cycle_end
+    `;
+
+    await tx`
+      INSERT INTO usage_records (subscription_id, cycle_start, cycle_end)
+      VALUES (
+        ${sub.subscription_id},
+        ${sub.current_cycle_start},
+        ${sub.current_cycle_end}
+      )
+    `;
+
+    return sub;
+  });
 
   res.status(200).json({
     status: 'success',
     messageKey: 'SUCCESS_PLAN_CHANGED',
+    data: { subscription },
+  });
+});
+
+// DELETE /api/subscriptions/my — cancel current active subscription
+export const cancelSubscription = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const [subscription] = await sql`
+    UPDATE subscriptions
+    SET status = 'CANCELLED', cancelled_at = NOW()
+    WHERE organization_id = ${req.user.org_id} AND status = 'ACTIVE'
+    RETURNING subscription_id, plan_id, status, current_cycle_start, current_cycle_end, cancelled_at
+  `;
+
+  if (!subscription) return next(new AppError('ERROR_NO_ACTIVE_SUBSCRIPTION', 404));
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_DEFAULT',
     data: { subscription },
   });
 });
@@ -238,4 +273,24 @@ export const getUsage = catchAsync(async (req: Request, res: Response, next: Nex
   if (!usage) return next(new AppError('ERROR_NO_ACTIVE_SUBSCRIPTION', 404));
 
   res.status(200).json({ status: 'success', data: { usage } });
+});
+
+// GET /api/subscriptions/overage  — get overage events for the org
+export const getOverageEvents = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
+
+  const events = await sql`
+    SELECT
+      oe.event_id,
+      oe.feature_name,
+      oe.overage_amount,
+      oe.created_at,
+      s.plan_id
+    FROM overage_events oe
+    JOIN subscriptions s ON s.subscription_id = oe.subscription_id
+    WHERE s.organization_id = ${req.user.org_id}
+    ORDER BY oe.created_at DESC
+  `;
+
+  res.status(200).json({ status: 'success', data: { events } });
 });

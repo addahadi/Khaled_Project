@@ -17,14 +17,13 @@ import {
 import ApiManager from '@/api/ApiManager';
 
 function LabSidebar() {
-  const { state }          = useSidebar();
-  const collapsed          = state === 'collapsed';
-  const { user, logout }   = useAuth();
-  const navigate           = useNavigate();
-  const initials           = user?.username?.slice(0, 2).toUpperCase() ?? 'LT';
+  const { state }        = useSidebar();
+  const collapsed        = state === 'collapsed';
+  const { user, logout } = useAuth();
+  const navigate         = useNavigate();
+  const initials         = user?.username?.slice(0, 2).toUpperCase() ?? 'LT';
   const [unread, setUnread] = useState(0);
 
-  // Poll unread alert count every 60 s
   useEffect(() => {
     const fetchUnread = () => {
       ApiManager.execute({
@@ -51,23 +50,27 @@ function LabSidebar() {
   ];
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border bg-background shadow-[2px_0_12px_-4px_rgba(0,0,0,0.08)]">
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-border bg-card shadow-[1px_0_0_0_hsl(var(--border))]"
+    >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="h-12 flex items-center px-4 border-b border-border mb-0">
+          {/* Logo area */}
+          <SidebarGroupLabel className="h-14 flex items-center px-4 border-b border-border mb-0">
             {!collapsed ? (
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 bg-primary flex items-center justify-center shrink-0">
-                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/30">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <rect x="8.5" y="1" width="3" height="18" fill="white" />
                     <rect x="1" y="8.5" width="18" height="3" fill="white" />
                   </svg>
                 </div>
-                <span className="text-sm font-normal text-foreground tracking-tight">DiagInfect</span>
+                <span className="text-sm font-semibold text-foreground tracking-tight">DiagInfect</span>
               </div>
             ) : (
-              <div className="w-6 h-6 bg-primary flex items-center justify-center">
-                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <rect x="8.5" y="1" width="3" height="18" fill="white" />
                   <rect x="1" y="8.5" width="18" height="3" fill="white" />
                 </svg>
@@ -75,31 +78,31 @@ function LabSidebar() {
             )}
           </SidebarGroupLabel>
 
-          <SidebarGroupContent className="pt-2">
+          <SidebarGroupContent className="pt-2 px-2">
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-10 px-0">
+                  <SidebarMenuButton asChild className="h-9 px-0">
                     <NavLink
                       to={item.url}
                       end={item.end}
                       className={[
-                        'flex items-center w-full h-10 px-3 mx-1 text-sm tracking-[0.16px] rounded-md',
-                        'text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
+                        'flex items-center w-full h-9 px-3 text-sm font-medium rounded-lg',
+                        'text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150',
                       ].join(' ')}
                       activeClassName="bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
                     >
                       <div className="relative shrink-0">
                         <item.icon className="h-4 w-4" />
                         {item.badge > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-destructive text-[9px] text-white flex items-center justify-center font-medium">
+                          <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-destructive text-[9px] text-white flex items-center justify-center font-semibold">
                             {item.badge > 9 ? '9+' : item.badge}
                           </span>
                         )}
                       </div>
-                      {!collapsed && <span className="ml-3">{item.title}</span>}
+                      {!collapsed && <span className="ml-2.5">{item.title}</span>}
                       {!collapsed && item.badge > 0 && (
-                        <span className="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-full bg-destructive text-white">
+                        <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive">
                           {item.badge > 99 ? '99+' : item.badge}
                         </span>
                       )}
@@ -112,29 +115,28 @@ function LabSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border">
+      <SidebarFooter className="border-t border-border p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted transition-colors text-left">
-              <div className="w-8 h-8 bg-primary text-primary-foreground text-xs flex items-center justify-center shrink-0 font-normal">
+            <button className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-muted transition-all duration-150 text-left">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center shrink-0 font-semibold shadow-sm">
                 {initials}
               </div>
               {!collapsed && (
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm text-foreground truncate tracking-[0.16px]">
+                  <span className="text-sm font-medium text-foreground truncate">
                     {user?.username}
                   </span>
-                  <span className="text-xs text-muted-foreground tracking-[0.32px]">Lab technician</span>
+                  <span className="text-xs text-muted-foreground">Lab technician</span>
                 </div>
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="end" className="w-44">
-            <DropdownMenuItem onClick={() => navigate('/lab/profile')}
-              className="text-sm tracking-[0.16px]">
+          <DropdownMenuContent side="right" align="end" className="w-44 rounded-xl">
+            <DropdownMenuItem onClick={() => navigate('/lab/profile')} className="text-sm rounded-lg">
               <UserCircle className="mr-2 h-4 w-4" /> Profile
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive text-sm tracking-[0.16px]" onClick={logout}>
+            <DropdownMenuItem className="text-destructive text-sm rounded-lg" onClick={logout}>
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -150,10 +152,10 @@ export function LabLayout() {
       <div className="min-h-screen flex w-full">
         <LabSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b border-border px-4 shrink-0 bg-background shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)]">
-            <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
+          <header className="h-14 flex items-center border-b border-border px-4 shrink-0 bg-card shadow-sm">
+            <SidebarTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-all duration-150" />
           </header>
-          <main className="flex-1 overflow-auto bg-muted/50 p-6">
+          <main className="flex-1 overflow-auto bg-background p-6">
             <Outlet />
           </main>
         </div>

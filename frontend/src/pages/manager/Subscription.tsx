@@ -41,6 +41,14 @@ interface Subscription {
   usage: { prediction_used: number; prediction_overage: number };
 }
 
+interface OverageEvent {
+  event_id: string;
+  feature_name: string;
+  overage_amount: number;
+  created_at: string;
+  plan_id: string;
+}
+
 const PLAN_ICONS: Record<string, React.ElementType> = {
   trial: Zap, clinic: Shield, hospital: Building2,
 };
@@ -58,11 +66,16 @@ export default function Subscription() {
   const { toast } = useToast();
   const { isLoading: subLoading, startLoading: startSub, stopLoading: stopSub } = useDelayedLoading();
   const { isLoading: plansLoading, startLoading: startPlans, stopLoading: stopPlans } = useDelayedLoading();
+  const { isLoading: overageLoading, startLoading: startOverage, stopLoading: stopOverage } = useDelayedLoading();
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [overageEvents, setOverageEvents] = useState<OverageEvent[]>([]);
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [switching, setSwitching] = useState(false);
+
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   useEffect(() => {
     ApiManager.execute({
@@ -84,7 +97,17 @@ export default function Subscription() {
       },
       onFinal: stopPlans,
     });
-  }, [startSub, stopSub, startPlans, stopPlans]);
+
+    ApiManager.execute({
+      queryKey: ['manager', 'overage'],
+      endpoint: '/subscriptions/overage',
+      onStart: startOverage,
+      onSuccess: (data: unknown) => {
+        setOverageEvents((data as { events: OverageEvent[] }).events);
+      },
+      onFinal: stopOverage,
+    });
+  }, [startSub, stopSub, startPlans, stopPlans, startOverage, stopOverage]);
 
   const handleSwitch = () => {
     if (!confirmPlan) return;
@@ -106,6 +129,26 @@ export default function Subscription() {
       },
       onError: ({ message }: { message: string }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
       onFinal: () => setSwitching(false),
+    });
+  };
+
+  const handleCancel = () => {
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.delete('/subscriptions/my'),
+      invalidateKeys: [['manager', 'subscription']],
+      onStart: () => setCancelling(true),
+      onSuccess: (_data: unknown, msg: string) => {
+        toast({ title: 'Subscription cancelled', description: msg });
+        setCancelConfirmOpen(false);
+        // Refresh subscription
+        ApiManager.execute({
+          queryKey: ['manager', 'subscription'],
+          endpoint: '/subscriptions/my',
+          onSuccess: (data: unknown) => setSubscription((data as { subscription: Subscription }).subscription),
+        });
+      },
+      onError: ({ message }: { message: string }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
+      onFinal: () => setCancelling(false),
     });
   };
 
@@ -138,9 +181,16 @@ export default function Subscription() {
                 <CardDescription>Your active subscription</CardDescription>
               </div>
             </div>
-            {subscription && (
-              <Badge variant="default" className="text-sm">{subscription.status}</Badge>
-            )}
+            <div className="flex items-center gap-3">
+              {subscription && subscription.status === 'ACTIVE' && (
+                <Button variant="destructive" size="sm" onClick={() => setCancelConfirmOpen(true)}>
+                  Cancel Subscription
+                </Button>
+              )}
+              {subscription && (
+                <Badge variant="default" className="text-sm">{subscription.status}</Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -274,10 +324,10 @@ export default function Subscription() {
                     <Button
                       className="w-full"
                       variant={isCurrent ? 'outline' : 'default'}
-                      disabled={isCurrent}
+                      disabled={isCurrent || (Boolean(subscription) && plan.is_trial)}
                       onClick={() => !isCurrent && setConfirmPlan(plan)}
                     >
-                      {isCurrent ? 'Current Plan' : subscription ? 'Switch to this Plan' : 'Subscribe'}
+                      {isCurrent ? 'Current Plan' : (Boolean(subscription) && plan.is_trial) ? 'Unavailable' : subscription ? 'Switch to this Plan' : 'Subscribe'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -287,32 +337,40 @@ export default function Subscription() {
         )}
       </div>
 
-      {/* Billing History (Placeholder) */}
+      {/* Billing & Overage History */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Billing History</h2>
+        <h2 className="text-lg font-semibold">Billing & Overage History</h2>
         <Card>
           <CardContent className="p-0">
-            <div className="divide-y">
-              <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
-                <div className="space-y-1">
-                  <p className="font-medium text-sm">Invoice #{new Date().getFullYear()}-001</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(new Date().toISOString())} · {subscription?.plan_name || 'Standard'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="font-semibold text-sm">
-                    ${subscription?.price_monthly || 0}.00
-                  </span>
-                  <Button 
-                    variant="outline" size="sm" className="gap-2 h-8" 
-                    onClick={() => toast({ title: 'Invoice Downloaded', description: 'This is a placeholder PDF.' })}
-                  >
-                    <Download className="h-3.5 w-3.5" /> PDF
-                  </Button>
-                </div>
+            {overageLoading ? (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}
               </div>
-            </div>
+            ) : overageEvents.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <p>No overage events or billing history found.</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {overageEvents.map(event => (
+                  <div key={event.event_id} className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                    <div className="space-y-1">
+                      <p className="font-medium text-sm">
+                        Overage: {FEATURE_LABELS[event.feature_name] ?? event.feature_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(event.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Badge variant="destructive">
+                        + {event.overage_amount} used
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -402,6 +460,25 @@ export default function Subscription() {
             <Button onClick={handleSwitch} disabled={switching}>
               {switching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm Switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel subscription dialog */}
+      <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Subscription</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel your subscription? You will lose access to all AI prediction features and other premium capabilities immediately. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelConfirmOpen(false)}>Keep Subscription</Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
+              {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancel Subscription
             </Button>
           </DialogFooter>
         </DialogContent>

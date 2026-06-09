@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Loader2, ArrowLeft, User, FileText, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Loader2, ArrowLeft, User, FileText, ChevronDown, CheckCircle } from 'lucide-react';
 import {
  DropdownMenu,
  DropdownMenuContent,
@@ -29,6 +29,9 @@ interface ResultRow {
  // fallback_flag is only sent when no numeric reference range is provided.
  // When both ref_low and ref_high are filled, the server auto-computes the flag.
  fallback_flag: 'NORMAL' | 'ABNORMAL' | 'CRITICAL' | '';
+ result_id?: string;
+ is_amended?: boolean;
+ original_result_id?: string | null;
 }
 
 interface OrderDetail {
@@ -46,6 +49,8 @@ interface OrderDetail {
  analyte_name:  string;
  value:  string;
  flag:  string;
+ reference_low: string | null;
+ reference_high: string | null;
  sub_panel:  string | null;
  is_amended:  boolean;
  original_result_id: string | null;
@@ -87,7 +92,9 @@ export default function EnterResults() {
  const [order, setOrder] = useState<OrderDetail | null>(null);
  const [rows, setRows] = useState<ResultRow[]>([emptyRow()]);
  const [submitting, setSubmitting] = useState(false);
+ const [completing, setCompleting] = useState(false);
  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+ const [amendingRowId, setAmendingRowId] = useState<string | null>(null);
 
  useEffect(() => {
  if (!testId) return;
@@ -99,14 +106,17 @@ export default function EnterResults() {
  const o = (data as { order: OrderDetail }).order;
  setOrder(o);
  if (o.results?.length > 0) {
- setRows(o.results.map(r => ({
- analyte_name:  r.analyte_name,
- value:  r.value,
- reference_low: '',
- reference_high: '',
- sub_panel:  r.sub_panel ?? '',
- fallback_flag: r.flag as ResultRow['fallback_flag'],
- })));
+  setRows(o.results.map(r => ({
+  analyte_name:  r.analyte_name,
+  value:  r.value,
+  reference_low: r.reference_low?.toString() ?? '',
+  reference_high: r.reference_high?.toString() ?? '',
+  sub_panel:  r.sub_panel ?? '',
+  fallback_flag: r.flag as ResultRow['fallback_flag'],
+  result_id: r.result_id,
+  is_amended: r.is_amended,
+  original_result_id: r.original_result_id,
+  })));
  }
  },
  onFinal: stopLoading,
@@ -144,10 +154,90 @@ export default function EnterResults() {
  const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
  const loadTemplate = (t: string) => setRows(TEMPLATES[t].map(r => ({ ...r })));
 
+ const handleComplete = () => {
+  ApiManager.executeMutation({
+    mutationFn: () => apiClient.patch(`/lab/orders/${testId}/complete`),
+    invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
+    onStart: () => setCompleting(true),
+    onSuccess: () => {
+      toast({ title: 'Order Completed', description: 'The test status has been set to COMPLETED.' });
+      ApiManager.execute({
+        queryKey: ['lab', 'orders', testId!],
+        endpoint: `/lab/orders/${testId}`,
+        onSuccess: (data: unknown) => setOrder((data as { order: OrderDetail }).order)
+      });
+    },
+    onError: ({ message }: { message: string }) => {
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    },
+    onFinal: () => setCompleting(false)
+  });
+ };
+
+ const handleAmendSubmit = (i: number) => {
+  const row = rows[i];
+  if (!row.result_id) return;
+
+  const rowToParse = { ...row, fallback_flag: row.fallback_flag || undefined };
+  const parsed = labResultRowSchema.safeParse(rowToParse);
+  if (!parsed.success) {
+    setFieldErrors(flattenZodErrors(parsed.error));
+    toast({ title: 'Validation Error', description: 'Please fill all required fields.', variant: 'destructive' });
+    return;
+  }
+  setFieldErrors({});
+
+  const payload = {
+    analyte_name: parsed.data.analyte_name,
+    value: parsed.data.value,
+    reference_low: parsed.data.reference_low ? Number(parsed.data.reference_low) : undefined,
+    reference_high: parsed.data.reference_high ? Number(parsed.data.reference_high) : undefined,
+    sub_panel: parsed.data.sub_panel || undefined,
+    fallback_flag: (!parsed.data.reference_low && !parsed.data.reference_high && parsed.data.fallback_flag)
+      ? parsed.data.fallback_flag
+      : undefined,
+  };
+
+  ApiManager.executeMutation({
+    mutationFn: () => apiClient.post(`/lab/results/${row.result_id}/amend`, payload),
+    invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
+    onStart: () => setSubmitting(true),
+    onSuccess: () => {
+      toast({ title: 'Result amended successfully', description: 'The original result has been archived.' });
+      setAmendingRowId(null);
+      // Reload order data
+      ApiManager.execute({
+        queryKey: ['lab', 'orders', testId!],
+        endpoint: `/lab/orders/${testId}`,
+        onSuccess: (data: unknown) => {
+          const o = (data as { order: OrderDetail }).order;
+          setOrder(o);
+          setRows(o.results.map(r => ({
+            analyte_name: r.analyte_name, value: r.value, reference_low: r.reference_low?.toString() ?? '',
+            reference_high: r.reference_high?.toString() ?? '', sub_panel: r.sub_panel ?? '',
+            fallback_flag: r.flag as any, result_id: r.result_id, is_amended: r.is_amended,
+            original_result_id: r.original_result_id
+          })));
+        }
+      });
+    },
+    onError: ({ message, fields }: { message: string, fields?: Record<string, string> | null }) => {
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+      if (fields) setFieldErrors(fields);
+    },
+    onFinal: () => setSubmitting(false),
+  });
+ };
+
  const handleSubmit = () => {
- const parsed = labResultsSchema.safeParse({ results: rows });
+ const rowsToParse = rows.map(r => ({
+   ...r,
+   fallback_flag: r.fallback_flag || undefined
+ }));
+ const parsed = labResultsSchema.safeParse({ results: rowsToParse });
  if (!parsed.success) {
  setFieldErrors(flattenZodErrors(parsed.error));
+ console.log(parsed.error)
  toast({ title: 'Validation Error', description: 'Please fill all required fields.', variant: 'destructive' });
  return;
  }
@@ -176,7 +266,23 @@ export default function EnterResults() {
  onStart: () => setSubmitting(true),
  onSuccess: (_data: unknown, msg: string) => {
  toast({ title: 'Results submitted', description: msg });
- navigate('/lab/orders');
+ // Reload order data so the tech can review and mark complete
+ ApiManager.execute({
+   queryKey: ['lab', 'orders', testId!],
+   endpoint: `/lab/orders/${testId}`,
+   onSuccess: (data: unknown) => {
+     const o = (data as { order: OrderDetail }).order;
+     setOrder(o);
+     setRows(o.results.map(r => ({
+       analyte_name: r.analyte_name, value: r.value,
+       reference_low: r.reference_low?.toString() ?? '',
+       reference_high: r.reference_high?.toString() ?? '',
+       sub_panel: r.sub_panel ?? '', fallback_flag: r.flag as ResultRow['fallback_flag'],
+       result_id: r.result_id, is_amended: r.is_amended,
+       original_result_id: r.original_result_id,
+     })));
+   },
+ });
  },
  onError: ({ message, fields }: { message: string, fields?: Record<string, string> | null }) => {
  toast({ title: 'Error', description: message, variant: 'destructive' });
@@ -243,146 +349,183 @@ export default function EnterResults() {
 
  {/* Results entry */}
  <Card>
- <CardHeader>
- <CardTitle className="text-base">Result Entries</CardTitle>
- </CardHeader>
- <CardContent className="space-y-4">
- {rows.map((row, i) => {
- const hasRefRange = row.reference_low !== '' && row.reference_high !== '';
- return (
- <div key={i} className="grid grid-cols-12 gap-2 items-end p-3 border  bg-muted/20">
+  <CardHeader>
+  <CardTitle className="text-base">Result Entries</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">
+  {rows.map((row, i) => {
+  const hasRefRange = row.reference_low !== '' && row.reference_high !== '';
+  const isEditingThisRow = amendingRowId === row.result_id;
+  const isRowDisabled = (isCompleted && !isEditingThisRow) || row.is_amended;
 
- {/* Analyte name */}
+  return (
+  <div key={row.result_id || i} className={`grid grid-cols-12 gap-2 items-end p-3 border rounded-md relative ${row.is_amended ? 'opacity-60 bg-muted/50 grayscale' : 'bg-muted/20'} ${isEditingThisRow ? 'ring-2 ring-primary/50' : ''}`}>
+   
+   {/* Status Badges */}
+   {(row.is_amended || row.original_result_id) && (
+     <div className="absolute -top-2.5 right-4 flex gap-2">
+       {row.is_amended && <Badge variant="secondary" className="text-[10px] bg-muted-foreground text-white">Amended (Archived)</Badge>}
+       {row.original_result_id && <Badge className="text-[10px] bg-primary text-primary-foreground">Corrected Result</Badge>}
+     </div>
+   )}
+
+  {/* Analyte name */}
  <div className="col-span-12 sm:col-span-3 space-y-1">
- <Label className="text-xs">Analyte Name</Label>
- <Input
- placeholder="e.g. WBC Count"
- value={row.analyte_name}
- onChange={e => updateRow(i, 'analyte_name', e.target.value)}
- onBlur={() => handleBlur(i)}
- disabled={isCompleted}
- className={fieldErrors[`results.${i}.analyte_name`] ? 'border-destructive' : ''}
- />
+  <Label className="text-xs">Analyte Name</Label>
+  <Input
+  placeholder="e.g. WBC Count"
+  value={row.analyte_name}
+  onChange={e => updateRow(i, 'analyte_name', e.target.value)}
+  onBlur={() => handleBlur(i)}
+  disabled={isRowDisabled}
+  className={fieldErrors[`results.${i}.analyte_name`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}
+  />
  </div>
 
  {/* Value */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
- <Label className="text-xs">Value</Label>
- <Input
- placeholder="e.g. 14.2"
- value={row.value}
- onChange={e => updateRow(i, 'value', e.target.value)}
- onBlur={() => handleBlur(i)}
- disabled={isCompleted}
- className={fieldErrors[`results.${i}.value`] ? 'border-destructive' : ''}
- />
+  <Label className="text-xs">Value</Label>
+  <Input
+  placeholder="e.g. 14.2"
+  value={row.value}
+  onChange={e => updateRow(i, 'value', e.target.value)}
+  onBlur={() => handleBlur(i)}
+  disabled={isRowDisabled}
+  className={fieldErrors[`results.${i}.value`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}
+  />
  </div>
 
  {/* Ref Low */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
- <Label className="text-xs">Ref. Low</Label>
- <Input
- type="number" placeholder="0"
- value={row.reference_low}
- onChange={e => updateRow(i, 'reference_low', e.target.value)}
- onBlur={() => handleBlur(i)}
- disabled={isCompleted}
- className={fieldErrors[`results.${i}.reference_low`] ? 'border-destructive' : ''}
- />
+  <Label className="text-xs">Ref. Low</Label>
+  <Input
+  type="number" placeholder="0"
+  value={row.reference_low}
+  onChange={e => updateRow(i, 'reference_low', e.target.value)}
+  onBlur={() => handleBlur(i)}
+  disabled={isRowDisabled}
+  className={fieldErrors[`results.${i}.reference_low`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}
+  />
  </div>
 
  {/* Ref High */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
- <Label className="text-xs">Ref. High</Label>
- <Input
- type="number" placeholder="100"
- value={row.reference_high}
- onChange={e => updateRow(i, 'reference_high', e.target.value)}
- onBlur={() => handleBlur(i)}
- disabled={isCompleted}
- className={fieldErrors[`results.${i}.reference_high`] ? 'border-destructive' : ''}
- />
+  <Label className="text-xs">Ref. High</Label>
+  <Input
+  type="number" placeholder="100"
+  value={row.reference_high}
+  onChange={e => updateRow(i, 'reference_high', e.target.value)}
+  onBlur={() => handleBlur(i)}
+  disabled={isRowDisabled}
+  className={fieldErrors[`results.${i}.reference_high`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}
+  />
  </div>
 
  {/* Sub-panel grouping */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
- <Label className="text-xs">Sub-Panel <span className="text-muted-foreground">(e.g. CBC, Liver)</span></Label>
- <Input
- placeholder="e.g. CBC, Liver Panel"
- value={row.sub_panel}
- onChange={e => updateRow(i, 'sub_panel', e.target.value)}
- onBlur={() => handleBlur(i)}
- disabled={isCompleted}
- />
+  <Label className="text-xs">Sub-Panel <span className="text-muted-foreground">(e.g. CBC, Liver)</span></Label>
+  <Input
+  placeholder="e.g. CBC, Liver Panel"
+  value={row.sub_panel}
+  onChange={e => updateRow(i, 'sub_panel', e.target.value)}
+  onBlur={() => handleBlur(i)}
+  disabled={isRowDisabled}
+  className={row.is_amended ? 'line-through' : ''}
+  />
  </div>
 
  {/* Flag — auto-computed when ref range is provided, manual otherwise */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
- <Label className="text-xs">
- Flag{' '}
- {hasRefRange && !isCompleted && (
- <span className="text-xs font-normal text-primary">(auto)</span>
- )}
- </Label>
- {hasRefRange && !isCompleted ? (
- <div className="h-9 flex items-center px-3 rounded-md border bg-primary text-xs text-primary font-medium">
- Server-computed
- </div>
- ) : (
- <Select
- value={row.fallback_flag}
- onValueChange={(v: string) => updateRow(i, 'fallback_flag', v as ResultRow['fallback_flag'])}
- disabled={isCompleted}
- >
- <SelectTrigger className={fieldErrors[`results.${i}.fallback_flag`] ? 'border-destructive' : ''}>
- <SelectValue placeholder="Flag" />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="NORMAL">Normal</SelectItem>
- <SelectItem value="ABNORMAL">Abnormal</SelectItem>
- <SelectItem value="CRITICAL">Critical</SelectItem>
- </SelectContent>
- </Select>
- )}
+  <Label className="text-xs">
+  Flag{' '}
+  {hasRefRange && !isRowDisabled && (
+  <span className="text-xs font-normal text-primary">(auto)</span>
+  )}
+  </Label>
+  {hasRefRange && !isEditingThisRow && !row.fallback_flag ? (
+  <div className={`h-9 flex items-center px-3 rounded-md border text-xs font-medium ${row.is_amended ? 'bg-muted text-muted-foreground line-through' : 'bg-primary/10 text-primary border-primary/20'}`}>
+  Server-computed
+  </div>
+  ) : (
+  <Select
+  value={row.fallback_flag}
+  onValueChange={(v: string) => updateRow(i, 'fallback_flag', v as ResultRow['fallback_flag'])}
+  disabled={isRowDisabled}
+  >
+  <SelectTrigger className={fieldErrors[`results.${i}.fallback_flag`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}>
+  <SelectValue placeholder="Flag" />
+  </SelectTrigger>
+  <SelectContent>
+  <SelectItem value="NORMAL">Normal</SelectItem>
+  <SelectItem value="ABNORMAL">Abnormal</SelectItem>
+  <SelectItem value="CRITICAL">Critical</SelectItem>
+  </SelectContent>
+  </Select>
+  )}
  </div>
 
- {/* Remove row */}
- <div className="col-span-12 sm:col-span-1 flex justify-end">
- {!isCompleted && rows.length > 1 && (
- <Button variant="ghost" size="icon" onClick={() => removeRow(i)}>
- <Trash2 className="h-4 w-4 text-destructive" />
- </Button>
- )}
- </div>
+  {/* Actions */}
+  <div className="col-span-12 sm:col-span-1 flex justify-end">
+  {!isCompleted && rows.length > 1 && (
+  <Button variant="ghost" size="icon" onClick={() => removeRow(i)}>
+  <Trash2 className="h-4 w-4 text-destructive" />
+  </Button>
+  )}
+  {isCompleted && !row.is_amended && row.result_id && !amendingRowId && (
+    <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setAmendingRowId(row.result_id!)}>
+      Amend
+    </Button>
+  )}
+  {isEditingThisRow && (
+    <div className="flex gap-1">
+      <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setAmendingRowId(null)}>
+        <Trash2 className="h-4 w-4 text-muted-foreground" />
+      </Button>
+      <Button variant="default" size="sm" className="h-9 text-xs px-2" onClick={() => handleAmendSubmit(i)} disabled={submitting}>
+        {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+      </Button>
+    </div>
+  )}
+  </div>
  </div>
  );
  })}
 
- {!isCompleted && (
- <div className="flex gap-3 pt-2">
- <Button variant="outline" onClick={addRow} className="gap-2">
- <Plus className="h-4 w-4" /> Add Analyte
- </Button>
- <DropdownMenu>
- <DropdownMenuTrigger asChild>
- <Button variant="outline" className="gap-2 text-primary border-primary/50 hover:bg-primary/10">
- <FileText className="h-4 w-4" /> Load Template <ChevronDown className="h-3 w-3 opacity-50" />
- </Button>
- </DropdownMenuTrigger>
- <DropdownMenuContent>
- {Object.keys(TEMPLATES).map(t => (
- <DropdownMenuItem key={t} onClick={() => loadTemplate(t)}>
- {t} Panel
- </DropdownMenuItem>
- ))}
- </DropdownMenuContent>
- </DropdownMenu>
- <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
- {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
- Submit Results
- </Button>
- </div>
- )}
+  {!isCompleted && (
+  <div className="flex flex-wrap gap-3 pt-2">
+  <Button variant="outline" onClick={addRow} className="gap-2">
+  <Plus className="h-4 w-4" /> Add Analyte
+  </Button>
+  <DropdownMenu>
+  <DropdownMenuTrigger asChild>
+  <Button variant="outline" className="gap-2 text-primary border-primary/50 hover:bg-primary/10">
+  <FileText className="h-4 w-4" /> Load Template <ChevronDown className="h-3 w-3 opacity-50" />
+  </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent>
+  {Object.keys(TEMPLATES).map(t => (
+  <DropdownMenuItem key={t} onClick={() => loadTemplate(t)}>
+  {t} Panel
+  </DropdownMenuItem>
+  ))}
+  </DropdownMenuContent>
+  </DropdownMenu>
+  <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
+  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+  Submit Results
+  </Button>
+  {order.status === 'INPROGRESS' && order.results?.length > 0 && (
+  <Button
+    onClick={handleComplete}
+    disabled={completing}
+    className="gap-2 bg-green-600 hover:bg-green-700 text-white ml-auto"
+  >
+    {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+    Mark as Complete
+  </Button>
+  )}
+  </div>
+  )}
  </CardContent>
  </Card>
  </div>

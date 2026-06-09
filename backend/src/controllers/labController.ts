@@ -249,7 +249,9 @@ export const startOrder = catchAsync(async (req: Request, res: Response, next: N
     LIMIT 1
   `;
   if (!existing) return next(new AppError('ERROR_ORDER_NOT_FOUND', 404));
-  if (existing.assigned_to) return next(new AppError('ERROR_ORDER_ALREADY_CLAIMED', 409));
+  if (existing.assigned_to && existing.assigned_to !== tech.technician_id) {
+    return next(new AppError('ERROR_ORDER_ALREADY_CLAIMED', 409));
+  }
   if (existing.status !== 'PENDING') return next(new AppError('ERROR_ORDER_NOT_CLAIMABLE', 409));
 
   // Atomic claim: row-lock ensures only one concurrent request wins
@@ -260,20 +262,23 @@ export const startOrder = catchAsync(async (req: Request, res: Response, next: N
         assigned_at = NOW()
     WHERE test_id      = ${testId}
       AND status       = 'PENDING'
-      AND assigned_to IS NULL
+      AND (assigned_to IS NULL OR assigned_to = ${tech.technician_id})
       AND deleted_at  IS NULL
     RETURNING test_id, status, assigned_to, assigned_at
   `;
 
   if (!order) return next(new AppError('ERROR_ORDER_ALREADY_CLAIMED', 409));
 
-  // Notify requesting doctor that someone picked up the order
+  // Notify PRIMARY and COVERING doctors that someone picked up the order
   await sql`
     INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
-    SELECT lt.patient_id, lt.requested_by, 'RESULT_READY',
+    SELECT pa.patient_id, pa.doctor_id, 'RESULT_READY',
            ${'Lab order is being processed by a technician.'}
-    FROM lab_tests lt
-    WHERE lt.test_id = ${testId} AND lt.requested_by IS NOT NULL
+    FROM patient_assignments pa
+    WHERE pa.patient_id = (SELECT patient_id FROM lab_tests WHERE test_id = ${testId})
+      AND pa.role IN ('PRIMARY', 'COVERING')
+      AND pa.discharged_at IS NULL
+      AND (pa.valid_until IS NULL OR pa.valid_until > NOW())
   `;
 
   res.status(200).json({
@@ -383,36 +388,110 @@ export const enterResults = catchAsync(async (req: Request, res: Response, next:
     insertedResults.push(inserted);
   }
 
-  // Mark test COMPLETED and clear assignment
+  // Transition PENDING → INPROGRESS (do NOT mark COMPLETED yet)
+  if (test.status === 'PENDING') {
+    await sql`
+      UPDATE lab_tests
+      SET status      = 'INPROGRESS',
+          assigned_to = ${tech?.technician_id ?? null},
+          assigned_at = NOW()
+      WHERE test_id = ${test_id}
+        AND status  = 'PENDING'
+    `;
+  }
+
+  res.status(201).json({
+    status: 'success',
+    messageKey: 'SUCCESS_RESULTS_ENTERED',
+    data: { results: insertedResults },
+  });
+});
+
+// PATCH /api/lab/orders/:testId/complete
+// Explicitly marks a test as COMPLETED after the tech has entered all analytes.
+// Moves alert + infection_risk logic here so partial submissions don't trigger them.
+export const completeOrder = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { testId } = req.params;
+  const orgId = req.user!.org_id;
+
+  // Verify tech identity
+  const [tech] = await sql`
+    SELECT technician_id FROM lab_technicians WHERE user_id = ${req.user!.user_id} LIMIT 1
+  `;
+  if (!tech) return next(new AppError('ERROR_FORBIDDEN', 403));
+
+  // Load test with org-scope
+  const [test] = await sql`
+    SELECT lt.test_id, lt.patient_id, lt.status, lt.assigned_to
+    FROM lab_tests lt
+    WHERE lt.test_id    = ${testId}
+      AND lt.deleted_at IS NULL
+      ${orgFilter(orgId)}
+    LIMIT 1
+  `;
+  if (!test) return next(new AppError('ERROR_ORDER_NOT_FOUND', 404));
+  if (test.status === 'COMPLETED') return next(new AppError('ERROR_ORDER_ALREADY_COMPLETED', 409));
+  if (test.status === 'CANCELLED') return next(new AppError('ERROR_ORDER_NOT_CLAIMABLE', 409));
+  if (test.status === 'PENDING')   return next(new AppError('ERROR_ORDER_NO_RESULTS', 422));
+
+  // Only the assigned tech (or any tech if unassigned) may complete
+  if (test.assigned_to && tech.technician_id !== test.assigned_to) {
+    return next(new AppError('ERROR_ORDER_NOT_ASSIGNED_TO_YOU', 403));
+  }
+
+  // Ensure at least one result row exists
+  const [countRow] = await sql`
+    SELECT COUNT(*) AS cnt FROM lab_test_results
+    WHERE test_id = ${testId} AND is_amended = FALSE
+  `;
+  if (Number(countRow.cnt) === 0) {
+    return next(new AppError('ERROR_ORDER_NO_RESULTS', 422));
+  }
+
+  // Mark COMPLETED
   await sql`
     UPDATE lab_tests
-    SET status = 'COMPLETED', assigned_to = NULL
-    WHERE test_id = ${test_id}
+    SET status = 'COMPLETED', assigned_to = NULL, updated_at = NOW()
+    WHERE test_id = ${testId}
   `;
 
-  // Alert the requesting doctor with severity-differentiated type
-  if (test.requested_by) {
-    const hasCritical = insertedResults.some(r => r.flag === 'CRITICAL');
-    const hasAbnormal = insertedResults.some(r => r.flag === 'ABNORMAL');
-    const alertType   = hasCritical ? 'CRITICAL_RESULT' : hasAbnormal ? 'ABNORMAL_RESULT' : 'RESULT_READY';
-    const message     = hasCritical
+  // Read active results for alert + risk computation
+  const activeResults = await sql`
+    SELECT flag FROM lab_test_results
+    WHERE test_id = ${testId} AND is_amended = FALSE
+  `;
+  const hasCritical = (activeResults as Array<Record<string, unknown>>).some(r => r['flag'] === 'CRITICAL');
+  const hasAbnormal = (activeResults as Array<Record<string, unknown>>).some(r => r['flag'] === 'ABNORMAL');
+
+  // Alert PRIMARY and COVERING doctors
+  const alertRecipients = await sql`
+    SELECT doctor_id FROM patient_assignments
+    WHERE patient_id = ${test.patient_id}
+      AND role IN ('PRIMARY', 'COVERING')
+      AND discharged_at IS NULL
+      AND (valid_until IS NULL OR valid_until > NOW())
+  `;
+
+  if (alertRecipients.length > 0) {
+    const alertType = hasCritical ? 'CRITICAL_RESULT' : hasAbnormal ? 'ABNORMAL_RESULT' : 'RESULT_READY';
+    const message   = hasCritical
       ? 'Critical lab result entered — immediate review and acknowledgment required.'
       : hasAbnormal
       ? 'Abnormal lab result entered — review recommended.'
       : 'Lab results are ready for review.';
 
-    await sql`
-      INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
-      VALUES (${test.patient_id}, ${test.requested_by}, ${alertType}, ${message})
-    `;
+    for (const rec of alertRecipients) {
+      await sql`
+        INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
+        VALUES (${test.patient_id}, ${rec.doctor_id}, ${alertType}, ${message})
+      `;
+    }
   }
 
-  // Update infection risk heuristic for flagged results
-  const hasCriticalResult = insertedResults.some(r => r.flag === 'CRITICAL');
-  const hasAbnormalResult = insertedResults.some(r => r.flag === 'ABNORMAL');
-  if (hasCriticalResult || hasAbnormalResult) {
-    const riskLevel = hasCriticalResult ? 'CRITICAL' : 'HIGH';
-    const riskScore = hasCriticalResult ? 0.9 : 0.65;
+  // Insert infection risk heuristic for flagged results
+  if (hasCritical || hasAbnormal) {
+    const riskLevel = hasCritical ? 'CRITICAL' : 'HIGH';
+    const riskScore = hasCritical ? 0.9 : 0.65;
     await sql`
       INSERT INTO infection_risks (patient_id, risk_score, risk_level, message, model_version)
       VALUES (
@@ -422,10 +501,10 @@ export const enterResults = catchAsync(async (req: Request, res: Response, next:
     `;
   }
 
-  res.status(201).json({
+  res.status(200).json({
     status: 'success',
-    messageKey: 'SUCCESS_RESULTS_ENTERED',
-    data: { results: insertedResults },
+    messageKey: 'SUCCESS_ORDER_COMPLETED',
+    data: { test_id: testId },
   });
 });
 
@@ -578,6 +657,30 @@ export const getUnits = catchAsync(async (_req: Request, res: Response) => {
     SELECT unit_id, name, symbol FROM units ORDER BY name ASC
   `;
   res.status(200).json({ status: 'success', data: { units } });
+});
+
+// POST /api/lab/units
+export const createUnitSchema = z.object({
+  name:   z.string().min(1, { message: 'ERR_UNIT_NAME_REQUIRED' }).max(100),
+  symbol: z.string().min(1, { message: 'ERR_UNIT_SYMBOL_REQUIRED' }).max(20),
+});
+
+export const createUnit = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  // Body is already validated by validateBody middleware
+  const { name, symbol } = req.body as z.infer<typeof createUnitSchema>;
+
+  // Check for duplicate symbol
+  const [existing] = await sql`
+    SELECT unit_id FROM units WHERE LOWER(symbol) = LOWER(${symbol}) LIMIT 1
+  `;
+  if (existing) return next(new AppError('ERROR_UNIT_SYMBOL_EXISTS', 409));
+
+  const [unit] = await sql`
+    INSERT INTO units (name, symbol) VALUES (${name}, ${symbol})
+    RETURNING unit_id, name, symbol
+  `;
+
+  res.status(201).json({ status: 'success', data: { unit } });
 });
 
 // GET /api/lab/stats  — dashboard stats for lab tech

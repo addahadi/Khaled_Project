@@ -2,10 +2,10 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * IBM Carbon feature-card
- * - Flat: no shadow, no rounded corners
- * - Hierarchy via 1px hairline border + surface change
- * - Hover lifts to surface-1 background
+ * DiagInfect Modern SaaS card
+ * - White surface on gray-50 page
+ * - 10px radius, subtle shadow
+ * - Hover: shadow lifts slightly
  */
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -14,7 +14,8 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "border border-border bg-card text-card-foreground shadow-sm",
+      "rounded-[var(--radius)] border border-border bg-card text-card-foreground",
+      "shadow-sm",
       className
     )}
     {...props}
@@ -34,14 +35,13 @@ const CardHeader = React.forwardRef<
 ))
 CardHeader.displayName = "CardHeader"
 
-/* Carbon card-title: 24px weight-400 */
 const CardTitle = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-xl font-normal leading-snug", className)}
+    className={cn("text-base font-semibold leading-snug tracking-tight", className)}
     {...props}
   />
 ))
@@ -53,7 +53,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground tracking-[0.16px]", className)}
+    className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
 ))

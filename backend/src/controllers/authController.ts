@@ -7,6 +7,7 @@ import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 import type { JwtPayload } from '../middleware/authenticate.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -14,7 +15,7 @@ function signAccessToken(payload: Omit<JwtPayload, 'jti'>): { token: string; jti
   const jti = crypto.randomUUID();
   return {
     token: jwt.sign({ ...payload, jti }, process.env.JWT_ACCESS_SECRET!, {
-      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as string,
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as any,
     }),
     jti,
   };
@@ -26,7 +27,7 @@ function makeRefreshToken(userId: string) {
   const jwt_token = jwt.sign(
     { sub: userId },
     process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as string }
+    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as any }
   );
   return { raw, hash, jwt_token };
 }
@@ -78,6 +79,15 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email:    z.string().email({ message: 'ERR_EMAIL_INVALID' }),
   password: z.string().min(1, { message: 'ERR_PASSWORD_REQUIRED' }),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email({ message: 'ERR_EMAIL_INVALID' }),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, { message: 'ERR_TOKEN_REQUIRED' }),
+  password: z.string().min(8, { message: 'ERR_PASSWORD_TOO_SHORT' }),
 });
 
 // ─── Controllers ──────────────────────────────────────────────────────────────
@@ -377,5 +387,67 @@ export const getMe = catchAsync(
     if (!user) return next(new AppError('ERROR_USER_NOT_FOUND', 404));
 
     res.status(200).json({ status: 'success', data: { user } });
+  }
+);
+
+export const forgotPassword = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = forgotPasswordSchema.safeParse(req.body);
+    if (!val.success) return next(new AppError('ERROR_VALIDATION_FAILED', 422));
+
+    const { email } = val.data;
+
+    const [user] = await sql`SELECT user_id, status FROM users WHERE email = ${email} AND deleted_at IS NULL LIMIT 1`;
+    if (!user || user.status !== 'ACTIVE') {
+      // Return success anyway to prevent email enumeration
+      return res.status(200).json({ status: 'success', messageKey: 'SUCCESS_PASSWORD_RESET_EMAIL_SENT' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    await sql`
+      INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+      VALUES (${user.user_id}, ${tokenHash}, NOW() + INTERVAL '1 hour')
+    `;
+
+    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+
+    // Fire & forget email
+    sendPasswordResetEmail({ to: email, reset_url: resetUrl }).catch(err => {
+      console.error('Failed to send password reset email:', err);
+    });
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_PASSWORD_RESET_EMAIL_SENT' });
+  }
+);
+
+export const resetPassword = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = resetPasswordSchema.safeParse(req.body);
+    if (!val.success) return next(new AppError('ERROR_VALIDATION_FAILED', 422));
+
+    const { token, password } = val.data;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const [storedToken] = await sql`
+      SELECT token_id, user_id, expires_at, used_at
+      FROM password_reset_tokens
+      WHERE token_hash = ${tokenHash}
+      LIMIT 1
+    `;
+
+    if (!storedToken || storedToken.used_at || new Date(storedToken.expires_at) < new Date()) {
+      return next(new AppError('ERROR_TOKEN_INVALID', 400));
+    }
+
+    const password_hash = await bcrypt.hash(password, 12);
+
+    await sql.begin(async (tx) => {
+      await tx`UPDATE users SET password_hash = ${password_hash} WHERE user_id = ${storedToken.user_id}`;
+      await tx`UPDATE password_reset_tokens SET used_at = NOW() WHERE token_id = ${storedToken.token_id}`;
+    });
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_PASSWORD_RESET' });
   }
 );
