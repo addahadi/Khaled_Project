@@ -314,7 +314,7 @@ export default function EnterResults() {
  <ArrowLeft className="h-4 w-4" />
  </Button>
  <div>
- <h1 className="text-[28px] font-light">
+ <h1 className="text-2xl font-semibold text-foreground tracking-tight">
  {isCompleted ? 'View Results' : 'Enter Results'}
  </h1>
  <p className="text-muted-foreground">{order.test_type}</p>
@@ -370,7 +370,7 @@ export default function EnterResults() {
    )}
 
   {/* Analyte name */}
- <div className="col-span-12 sm:col-span-3 space-y-1">
+ <div className="col-span-12 sm:col-span-2 space-y-1">
   <Label className="text-xs">Analyte Name</Label>
   <Input
   placeholder="e.g. WBC Count"
@@ -396,7 +396,7 @@ export default function EnterResults() {
  </div>
 
  {/* Ref Low */}
- <div className="col-span-6 sm:col-span-2 space-y-1">
+ <div className="col-span-6 sm:col-span-1 space-y-1">
   <Label className="text-xs">Ref. Low</Label>
   <Input
   type="number" placeholder="0"
@@ -409,7 +409,7 @@ export default function EnterResults() {
  </div>
 
  {/* Ref High */}
- <div className="col-span-6 sm:col-span-2 space-y-1">
+ <div className="col-span-6 sm:col-span-1 space-y-1">
   <Label className="text-xs">Ref. High</Label>
   <Input
   type="number" placeholder="100"
@@ -423,7 +423,7 @@ export default function EnterResults() {
 
  {/* Sub-panel grouping */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
-  <Label className="text-xs">Sub-Panel <span className="text-muted-foreground">(e.g. CBC, Liver)</span></Label>
+  <Label className="text-xs">Sub-Panel</Label>
   <Input
   placeholder="e.g. CBC, Liver Panel"
   value={row.sub_panel}
@@ -465,7 +465,7 @@ export default function EnterResults() {
  </div>
 
   {/* Actions */}
-  <div className="col-span-12 sm:col-span-1 flex justify-end">
+  <div className="col-span-12 sm:col-span-2 flex justify-end pb-0.5">
   {!isCompleted && rows.length > 1 && (
   <Button variant="ghost" size="icon" onClick={() => removeRow(i)}>
   <Trash2 className="h-4 w-4 text-destructive" />

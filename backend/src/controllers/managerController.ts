@@ -36,6 +36,7 @@ export const getOrganization = catchAsync(async (req: Request, res: Response, ne
       o.organization_id,
       o.name,
       o.type,
+      o.email,
       o.address,
       o.created_at,
       COALESCE(

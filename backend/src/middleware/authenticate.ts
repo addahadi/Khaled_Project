@@ -44,6 +44,21 @@ export const authenticate = catchAsync(
       return next(new AppError('ERROR_TOKEN_REVOKED', 401));
     }
 
+    // Check user status (active and not deleted)
+    const [userRecord] = await sql`
+      SELECT status, deleted_at FROM users
+      WHERE user_id = ${decoded.user_id}
+      LIMIT 1
+    `;
+
+    if (!userRecord || userRecord.deleted_at !== null) {
+      return next(new AppError('ERROR_USER_NOT_FOUND', 401));
+    }
+
+    if (userRecord.status !== 'ACTIVE') {
+      return next(new AppError('ERROR_ACCOUNT_INACTIVE', 403));
+    }
+
     req.user = decoded;
     next();
   }

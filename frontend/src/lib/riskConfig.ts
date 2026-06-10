@@ -14,39 +14,39 @@ interface RiskConfigEntry {
 }
 
 /**
- * IBM Carbon semantic colors
- * LOW      → success-green  (#24a148)
- * MODERATE → warning-yellow (#f1c21b / amber)
- * HIGH     → alert-orange   (#ff832b)
- * CRITICAL → error-red      (#da1e28)
+ * DiagInfect logo palette semantic colors
+ * LOW      → teal    #00a89c
+ * MODERATE → amber   #faaf3a
+ * HIGH     → orange  (between amber and red)
+ * CRITICAL → red     #c0272d
  */
 export const RISK_CONFIG: Record<RiskLevel, RiskConfigEntry> = {
   LOW: {
     icon:       CheckCircle2,
-    color:      'text-[#24a148]',
-    badgeClass: 'bg-[#defbe6] text-[#0e6027] border border-[#a7f0ba]',
-    barClass:   '[&>div]:bg-[#24a148]',
+    color:      'text-[#00a89c]',
+    badgeClass: 'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25 rounded-full',
+    barClass:   '[&>div]:bg-[#00a89c]',
     label:      'Low',
   },
   MODERATE: {
     icon:       TrendingUp,
     color:      'text-[#a2680a]',
-    badgeClass: 'bg-[#fdf1da] text-[#a2680a] border border-[#fdd13a]',
-    barClass:   '[&>div]:bg-[#f1c21b]',
+    badgeClass: 'bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 rounded-full',
+    barClass:   '[&>div]:bg-[#faaf3a]',
     label:      'Moderate',
   },
   HIGH: {
     icon:       ShieldAlert,
-    color:      'text-[#ff832b]',
-    badgeClass: 'bg-[#fff2e8] text-[#8a3800] border border-[#ffb784]',
-    barClass:   '[&>div]:bg-[#ff832b]',
+    color:      'text-[#e07020]',
+    badgeClass: 'bg-[#e07020]/10 text-[#a04c10] border border-[#e07020]/25 rounded-full',
+    barClass:   '[&>div]:bg-[#e07020]',
     label:      'High',
   },
   CRITICAL: {
     icon:       AlertTriangle,
-    color:      'text-[#da1e28]',
-    badgeClass: 'bg-[#fff1f1] text-[#a2191f] border border-[#ffa4a9]',
-    barClass:   '[&>div]:bg-[#da1e28]',
+    color:      'text-[#c0272d]',
+    badgeClass: 'bg-[#c0272d]/10 text-[#c0272d] border border-[#c0272d]/20 rounded-full',
+    barClass:   '[&>div]:bg-[#c0272d]',
     label:      'Critical',
   },
 };

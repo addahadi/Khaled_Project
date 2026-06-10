@@ -7,7 +7,7 @@ import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 import type { JwtPayload } from '../middleware/authenticate.js';
-import { sendPasswordResetEmail } from '../services/emailService.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +90,15 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8, { message: 'ERR_PASSWORD_TOO_SHORT' }),
 });
 
+const verifyEmailSchema = z.object({
+  token: z.string().min(1, { message: 'ERR_TOKEN_REQUIRED' }),
+});
+
+const updateProfileSchema = z.object({
+  username: z.string().min(3, { message: 'ERR_USERNAME_TOO_SHORT' }),
+  preferred_lang: z.enum(['en', 'ar']).optional(),
+});
+
 // ─── Controllers ──────────────────────────────────────────────────────────────
 
 export const register = catchAsync(
@@ -120,7 +129,7 @@ export const register = catchAsync(
       VALUES (
         ${username}, ${email}, ${password_hash},
         ${organization_id ?? null}, ${department_id ?? null},
-        'ACTIVE'
+        'PENDING_VERIFICATION'
       )
       RETURNING user_id
     `;
@@ -134,7 +143,21 @@ export const register = catchAsync(
       await sql`INSERT INTO hospital_managers (user_id) VALUES (${user.user_id})`;
     }
 
-    res.status(201).json({ status: 'success', messageKey: 'SUCCESS_REGISTERED' });
+    // Generate email verification token
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const verifyTokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+
+    await sql`
+      INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+      VALUES (${user.user_id}, ${verifyTokenHash}, NOW() + INTERVAL '24 hours')
+    `;
+
+    const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-email?token=${verifyToken}`;
+    sendVerificationEmail({ to: email, verify_url: verifyUrl }).catch(err => {
+      console.error('Failed to send verification email:', err);
+    });
+
+    res.status(201).json({ status: 'success', messageKey: 'SUCCESS_REGISTERED_CHECK_EMAIL' });
   }
 );
 
@@ -173,8 +196,13 @@ export const login = catchAsync(
     if (!user) return badCredentials();
 
     // Brute-force lock
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      return next(new AppError('ERROR_ACCOUNT_LOCKED', 423));
+    if (user.locked_until) {
+      if (new Date(user.locked_until) > new Date()) {
+        return next(new AppError('ERROR_ACCOUNT_LOCKED', 423));
+      } else {
+        user.failed_login_count = 0;
+        user.locked_until = null;
+      }
     }
 
     // Account status check
@@ -263,19 +291,22 @@ export const refresh = catchAsync(
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
     const [stored] = await sql`
-      SELECT id, user_id, family, revoked_at, expires_at
-      FROM refresh_tokens
-      WHERE token_hash = ${tokenHash}
-      LIMIT 1
+      UPDATE refresh_tokens
+      SET revoked_at = NOW()
+      WHERE token_hash = ${tokenHash} AND revoked_at IS NULL
+      RETURNING id, user_id, family, expires_at
     `;
 
-    if (!stored) return next(new AppError('ERROR_TOKEN_INVALID', 401));
+    if (!stored) {
+      const [existing] = await sql`
+        SELECT family FROM refresh_tokens WHERE token_hash = ${tokenHash} LIMIT 1
+      `;
+      if (!existing) return next(new AppError('ERROR_TOKEN_INVALID', 401));
 
-    // Reuse detection: revoke entire family
-    if (stored.revoked_at) {
+      // Reuse detection: revoke entire family
       await sql`
         UPDATE refresh_tokens SET revoked_at = NOW()
-        WHERE family = ${stored.family}
+        WHERE family = ${existing.family}
       `;
       return next(new AppError('ERROR_TOKEN_REUSE_DETECTED', 401));
     }
@@ -283,9 +314,6 @@ export const refresh = catchAsync(
     if (new Date(stored.expires_at) < new Date()) {
       return next(new AppError('ERROR_TOKEN_EXPIRED', 401));
     }
-
-    // Revoke old token
-    await sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ${stored.id}`;
 
     // Fetch user
     const [user] = await sql`
@@ -449,5 +477,122 @@ export const resetPassword = catchAsync(
     });
 
     res.status(200).json({ status: 'success', messageKey: 'SUCCESS_PASSWORD_RESET' });
+  }
+);
+
+export const updateProfile = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = updateProfileSchema.safeParse(req.body);
+    if (!val.success) {
+      const fields: Record<string, string> = {};
+      val.error.issues.forEach(i => { fields[String(i.path[0])] = i.message; });
+      return next(new AppError('ERROR_VALIDATION_FAILED', 422, fields));
+    }
+
+    const { username, preferred_lang } = val.data;
+
+    const [existing] = await sql`
+      SELECT user_id FROM users
+      WHERE username = ${username} AND user_id != ${req.user!.user_id} AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (existing) return next(new AppError('ERROR_USERNAME_EXISTS', 409));
+
+    await sql`
+      UPDATE users
+      SET username = ${username},
+          preferred_lang = ${preferred_lang ?? 'en'},
+          updated_at = NOW()
+      WHERE user_id = ${req.user!.user_id}
+    `;
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_PROFILE_UPDATED' });
+  }
+);
+
+export const verifyEmail = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const val = verifyEmailSchema.safeParse(req.body);
+    if (!val.success) return next(new AppError('ERROR_VALIDATION_FAILED', 422));
+
+    const { token } = val.data;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const [storedToken] = await sql`
+      SELECT token_id, user_id, expires_at, used_at
+      FROM email_verification_tokens
+      WHERE token_hash = ${tokenHash}
+      LIMIT 1
+    `;
+
+    if (!storedToken || storedToken.used_at || new Date(storedToken.expires_at) < new Date()) {
+      return next(new AppError('ERROR_TOKEN_INVALID', 400));
+    }
+
+    await sql.begin(async (tx) => {
+      await tx`UPDATE users SET status = 'ACTIVE' WHERE user_id = ${storedToken.user_id}`;
+      await tx`UPDATE email_verification_tokens SET used_at = NOW() WHERE token_id = ${storedToken.token_id}`;
+    });
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_EMAIL_VERIFIED' });
+  }
+);
+
+export const getSessions = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const sessions = await sql`
+      SELECT id, device_info, ip_address, created_at, expires_at, family
+      FROM refresh_tokens
+      WHERE user_id = ${req.user!.user_id}
+        AND revoked_at IS NULL
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+    `;
+    res.status(200).json({ status: 'success', data: { sessions } });
+  }
+);
+
+export const revokeSession = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    if (!id) return next(new AppError('ERROR_INVALID_REQUEST', 400));
+
+    // Find family by id, revoke all tokens in family
+    const [stored] = await sql`
+      SELECT family FROM refresh_tokens
+      WHERE id = ${id} AND user_id = ${req.user!.user_id}
+      LIMIT 1
+    `;
+
+    if (!stored) return next(new AppError('ERROR_NOT_FOUND', 404));
+
+    await sql`
+      UPDATE refresh_tokens SET revoked_at = NOW()
+      WHERE family = ${stored.family}
+    `;
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_SESSION_REVOKED' });
+  }
+);
+
+export const revokeOtherSessions = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const rawToken: string | undefined = req.cookies?.refreshToken;
+    if (!rawToken) return next(new AppError('ERROR_NO_REFRESH_TOKEN', 401));
+
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const [stored] = await sql`
+      SELECT family FROM refresh_tokens WHERE token_hash = ${tokenHash} LIMIT 1
+    `;
+
+    if (!stored) return next(new AppError('ERROR_TOKEN_INVALID', 401));
+
+    await sql`
+      UPDATE refresh_tokens SET revoked_at = NOW()
+      WHERE user_id = ${req.user!.user_id} AND family != ${stored.family}
+    `;
+
+    res.status(200).json({ status: 'success', messageKey: 'SUCCESS_OTHER_SESSIONS_REVOKED' });
   }
 );

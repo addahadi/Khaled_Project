@@ -44,6 +44,14 @@ type Scope = 'mine' | 'org';
 const SCOPE_STORAGE_KEY = 'diaginfect_patient_scope';
 const GENDER_OPTIONS    = ['MALE', 'FEMALE', 'OTHER'];
 
+const RISK_FILTERS = [
+  { value: 'ALL',      label: 'All Risk' },
+  { value: 'CRITICAL', label: 'Critical' },
+  { value: 'HIGH',     label: 'High' },
+  { value: 'MODERATE', label: 'Moderate' },
+  { value: 'LOW',      label: 'Low' },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Patients() {
@@ -51,7 +59,6 @@ export default function Patients() {
   const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
 
-  // ── Scope toggle — persisted to localStorage ──────────────────────────────
   const [scope, setScope] = useState<Scope>(
     () => (localStorage.getItem(SCOPE_STORAGE_KEY) as Scope | null) ?? 'org',
   );
@@ -59,12 +66,10 @@ export default function Patients() {
   const handleScopeChange = (val: Scope) => {
     setScope(val);
     localStorage.setItem(SCOPE_STORAGE_KEY, val);
-    // Reset pagination when scope changes
     setPatients([]);
     setNextCursor(null);
   };
 
-  // ── List state ────────────────────────────────────────────────────────────
   const [patients,    setPatients]    = useState<Patient[]>([]);
   const [nextCursor,  setNextCursor]  = useState<string | null>(null);
   const [totalCount,  setTotalCount]  = useState(0);
@@ -74,23 +79,19 @@ export default function Patients() {
   const [sortOrder,   setSortOrder]   = useState('recent');
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // ── Add patient dialog state ──────────────────────────────────────────────
-  const [addOpen,  setAddOpen]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [form,     setForm]     = useState({ name: '', age: '', gender: '', medical_history: '' });
+  const [addOpen,     setAddOpen]     = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [form,        setForm]        = useState({ name: '', age: '', gender: '', medical_history: '' });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // ── Debounce search ───────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // ── Data loading ──────────────────────────────────────────────────────────
   const load = useCallback((cursor: string | null = null) => {
     const isLoadMore = !!cursor;
     const params     = new URLSearchParams();
-
     params.set('scope', scope);
     if (debouncedSearch) params.set('search', debouncedSearch);
     if (cursor)          params.set('cursor', cursor);
@@ -115,7 +116,6 @@ export default function Patients() {
     load();
   }, [load]);
 
-  // ── Client-side filtering (risk + sort only — search is server-side) ──────
   let filtered = patients.filter(p =>
     riskFilter === 'ALL' || p.risk_status === riskFilter,
   );
@@ -131,7 +131,6 @@ export default function Patients() {
     return 0;
   });
 
-  // ── CSV export ────────────────────────────────────────────────────────────
   const handleExportCSV = () => {
     const rows = [['Name', 'Age', 'Gender', 'Risk Level', 'Risk Score', 'Added Date']];
     patients.forEach(p => {
@@ -154,7 +153,6 @@ export default function Patients() {
     URL.revokeObjectURL(url);
   };
 
-  // ── Add patient ───────────────────────────────────────────────────────────
   const handleAdd = () => {
     const result = addPatientSchema.safeParse({ name: form.name, age: form.age, gender: form.gender });
     if (!result.success) { setFieldErrors(flattenZodErrors(result.error)); return; }
@@ -172,7 +170,6 @@ export default function Patients() {
         toast({ title: 'Patient registered', description: msg });
         setAddOpen(false);
         setForm({ name: '', age: '', gender: '', medical_history: '' });
-        // Reload from scratch so the new patient appears with its assignment
         setPatients([]);
         setNextCursor(null);
         load();
@@ -188,13 +185,13 @@ export default function Patients() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl">
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-light">Patients</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Patients</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {totalCount} {scope === 'mine' ? 'assigned' : 'total'} patient{totalCount !== 1 ? 's' : ''}
           </p>
         </div>
@@ -208,36 +205,36 @@ export default function Patients() {
         </div>
       </div>
 
-      {/* ── Scope toggle ──────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
-        <button
-          onClick={() => handleScopeChange('mine')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            scope === 'mine'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <User className="h-3.5 w-3.5" />
-          My Patients
-        </button>
-        <button
-          onClick={() => handleScopeChange('org')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            scope === 'org'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Building2 className="h-3.5 w-3.5" />
-          All Patients
-        </button>
-      </div>
+      {/* Scope toggle + filters row */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        {/* Scope pill toggle */}
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-[var(--radius)] shrink-0">
+          <button
+            onClick={() => handleScopeChange('mine')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              scope === 'mine'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <User className="h-3.5 w-3.5" /> My Patients
+          </button>
+          <button
+            onClick={() => handleScopeChange('org')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              scope === 'org'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Building2 className="h-3.5 w-3.5" /> All Patients
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 w-full sm:w-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             className="pl-9"
             placeholder="Search by name…"
@@ -245,45 +242,54 @@ export default function Patients() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-[160px] bg-background">
-              <SortAsc className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Recently Added</SelectItem>
-              <SelectItem value="risk">Highest Risk</SelectItem>
-              <SelectItem value="name">Name A-Z</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-            </SelectContent>
-          </Select>
 
-          {['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'].map(r => (
-            <Button
-              key={r}
-              size="sm"
-              variant={riskFilter === r ? 'default' : 'outline'}
-              onClick={() => setRiskFilter(r)}
-            >
-              {r === 'ALL' ? 'All Risk' : r.charAt(0) + r.slice(1).toLowerCase()}
-            </Button>
-          ))}
-        </div>
+        {/* Sort */}
+        <Select value={sortOrder} onValueChange={setSortOrder}>
+          <SelectTrigger className="w-[160px] bg-card shrink-0">
+            <SortAsc className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">Recently Added</SelectItem>
+            <SelectItem value="risk">Highest Risk</SelectItem>
+            <SelectItem value="name">Name A–Z</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* ── Patient list ──────────────────────────────────────────────────── */}
+      {/* Risk filter chips */}
+      <div className="flex gap-2 flex-wrap">
+        {RISK_FILTERS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setRiskFilter(value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              riskFilter === value
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-primary/40'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Patient grid */}
       {isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 w-full" />)}
+          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 w-full rounded-[var(--radius)]" />)}
         </div>
 
       ) : filtered.length === 0 && patients.length > 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <Search className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">No patients match your current filters.</p>
-            <Button size="sm" variant="outline" className="mt-3"
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <Search className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No matches found</p>
+            <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search term.</p>
+            <Button size="sm" variant="outline" className="mt-4"
               onClick={() => { setSearch(''); setRiskFilter('ALL'); }}>
               Clear Filters
             </Button>
@@ -293,14 +299,16 @@ export default function Patients() {
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <Users className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <Users className="h-5 w-5 text-muted-foreground" />
+            </div>
             {scope === 'mine' ? (
               <>
-                <p className="text-muted-foreground">No patients assigned to you yet.</p>
-                <p className="text-muted-foreground text-xs mt-1">
-                  Register a new patient or switch to All Patients to browse and join a care team.
+                <p className="text-sm font-medium text-foreground">No patients assigned yet</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                  Register a new patient or switch to All Patients to browse.
                 </p>
-                <div className="flex justify-center gap-2 mt-3">
+                <div className="flex justify-center gap-2 mt-4">
                   <Button size="sm" variant="outline" onClick={() => handleScopeChange('org')}>
                     View All Patients
                   </Button>
@@ -311,8 +319,8 @@ export default function Patients() {
               </>
             ) : (
               <>
-                <p className="text-muted-foreground">No patients yet.</p>
-                <Button size="sm" variant="outline" className="mt-3 gap-2" onClick={() => setAddOpen(true)}>
+                <p className="text-sm font-medium text-foreground">No patients yet</p>
+                <Button size="sm" className="mt-4 gap-2" onClick={() => setAddOpen(true)}>
                   <UserPlus className="h-4 w-4" /> Register first patient
                 </Button>
               </>
@@ -323,102 +331,102 @@ export default function Patients() {
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map(p => (
-              <Card
-                key={p.patient_id}
-                className="cursor-pointer hover:border-primary/30 transition-all"
-                onClick={() => navigate(`/doctor/patients/${p.patient_id}`)}
-              >
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-normal truncate">{p.name}</p>
-                        {/* Show assignment badge only in org scope to communicate read-only status */}
-                        {scope === 'org' && !p.is_assigned && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border shrink-0">
-                            View only
-                          </span>
-                        )}
+            {filtered.map(p => {
+              const cfg = getRiskConfig(p.risk_status);
+              const RiskIcon = cfg?.icon;
+              return (
+                <Card
+                  key={p.patient_id}
+                  className="cursor-pointer hover:border-primary/30 hover:shadow-md transition-all duration-150"
+                  onClick={() => navigate(`/doctor/patients/${p.patient_id}`)}
+                >
+                  <CardContent className="p-4">
+                    {/* Top row: avatar + name + chevron */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+                        {p.name.slice(0, 2).toUpperCase()}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {p.age} yrs · {p.gender.charAt(0) + p.gender.slice(1).toLowerCase()}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium text-sm text-foreground truncate">{p.name}</p>
+                          {scope === 'org' && !p.is_assigned && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border shrink-0">
+                              View only
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {p.age} yrs · {p.gender.charAt(0) + p.gender.slice(1).toLowerCase()}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                  </div>
 
-                  <div className="flex items-center justify-between mt-3">
-                    {p.risk_status ? (() => {
-                      const cfg = getRiskConfig(p.risk_status);
-                      if (!cfg) return <Badge variant="secondary" className="text-xs">Unknown</Badge>;
-                      const RiskIcon = cfg.icon;
-                      return (
+                    {/* Bottom row: risk badge + score */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                      {cfg && RiskIcon ? (
                         <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
                           <RiskIcon className="h-3 w-3" /> {cfg.label}
                         </Badge>
-                      );
-                    })() : (
-                      <Badge variant="secondary" className="text-xs">No prediction</Badge>
-                    )}
-                    {p.risk_score !== null && (
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">No prediction</Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
-                        Score: {Math.round(p.risk_score * 100)}%
+                        {p.risk_score !== null
+                          ? `Score: ${Math.round(p.risk_score * 100)}%`
+                          : formatDate(p.created_at)
+                        }
                       </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Added {formatDate(p.created_at)}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {nextCursor && (
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center pt-2">
               <Button variant="outline" onClick={() => load(nextCursor)} disabled={loadingMore} className="gap-2">
                 {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
-                Load More
+                Load more patients
               </Button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Add Patient Dialog ─────────────────────────────────────────────── */}
+      {/* Add Patient Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm rounded-xl">
           <DialogHeader>
-            <DialogTitle>Register New Patient</DialogTitle>
+            <DialogTitle className="text-base">Register New Patient</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Full Name</Label>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Full Name</Label>
               <Input
-                placeholder="Ahmed Benali"
+                placeholder="e.g. Ahmed Benali"
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className={fieldErrors.name ? 'border-destructive' : ''}
+                className={fieldErrors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
               {fieldErrors.name && <p className="text-xs text-destructive">{fieldErrors.name}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Age</Label>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Age</Label>
                 <Input
                   type="number" min={0} max={150} placeholder="45"
                   value={form.age}
                   onChange={e => setForm(p => ({ ...p, age: e.target.value }))}
-                  className={fieldErrors.age ? 'border-destructive' : ''}
+                  className={fieldErrors.age ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
                 {fieldErrors.age && <p className="text-xs text-destructive">{fieldErrors.age}</p>}
               </div>
 
-              <div className="space-y-1">
-                <Label>Gender</Label>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Gender</Label>
                 <Select
                   value={form.gender}
                   onValueChange={(v: string) => setForm(p => ({ ...p, gender: v }))}
@@ -438,23 +446,25 @@ export default function Patients() {
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label>Medical History <span className="text-muted-foreground text-xs">(Optional)</span></Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm">
+                Medical History <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
               <Textarea
-                placeholder="Prior conditions, known allergies..."
+                placeholder="Prior conditions, known allergies…"
                 value={form.medical_history}
                 onChange={e => setForm(p => ({ ...p, medical_history: e.target.value }))}
-                className="resize-none"
+                className="resize-none text-sm"
                 rows={3}
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button onClick={handleAdd} disabled={saving} className="gap-2">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Register
+              Register Patient
             </Button>
           </DialogFooter>
         </DialogContent>

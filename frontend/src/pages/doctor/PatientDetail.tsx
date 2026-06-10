@@ -77,20 +77,20 @@ interface Prediction {
 // ─── Style maps ───────────────────────────────────────────────────────────────
 
 const RISK_STYLE: Record<string, string> = {
-  LOW:      'bg-[#defbe6] text-[#24a148]',
-  MODERATE: 'bg-[#fdf1da] text-[#a2680a]',
-  HIGH:     'bg-[#fff2e8] text-[#ff832b]',
-  CRITICAL: 'bg-[#fff1f1] text-[#da1e28]',
+  LOW:      'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25 rounded-full',
+  MODERATE: 'bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 rounded-full',
+  HIGH:     'bg-[#e07020]/10 text-[#a04c10] border border-[#e07020]/25 rounded-full',
+  CRITICAL: 'bg-[#c0272d]/10 text-[#c0272d] border border-[#c0272d]/20 rounded-full',
 };
 const LAB_STATUS: Record<string, string> = {
-  PENDING:    'bg-[#fdf1da] text-[#a2680a]',
-  INPROGRESS: 'bg-primary/10 text-primary',
-  COMPLETED:  'bg-[#defbe6] text-[#24a148]',
+  PENDING:    'bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 rounded-full',
+  INPROGRESS: 'bg-primary/10 text-primary border border-primary/20 rounded-full',
+  COMPLETED:  'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25 rounded-full',
 };
 const ROLE_CONFIG: Record<string, { label: string; icon: typeof Shield; className: string }> = {
-  PRIMARY:    { label: 'Primary',    icon: ShieldCheck, className: 'bg-primary/10 text-primary border-primary/20' },
-  COVERING:   { label: 'Covering',   icon: Shield,      className: 'bg-orange-50 text-orange-700 border-orange-200' },
-  CONSULTING: { label: 'Consulting', icon: UserCheck,   className: 'bg-purple-50 text-purple-700 border-purple-200' },
+  PRIMARY:    { label: 'Primary',    icon: ShieldCheck, className: 'bg-primary/10 text-primary border border-primary/20 rounded-full' },
+  COVERING:   { label: 'Covering',   icon: Shield,      className: 'bg-[#e07020]/10 text-[#a04c10] border border-[#e07020]/25 rounded-full' },
+  CONSULTING: { label: 'Consulting', icon: UserCheck,   className: 'bg-[#2e368f]/10 text-[#2e368f] border border-[#2e368f]/20 rounded-full' },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -418,7 +418,7 @@ export default function PatientDetail() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-[28px] font-light">{patient.name}</h1>
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight">{patient.name}</h1>
             {isAssigned && (
               <Badge variant="outline" className="text-xs gap-1 text-primary border-primary/30">
                 <ShieldCheck className="h-3 w-3" /> Assigned

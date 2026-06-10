@@ -93,6 +93,7 @@ export const getLabOrders = catchAsync(async (req: Request, res: Response) => {
   const page   = Math.max(1, parseInt(String(req.query.page  ?? '1'),  10));
   const limit  = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10)));
   const offset = (page - 1) * limit;
+  const sort   = typeof req.query.sort === 'string' ? req.query.sort : 'recent';
 
   // Resolve current tech's ID so we can flag is_mine
   const [techRow] = await sql`
@@ -108,6 +109,44 @@ export const getLabOrders = catchAsync(async (req: Request, res: Response) => {
   const searchFilter = search
     ? sql`AND (pat.name ILIKE ${'%' + search + '%'} OR lt.test_type ILIKE ${'%' + search + '%'})`
     : sql``;
+
+  let orderClause = sql`
+    ORDER BY
+      (lt.assigned_to = ${myTechId}::uuid) DESC NULLS LAST,
+      CASE lt.status
+        WHEN 'INPROGRESS' THEN 1
+        WHEN 'PENDING'    THEN 2
+        WHEN 'COMPLETED'  THEN 3
+        ELSE 4
+      END,
+      lt.ordered_at DESC
+  `;
+
+  if (sort === 'A-Z') {
+    orderClause = sql`
+      ORDER BY
+        (lt.assigned_to = ${myTechId}::uuid) DESC NULLS LAST,
+        CASE lt.status
+          WHEN 'INPROGRESS' THEN 1
+          WHEN 'PENDING'    THEN 2
+          WHEN 'COMPLETED'  THEN 3
+          ELSE 4
+        END,
+        pat.name ASC
+    `;
+  } else if (sort === 'older') {
+    orderClause = sql`
+      ORDER BY
+        (lt.assigned_to = ${myTechId}::uuid) DESC NULLS LAST,
+        CASE lt.status
+          WHEN 'INPROGRESS' THEN 1
+          WHEN 'PENDING'    THEN 2
+          WHEN 'COMPLETED'  THEN 3
+          ELSE 4
+        END,
+        lt.ordered_at ASC
+    `;
+  }
 
   const orders = await sql`
     SELECT
@@ -134,15 +173,7 @@ export const getLabOrders = catchAsync(async (req: Request, res: Response) => {
     ${orgFilter(orgId)}
     ${statusFilter}
     ${searchFilter}
-    ORDER BY
-      (lt.assigned_to = ${myTechId}::uuid) DESC NULLS LAST,
-      CASE lt.status
-        WHEN 'INPROGRESS' THEN 1
-        WHEN 'PENDING'    THEN 2
-        WHEN 'COMPLETED'  THEN 3
-        ELSE 4
-      END,
-      lt.ordered_at ASC
+    ${orderClause}
     LIMIT ${limit} OFFSET ${offset}
   `;
 

@@ -59,12 +59,14 @@ export default function ManagerProfile() {
       onSuccess: (data: unknown) => setProfile((data as { user: UserProfile }).user),
       onFinal:   stopLoading,
     });
-    ApiManager.execute({
-      queryKey: ['manager', 'organization'],
-      endpoint: '/manager/organization',
-      onSuccess: (data: unknown) => setOrgProfile((data as { organization: OrganizationProfile }).organization),
-    });
-  }, []);
+    if (user?.role === 'MANAGER') {
+      ApiManager.execute({
+        queryKey: ['manager', 'organization'],
+        endpoint: '/manager/organization',
+        onSuccess: (data: unknown) => setOrgProfile((data as { organization: OrganizationProfile }).organization),
+      });
+    }
+  }, [user?.role, startLoading, stopLoading]);
 
   useEffect(() => {
     if (profile && editing) {
@@ -170,7 +172,9 @@ export default function ManagerProfile() {
               <div>
                 <h2 className="text-xl font-bold">{profile?.username}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge className="text-xs bg-violet-100 text-violet-800">Manager</Badge>
+                  <Badge className="text-xs bg-violet-100 text-violet-800">
+                    {profile?.role === 'LAB_TECH' ? 'Lab Technician' : 'Manager'}
+                  </Badge>
                   <Badge
                     variant={profile?.status === 'ACTIVE' ? 'default' : 'secondary'}
                     className="text-xs"
@@ -284,6 +288,7 @@ export default function ManagerProfile() {
       </Card>
 
       {/* Organization Details Card */}
+      {user?.role === 'MANAGER' && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -385,6 +390,7 @@ export default function ManagerProfile() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
- Users, Brain, FlaskConical, Bell,
- AlertTriangle, ChevronRight, CheckCircle2, Zap,
+  Users, Brain, Bell,
+  AlertTriangle, ChevronRight, CheckCircle2, Zap, Plus,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiManager from '@/api/ApiManager';
@@ -16,267 +16,393 @@ import { formatDate } from '@/lib/formatDate';
 import { getRiskConfig } from '@/lib/riskConfig';
 
 interface Patient {
- patient_id: string; name: string; age: number;
- risk_status: string | null; risk_score: number | null; created_at: string;
+  patient_id: string; name: string; age: number;
+  risk_status: string | null; risk_score: number | null; created_at: string;
 }
 interface Prediction {
- request_id: string; patient_name: string;
- risk_level: string | null; risk_score: number | null;
- confidence: number | null; created_at: string;
+  request_id: string; patient_name: string;
+  risk_level: string | null; risk_score: number | null;
+  confidence: number | null; created_at: string;
 }
 interface Alert {
- alert_id: string; patient_name: string | null;
- alert_type: string; message: string;
- is_read: boolean; created_at: string;
+  alert_id: string; patient_name: string | null;
+  alert_type: string; message: string;
+  is_read: boolean; created_at: string;
 }
 
-
 export default function DoctorDashboard() {
- const { user } = useAuth();
- const navigate = useNavigate();
- const location = useLocation();
- const alertsRef = useRef<HTMLDivElement>(null);
- const { isLoading: pLoading, startLoading: startP, stopLoading: stopP } = useDelayedLoading();
- const { isLoading: prLoading, startLoading: startPr, stopLoading: stopPr } = useDelayedLoading();
- const { isLoading: aLoading, startLoading: startA, stopLoading: stopA } = useDelayedLoading();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const alertsRef = useRef<HTMLDivElement>(null);
+  const { isLoading: pLoading, startLoading: startP, stopLoading: stopP } = useDelayedLoading();
+  const { isLoading: prLoading, startLoading: startPr, stopLoading: stopPr } = useDelayedLoading();
+  const { isLoading: aLoading, startLoading: startA, stopLoading: stopA } = useDelayedLoading();
 
- const [patients, setPatients] = useState<Patient[]>([]);
- const [predictions, setPredictions] = useState<Prediction[]>([]);
- const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
 
- useEffect(() => {
- ApiManager.execute({
- queryKey: ['doctor', 'patients'],
- endpoint: '/doctor/patients',
- onStart: startP,
- onSuccess: (d) => setPatients((d as { patients: Patient[] }).patients),
- onFinal: stopP,
- });
- ApiManager.execute({
- queryKey: ['doctor', 'predictions'],
- endpoint: '/doctor/predictions',
- onStart: startPr,
- onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
- onFinal: stopPr,
- });
- ApiManager.execute({
- queryKey: ['doctor', 'alerts'],
- endpoint: '/doctor/alerts',
- // DoctorLayout already fetches alerts for the bell badge — reuse cached
- // data for 30s to avoid a duplicate HTTP request on mount.
- staleTime: 30_000,
- onStart: startA,
- onSuccess: (d) => setAlerts((d as { alerts: Alert[] }).alerts),
- onFinal: stopA,
- });
- }, [startP, stopP, startPr, stopPr, startA, stopA]);
+  useEffect(() => {
+    ApiManager.execute({
+      queryKey: ['doctor', 'patients'],
+      endpoint: '/doctor/patients',
+      onStart: startP,
+      onSuccess: (d) => setPatients((d as { patients: Patient[] }).patients),
+      onFinal: stopP,
+    });
+    ApiManager.execute({
+      queryKey: ['doctor', 'predictions'],
+      endpoint: '/doctor/predictions',
+      onStart: startPr,
+      onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
+      onFinal: stopPr,
+    });
+    ApiManager.execute({
+      queryKey: ['doctor', 'alerts'],
+      endpoint: '/doctor/alerts',
+      staleTime: 30_000,
+      onStart: startA,
+      onSuccess: (d) => setAlerts((d as { alerts: Alert[] }).alerts),
+      onFinal: stopA,
+    });
+  }, [startP, stopP, startPr, stopPr, startA, stopA]);
 
- // Scroll to alerts section when navigated via bell icon
- useEffect(() => {
- if ((location.state as { scrollTo?: string })?.scrollTo === 'alerts' && alertsRef.current) {
- alertsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
- // Clear the state so re-renders don't re-scroll
- window.history.replaceState({}, '');
- }
- }, [location.state, aLoading]);
+  useEffect(() => {
+    if ((location.state as { scrollTo?: string })?.scrollTo === 'alerts' && alertsRef.current) {
+      alertsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, aLoading]);
 
- const unreadAlerts = alerts.filter(a => !a.is_read);
- const criticalPatients = patients.filter(p => p.risk_status === 'CRITICAL');
- const recentPredictions = predictions.slice(0, 5);
- const recentPatients = patients.slice(0, 6);
+  const unreadAlerts = alerts.filter(a => !a.is_read);
+  const criticalPatients = patients.filter(p => p.risk_status === 'CRITICAL');
+  const recentPredictions = predictions.slice(0, 5);
+  const recentPatients = patients.slice(0, 5);
 
- const markRead = (alertId: string) => {
- ApiManager.executeMutation({
- mutationFn: () => apiClient.patch(`/doctor/alerts/${alertId}/read`),
- invalidateKeys: [['doctor', 'alerts']],
- onSuccess: () => {
- setAlerts(prev => prev.map(a => a.alert_id === alertId ? { ...a, is_read: true } : a));
- },
- });
- };
+  const markRead = (alertId: string) => {
+    ApiManager.executeMutation({
+      mutationFn: () => apiClient.patch(`/doctor/alerts/${alertId}/read`),
+      invalidateKeys: [['doctor', 'alerts']],
+      onSuccess: () => {
+        setAlerts(prev => prev.map(a => a.alert_id === alertId ? { ...a, is_read: true } : a));
+      },
+    });
+  };
 
- return (
- <div className="space-y-6">
- {/* Welcome */}
- <div>
- <h1 className="text-[28px] font-light">Dashboard</h1>
- <p className="text-muted-foreground">Welcome back, Dr. {user?.username}</p>
- </div>
+  const STAT_CARDS = [
+    {
+      label: 'Total Patients',
+      val: patients.length,
+      icon: Users,
+      iconBg: 'bg-primary/10',
+      iconColor: 'text-primary',
+      loading: pLoading,
+    },
+    {
+      label: 'Critical Risk',
+      val: criticalPatients.length,
+      icon: AlertTriangle,
+      iconBg: 'bg-[#c0272d]/10',
+      iconColor: 'text-[#c0272d]',
+      loading: pLoading,
+      highlight: criticalPatients.length > 0,
+    },
+    {
+      label: 'Predictions Run',
+      val: predictions.length,
+      icon: Brain,
+      iconBg: 'bg-[#2e368f]/10',
+      iconColor: 'text-[#2e368f]',
+      loading: prLoading,
+    },
+    {
+      label: 'Unread Alerts',
+      val: unreadAlerts.length,
+      icon: Bell,
+      iconBg: 'bg-[#faaf3a]/15',
+      iconColor: 'text-[#a2680a]',
+      loading: aLoading,
+      highlight: unreadAlerts.length > 0,
+    },
+  ];
 
- {/* Stat cards */}
- <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
- {[
- { label: 'Total Patients', val: patients.length, icon: Users, color: 'text-primary', loading: pLoading },
- { label: 'Critical Risk', val: criticalPatients.length, icon: AlertTriangle, color: 'text-[#da1e28]', loading: pLoading },
- { label: 'AI Predictions Run', val: predictions.length, icon: Brain, color: 'text-primary', loading: prLoading },
- { label: 'Unread Alerts', val: unreadAlerts.length, icon: Bell, color: 'text-[#a2680a]', loading: aLoading },
- ].map(({ label, val, icon: Icon, color, loading }) => (
- <Card key={label}>
- <CardHeader className="flex flex-row items-center justify-between pb-2">
- <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
- <Icon className={`h-4 w-4 ${color}`} />
- </CardHeader>
- <CardContent>
- {loading
- ? <Skeleton className="h-8 w-12" />
- : <div className="text-[32px] font-light text-foreground leading-none">{val}</div>
- }
- </CardContent>
- </Card>
- ))}
- </div>
+  return (
+    <div className="space-y-6 max-w-7xl">
 
- <div className="grid gap-6 lg:grid-cols-3">
- {/* Recent patients */}
- <div className="lg:col-span-2 space-y-3">
- <div className="flex items-center justify-between">
- <h2 className="font-normal">Recent Patients</h2>
- <Button size="sm" variant="ghost" className="gap-1" onClick={() => navigate('/doctor/patients')}>
- View all <ChevronRight className="h-3.5 w-3.5" />
- </Button>
- </div>
- {pLoading ? (
- <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
- ) : recentPatients.length === 0 ? (
- <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">
- No patients yet. <button className="text-primary underline ml-1"
- onClick={() => navigate('/doctor/patients')}>Register one</button>
- </CardContent></Card>
- ) : recentPatients.map(p => (
- <Card key={p.patient_id}
- className="cursor-pointer hover:border-primary/30 transition-all"
- onClick={() => navigate(`/doctor/patients/${p.patient_id}`)}>
- <CardContent className="py-3 flex items-center justify-between">
- <div>
- <p className="font-medium text-sm">{p.name}</p>
- <p className="text-xs text-muted-foreground">{p.age} yrs</p>
- </div>
- <div className="flex items-center gap-2">
- {p.risk_status ? (() => {
- const cfg = getRiskConfig(p.risk_status);
- if (!cfg) return <Badge variant="secondary" className="text-xs">—</Badge>;
- const RiskIcon = cfg.icon;
- return (
- <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
- <RiskIcon className="h-3 w-3" />
- {cfg.label}
- </Badge>
- );
- })() : (
- <Badge variant="secondary" className="text-xs">No data</Badge>
- )}
- <ChevronRight className="h-4 w-4 text-muted-foreground" />
- </div>
- </CardContent>
- </Card>
- ))}
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Welcome back, Dr. {user?.username}
+          </p>
+        </div>
+        <Button onClick={() => navigate('/doctor/predictions/new')} className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Prediction
+        </Button>
+      </div>
 
- {/* Recent predictions */}
- {recentPredictions.length > 0 && (
- <>
- <div className="flex items-center justify-between pt-2">
- <h2 className="font-normal">Recent Predictions</h2>
- <Button size="sm" variant="ghost" className="gap-1" onClick={() => navigate('/doctor/predictions')}>
- View all <ChevronRight className="h-3.5 w-3.5" />
- </Button>
- </div>
- {recentPredictions.map(pr => (
- <Card key={pr.request_id}
- className="cursor-pointer hover:border-primary/30 transition-all"
- onClick={() => navigate('/doctor/predictions', { state: { openPrediction: pr.request_id } })}>
- <CardContent className="py-3 flex items-center justify-between">
- <div>
- <p className="font-medium text-sm">{pr.patient_name}</p>
- <p className="text-xs text-muted-foreground">
- {formatDate(pr.created_at)}
- {pr.risk_score !== null && ` · Score: ${Math.round(pr.risk_score * 100)}%`}
- </p>
- </div>
- <div className="flex items-center gap-2">
- {pr.risk_level && (() => {
- const cfg = getRiskConfig(pr.risk_level);
- if (!cfg) return null;
- const RiskIcon = cfg.icon;
- return (
- <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
- <RiskIcon className="h-3 w-3" />
- {cfg.label}
- </Badge>
- );
- })()}
- <ChevronRight className="h-4 w-4 text-muted-foreground" />
- </div>
- </CardContent>
- </Card>
- ))}
- </>
- )}
- </div>
+      {/* Stat cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {STAT_CARDS.map(({ label, val, icon: Icon, iconBg, iconColor, loading, highlight }) => (
+          <Card
+            key={label}
+            className={highlight ? 'border-destructive/20' : ''}
+          >
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {label}
+                </span>
+                <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}>
+                  <Icon className={`h-4 w-4 ${iconColor}`} />
+                </div>
+              </div>
+              {loading
+                ? <Skeleton className="h-8 w-14 rounded-lg" />
+                : <div className="text-3xl font-semibold text-foreground leading-none">{val}</div>
+              }
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
- {/* Alerts panel */}
- <div className="space-y-3" ref={alertsRef}>
- <div className="flex items-center justify-between">
- <h2 className="font-normal flex items-center gap-2">
- Alerts
- {unreadAlerts.length > 0 && (
- <Badge variant="destructive" className="text-xs">{unreadAlerts.length}</Badge>
- )}
- </h2>
- </div>
+      {/* Main content grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
 
- {aLoading ? (
- <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
- ) : alerts.length === 0 ? (
- <Card><CardContent className="py-8 text-center">
- <CheckCircle2 className="mx-auto h-7 w-7 text-[#24a148] mb-2" />
- <p className="text-sm text-muted-foreground">No alerts</p>
- </CardContent></Card>
- ) : alerts.slice(0, 8).map(a => (
- <Card key={a.alert_id}
- className={`transition-all ${a.is_read ? 'opacity-60' : 'border-primary/20'}`}>
- <CardContent className="py-3">
- <div className="flex items-start justify-between gap-2">
- <div className="flex-1 min-w-0">
- <div className="flex items-center gap-1.5 mb-0.5">
- {a.alert_type === 'CRITICAL_RESULT' && (
- <AlertTriangle className="h-3.5 w-3.5 text-[#da1e28] shrink-0" />
- )}
- {a.alert_type === 'OVERAGE_STARTED' && (
- <Zap className="h-3.5 w-3.5 text-[#ff832b] shrink-0" />
- )}
- <span className="text-xs font-medium truncate">
- {a.patient_name ?? 'System'}
- </span>
- </div>
- <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>
- <p className="text-xs text-muted-foreground mt-1">
- {formatDate(a.created_at)}
- </p>
- </div>
- {!a.is_read && (
- <Button
- variant="ghost"
- size="sm"
- className="shrink-0 text-xs h-7 px-2"
- aria-label={`Mark alert from ${a.patient_name ?? 'System'} as read`}
- onClick={() => markRead(a.alert_id)}
- >
- Mark read
- </Button>
- )}
- </div>
- </CardContent>
- </Card>
- ))}
+        {/* Left: Patients + Predictions */}
+        <div className="lg:col-span-2 space-y-6">
 
- <Button
- className="w-full gap-2" size="sm"
- onClick={() => navigate('/doctor/predictions/new')}
- >
- <Brain className="h-4 w-4" /> Run New Prediction
- </Button>
- </div>
- </div>
- </div>
- );
+          {/* Recent Patients */}
+          <Card>
+            <CardHeader className="pb-3 px-5 pt-5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Recent Patients</CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                  onClick={() => navigate('/doctor/patients')}
+                >
+                  View all <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              {pLoading ? (
+                <div className="px-5 pb-5 space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                </div>
+              ) : recentPatients.length === 0 ? (
+                <div className="px-5 pb-5 py-8 text-center">
+                  <Users className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">No patients yet.</p>
+                  <button
+                    className="text-sm text-primary font-medium mt-1 hover:underline"
+                    onClick={() => navigate('/doctor/patients')}
+                  >
+                    Register your first patient
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {recentPatients.map((p, i) => (
+                    <div
+                      key={p.patient_id}
+                      className={`flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-muted/50 transition-colors ${i < recentPatients.length - 1 ? 'border-b border-border' : ''}`}
+                      onClick={() => navigate(`/doctor/patients/${p.patient_id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+                          {p.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{p.age} yrs</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {p.risk_status ? (() => {
+                          const cfg = getRiskConfig(p.risk_status);
+                          if (!cfg) return <Badge variant="secondary">—</Badge>;
+                          const RiskIcon = cfg.icon;
+                          return (
+                            <Badge className={`gap-1 ${cfg.badgeClass}`}>
+                              <RiskIcon className="h-3 w-3" />
+                              {cfg.label}
+                            </Badge>
+                          );
+                        })() : (
+                          <Badge variant="secondary">No data</Badge>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Predictions */}
+          {(prLoading || recentPredictions.length > 0) && (
+            <Card>
+              <CardHeader className="pb-3 px-5 pt-5">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Recent Predictions</CardTitle>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => navigate('/doctor/predictions')}
+                  >
+                    View all <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="px-0 pb-0">
+                {prLoading ? (
+                  <div className="px-5 pb-5 space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                  </div>
+                ) : (
+                  <div>
+                    {recentPredictions.map((pr, i) => (
+                      <div
+                        key={pr.request_id}
+                        className={`flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-muted/50 transition-colors ${i < recentPredictions.length - 1 ? 'border-b border-border' : ''}`}
+                        onClick={() => navigate('/doctor/predictions', { state: { openPrediction: pr.request_id } })}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-[#2e368f]/10 flex items-center justify-center shrink-0">
+                            <Brain className="h-4 w-4 text-[#2e368f]" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{pr.patient_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(pr.created_at)}
+                              {pr.risk_score !== null && (
+                                <span className="ml-1.5">· Score: {Math.round(pr.risk_score * 100)}%</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {pr.risk_level && (() => {
+                            const cfg = getRiskConfig(pr.risk_level);
+                            if (!cfg) return null;
+                            const RiskIcon = cfg.icon;
+                            return (
+                              <Badge className={`gap-1 ${cfg.badgeClass}`}>
+                                <RiskIcon className="h-3 w-3" />
+                                {cfg.label}
+                              </Badge>
+                            );
+                          })()}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Right: Alerts panel */}
+        <div ref={alertsRef}>
+          <Card className="h-full">
+            <CardHeader className="pb-3 px-5 pt-5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Alerts
+                  {unreadAlerts.length > 0 && (
+                    <span className="bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none">
+                      {unreadAlerts.length}
+                    </span>
+                  )}
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                  onClick={() => navigate('/doctor/alerts')}
+                >
+                  View all <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-0 pb-4">
+              {aLoading ? (
+                <div className="px-5 space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                </div>
+              ) : alerts.length === 0 ? (
+                <div className="px-5 py-8 text-center">
+                  <div className="w-10 h-10 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-2">
+                    <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">All clear — no alerts</p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {alerts.slice(0, 5).map((a, i) => (
+                    <div
+                      key={a.alert_id}
+                      className={`px-5 py-3 transition-all ${a.is_read ? 'opacity-50' : ''} ${i < Math.min(alerts.length, 5) - 1 ? 'border-b border-border' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <div className={`mt-0.5 w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                            a.alert_type === 'CRITICAL_RESULT'
+                              ? 'bg-[#c0272d]/10'
+                              : a.alert_type === 'OVERAGE_STARTED'
+                              ? 'bg-[#faaf3a]/15'
+                              : 'bg-primary/10'
+                          }`}>
+                            {a.alert_type === 'CRITICAL_RESULT' && (
+                              <AlertTriangle className="h-3.5 w-3.5 text-[#c0272d]" />
+                            )}
+                            {a.alert_type === 'OVERAGE_STARTED' && (
+                              <Zap className="h-3.5 w-3.5 text-[#a2680a]" />
+                            )}
+                            {a.alert_type !== 'CRITICAL_RESULT' && a.alert_type !== 'OVERAGE_STARTED' && (
+                              <Bell className="h-3.5 w-3.5 text-primary" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-foreground truncate">
+                              {a.patient_name ?? 'System'}
+                            </p>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                              {a.message}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/70 mt-1">
+                              {formatDate(a.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                        {!a.is_read && (
+                          <button
+                            className="shrink-0 text-[10px] font-medium text-primary hover:underline mt-0.5"
+                            aria-label={`Mark alert from ${a.patient_name ?? 'System'} as read`}
+                            onClick={() => markRead(a.alert_id)}
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
