@@ -288,7 +288,7 @@ CREATE TABLE public.alerts (
   alert_id uuid NOT NULL DEFAULT gen_random_uuid(),
   patient_id uuid,
   recipient_id uuid NOT NULL,
-  alert_type text NOT NULL,
+  alert_type text NOT NULL CHECK (alert_type = ANY (ARRAY['RISK_CRITICAL'::text, 'RISK_HIGH'::text, 'RISK_MODERATE'::text, 'RISK_LOW'::text, 'RESULT_READY'::text, 'ABNORMAL_RESULT'::text, 'CRITICAL_RESULT'::text, 'NEW_LAB_ORDER'::text, 'PATIENT_ASSIGNED'::text, 'PRIMARY_TRANSFERRED'::text, 'OVERAGE_STARTED'::text])),
   message text NOT NULL,
   is_read boolean NOT NULL DEFAULT false,
   read_at timestamp with time zone,

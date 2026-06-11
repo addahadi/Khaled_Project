@@ -79,7 +79,7 @@ export const checkPredictionLimit = catchAsync(
             AND s.status = 'ACTIVE'
           ORDER BY s.created_at DESC
           LIMIT 1
-          FOR UPDATE OF ur
+          FOR UPDATE OF s
         `;
 
         if (!row) {

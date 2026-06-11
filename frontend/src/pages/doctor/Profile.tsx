@@ -73,7 +73,7 @@ export default function DoctorProfile() {
     ?? user?.username?.slice(0, 2).toUpperCase() ?? 'DR';
 
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-6 w-full">
 
       {/* Header */}
       <div className="flex items-center justify-between">

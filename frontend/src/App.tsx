@@ -28,6 +28,7 @@ import Patients          from '@/pages/doctor/Patients';
 import PatientDetail     from '@/pages/doctor/PatientDetail';
 import NewPrediction     from '@/pages/doctor/NewPrediction';
 import PredictionHistory from '@/pages/doctor/PredictionHistory';
+import PredictionDetail  from '@/pages/doctor/PredictionDetail';
 import DoctorProfile     from '@/pages/doctor/Profile';
 import Alerts            from '@/pages/doctor/Alerts';
 import { AlertsProvider } from '@/contexts/AlertsContext';
@@ -96,6 +97,7 @@ export default function App() {
                 <Route path="/doctor/patients/:patientId"    element={<PatientDetail />} />
                 <Route path="/doctor/predictions"            element={<PredictionHistory />} />
                 <Route path="/doctor/predictions/new"        element={<NewPrediction />} />
+                <Route path="/doctor/predictions/:predictionId" element={<PredictionDetail />} />
                 <Route path="/doctor/profile"                element={<DoctorProfile />} />
                 <Route path="/doctor/alerts"                 element={<Alerts />} />
               </Route>

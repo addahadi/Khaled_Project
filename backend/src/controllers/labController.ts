@@ -645,6 +645,10 @@ export const amendResult = catchAsync(async (req: Request, res: Response, next: 
 
 // GET /api/lab/alerts
 export const getLabAlerts = catchAsync(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 8;
+  const offset = (page - 1) * limit;
+
   const alerts = await sql`
     SELECT
       a.alert_id,
@@ -659,12 +663,35 @@ export const getLabAlerts = catchAsync(async (req: Request, res: Response) => {
     LEFT JOIN patients pat ON pat.patient_id = a.patient_id
     WHERE a.recipient_id = ${req.user!.user_id}
     ORDER BY a.created_at DESC
-    LIMIT 50
+    LIMIT ${limit} OFFSET ${offset}
   `;
 
-  const unread_count = (alerts as Array<Record<string, unknown>>).filter(a => !a['is_read']).length;
+  const [{ count }] = await sql`
+    SELECT COUNT(*)::int AS count
+    FROM alerts
+    WHERE recipient_id = ${req.user!.user_id}
+  `;
 
-  res.status(200).json({ status: 'success', data: { alerts, unread_count } });
+  const [{ unread_count }] = await sql`
+    SELECT COUNT(*)::int AS unread_count
+    FROM alerts
+    WHERE recipient_id = ${req.user!.user_id}
+      AND is_read = false
+  `;
+
+  res.status(200).json({ 
+    status: 'success', 
+    data: { 
+      alerts,
+      unread_count,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        pages: Math.ceil(count / limit)
+      }
+    } 
+  });
 });
 
 // PATCH /api/lab/alerts/:alertId/read

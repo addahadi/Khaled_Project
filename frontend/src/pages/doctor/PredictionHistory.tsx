@@ -4,19 +4,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Brain, Search, CheckCircle2, ChevronRight,
-  TrendingUp, Calendar, User, Building2,
+  Calendar, User, Building2,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
-import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { formatDate } from '@/lib/formatDate';
 import { getRiskConfig, RISK_CONFIG } from '@/lib/riskConfig';
 import type { RiskLevel } from '@/lib/riskConfig';
 
@@ -26,31 +22,9 @@ interface Prediction {
   risk_score:    number | null; risk_level: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | null;
   confidence:    number | null;
 }
-interface FeatureExplanation {
-  feature_name: string; contribution: number;
-  direction: 'POSITIVE' | 'NEGATIVE'; rank: number;
-}
-interface PredictionDetail extends Prediction {
-  feature_explanations: FeatureExplanation[];
-  raw_payload: Record<string, unknown>;
-}
 
-const FEATURE_LABELS: Record<string, string> = {
-  wbc_count: 'White Blood Cell Count', rbc_count: 'Red Blood Cell Count',
-  hemoglobin: 'Hemoglobin', hematocrit: 'Hematocrit', platelet_count: 'Platelet Count',
-  crp_level: 'C-Reactive Protein (CRP)', esr: 'Erythrocyte Sedimentation Rate',
-  procalcitonin: 'Procalcitonin', temperature: 'Body Temperature', heart_rate: 'Heart Rate',
-  spo2: 'Blood Oxygen (SpO₂)', blood_pressure_systolic: 'Systolic Blood Pressure',
-  blood_pressure_diastolic: 'Diastolic Blood Pressure', neutrophil_pct: 'Neutrophil %',
-  lymphocyte_pct: 'Lymphocyte %', albumin: 'Albumin', creatinine: 'Creatinine',
-  bun: 'Blood Urea Nitrogen', alt: 'ALT (Liver Enzyme)', ast: 'AST (Liver Enzyme)',
-  bilirubin: 'Bilirubin', glucose: 'Blood Glucose', sodium: 'Sodium', potassium: 'Potassium',
-  age: 'Patient Age', gender: 'Patient Gender', symptom_count: 'Number of Symptoms',
-  fever_present: 'Fever Present', days_since_onset: 'Days Since Symptom Onset',
-};
-
-function featureLabel(raw: string): string {
-  return FEATURE_LABELS[raw] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+interface Pagination {
+  total: number; page: number; limit: number; pages: number;
 }
 
 const RISK_SUMMARY_STYLES = {
@@ -64,77 +38,60 @@ export default function PredictionHistory() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
-  const { isLoading: detailLoading, startLoading: startDetail, stopLoading: stopDetail } = useDelayedLoading();
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [search,       setSearch]      = useState('');
-  const [riskFilter,   setRiskFilter]  = useState('ALL');
-  const [dateFilter,   setDateFilter]  = useState('ALL');
-  const [detail,       setDetail]      = useState<PredictionDetail | null>(null);
-  const [sheetOpen,    setSheetOpen]   = useState(false);
-  const [scope, setScope] = useState<'mine' | 'org'>(
+  const [pagination,  setPagination]  = useState<Pagination | null>(null);
+  const [counts,      setCounts]      = useState<Record<RiskLevel, number>>({ CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 });
+  const [page,        setPage]        = useState(1);
+  const [search,      setSearch]      = useState('');
+  const [riskFilter,  setRiskFilter]  = useState('ALL');
+  const [dateFilter,  setDateFilter]  = useState('ALL');
+  const [scope,       setScope]       = useState<'mine' | 'org'>(
     () => (localStorage.getItem('diaginfect_prediction_scope') as 'mine' | 'org' | null) ?? 'org'
   );
 
   const handleScopeChange = (val: 'mine' | 'org') => {
     setScope(val);
+    setPage(1);
     localStorage.setItem('diaginfect_prediction_scope', val);
   };
 
   useEffect(() => {
     ApiManager.execute({
-      queryKey: ['doctor', 'predictions', scope],
-      endpoint: `/doctor/predictions?scope=${scope}`,
+      queryKey: ['doctor', 'predictions', scope, String(page), search, riskFilter, dateFilter],
+      endpoint: `/doctor/predictions?scope=${scope}&page=${page}&limit=8&search=${encodeURIComponent(search)}&risk=${riskFilter}&date_range=${dateFilter}`,
       onStart:   startLoading,
-      onSuccess: (d) => setPredictions((d as { predictions: Prediction[] }).predictions),
+      onSuccess: (d) => {
+        const payload = d as { predictions: Prediction[], pagination: Pagination, riskCounts: Record<string, number> };
+        setPredictions(payload.predictions);
+        setPagination(payload.pagination);
+        setCounts({
+          CRITICAL: payload.riskCounts?.CRITICAL ?? 0,
+          HIGH:     payload.riskCounts?.HIGH     ?? 0,
+          MODERATE: payload.riskCounts?.MODERATE ?? 0,
+          LOW:      payload.riskCounts?.LOW      ?? 0,
+        });
+      },
       onFinal:   stopLoading,
     });
-  }, [scope, startLoading, stopLoading]);
+  }, [scope, page, search, riskFilter, dateFilter, startLoading, stopLoading]);
 
+  // Deep-link: if navigated with openPrediction state, redirect to detail page
   useEffect(() => {
     const targetId = (location.state as { openPrediction?: string })?.openPrediction;
-    if (targetId && predictions.length > 0) {
-      openDetail(targetId);
-      window.history.replaceState({}, '');
+    if (targetId) {
+      navigate(`/doctor/predictions/${targetId}`, { replace: true });
     }
-  }, [predictions, location.state]);
-
-  const openDetail = (predictionId: string) => {
-    setSheetOpen(true);
-    ApiManager.execute({
-      queryKey: ['doctor', 'prediction', predictionId],
-      endpoint: `/doctor/predictions/${predictionId}`,
-      onStart:   startDetail,
-      onSuccess: (d) => setDetail((d as { prediction: PredictionDetail }).prediction),
-      onFinal:   stopDetail,
-    });
-  };
-
-  const filtered = predictions.filter(p => {
-    const q = search.toLowerCase();
-    const matchSearch = p.patient_name.toLowerCase().includes(q);
-    const matchRisk   = riskFilter === 'ALL' || p.risk_level === riskFilter;
-    let matchDate = true;
-    if (dateFilter !== 'ALL') {
-      const diffDays = (Date.now() - new Date(p.created_at).getTime()) / 86_400_000;
-      if (dateFilter === 'TODAY')   matchDate = diffDays <= 1;
-      if (dateFilter === '7DAYS')   matchDate = diffDays <= 7;
-      if (dateFilter === '30DAYS')  matchDate = diffDays <= 30;
-    }
-    return matchSearch && matchRisk && matchDate;
-  });
-
-  const counts: Record<RiskLevel, number> = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
-  predictions.forEach(p => { if (p.risk_level) counts[p.risk_level]++; });
+  }, [location.state, navigate]);
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Prediction History</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{predictions.length} total predictions</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{pagination?.total ?? 0} total predictions</p>
         </div>
         <Button className="gap-2" onClick={() => navigate('/doctor/predictions/new')}>
           <Brain className="h-4 w-4" /> New Prediction
@@ -167,7 +124,7 @@ export default function PredictionHistory() {
           return (
             <button
               key={level}
-              onClick={() => setRiskFilter(riskFilter === level ? 'ALL' : level)}
+              onClick={() => { setRiskFilter(riskFilter === level ? 'ALL' : level); setPage(1); }}
               className={`p-4 rounded-[var(--radius)] border text-left transition-all ${style.bg} ${style.border} ${
                 riskFilter === level ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'hover:shadow-sm'
               }`}
@@ -187,10 +144,10 @@ export default function PredictionHistory() {
             className="pl-9"
             placeholder="Search by patient…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-        <Select value={dateFilter} onValueChange={setDateFilter}>
+        <Select value={dateFilter} onValueChange={val => { setDateFilter(val); setPage(1); }}>
           <SelectTrigger className="w-[160px] bg-card">
             <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue placeholder="Date Range" />
@@ -209,19 +166,19 @@ export default function PredictionHistory() {
         <div className="space-y-3">
           {[1,2,3,4].map(i => <Skeleton key={i} className="h-20 w-full rounded-[var(--radius)]" />)}
         </div>
-      ) : filtered.length === 0 && predictions.length > 0 ? (
+      ) : predictions.length === 0 && (search || riskFilter !== 'ALL' || dateFilter !== 'ALL') ? (
         <Card>
           <CardContent className="py-16 text-center">
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
               <Search className="h-5 w-5 text-muted-foreground" />
             </div>
             <p className="text-sm font-medium">No predictions match your search.</p>
-            <Button size="sm" variant="outline" className="mt-4" onClick={() => { setSearch(''); setRiskFilter('ALL'); }}>
+            <Button size="sm" variant="outline" className="mt-4" onClick={() => { setSearch(''); setRiskFilter('ALL'); setDateFilter('ALL'); setPage(1); }}>
               Clear Filters
             </Button>
           </CardContent>
         </Card>
-      ) : filtered.length === 0 ? (
+      ) : predictions.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
@@ -235,14 +192,14 @@ export default function PredictionHistory() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map(p => {
+          {predictions.map(p => {
             const cfg = getRiskConfig(p.risk_level);
             const RiskIcon = cfg?.icon;
             return (
               <Card
                 key={p.request_id}
                 className="cursor-pointer hover:border-primary/30 hover:shadow-sm transition-all duration-150"
-                onClick={() => openDetail(p.request_id)}
+                onClick={() => navigate(`/doctor/predictions/${p.request_id}`)}
               >
                 <CardContent className="p-4 flex items-center gap-4">
                   {/* Risk icon box */}
@@ -289,128 +246,33 @@ export default function PredictionHistory() {
               </Card>
             );
           })}
-        </div>
-      )}
 
-      {/* XAI Detail Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2 text-base">
-              <Brain className="h-4 w-4" /> Prediction Detail + XAI
-            </SheetTitle>
-          </SheetHeader>
-
-          {detailLoading || !detail ? (
-            <div className="space-y-4 mt-6">
-              <Skeleton className="h-32 w-full rounded-[var(--radius)]" />
-              <Skeleton className="h-48 w-full rounded-[var(--radius)]" />
-            </div>
-          ) : (
-            <div className="mt-6 space-y-5">
-              {/* Summary */}
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  {[
-                    { label: 'Patient', value: detail.patient_name },
-                    { label: 'Model',   value: detail.model_version },
-                    { label: 'Date',    value: formatDateTime(detail.created_at) },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{label}</span>
-                      <span className="text-sm font-medium">{value}</span>
-                    </div>
-                  ))}
-
-                  {detail.risk_level && (() => {
-                    const cfg = getRiskConfig(detail.risk_level);
-                    if (!cfg) return null;
-                    const RiskIcon = cfg.icon;
-                    return (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Risk Level</span>
-                          <Badge className={`gap-1 ${cfg.badgeClass}`}>
-                            <RiskIcon className="h-3 w-3" /> {cfg.label}
-                          </Badge>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-xs mb-1.5">
-                            <span className="text-muted-foreground">Risk Score</span>
-                            <span className="font-medium">
-                              {detail.risk_score !== null ? `${Math.round(detail.risk_score * 100)}%` : '—'}
-                            </span>
-                          </div>
-                          <Progress
-                            value={(detail.risk_score ?? 0) * 100}
-                            className={cfg.barClass}
-                          />
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Confidence</span>
-                          <span className="font-medium">
-                            {detail.confidence !== null ? `${Math.round(detail.confidence * 100)}%` : '—'}
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-
-              {/* XAI feature explanations */}
-              {detail.feature_explanations?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" /> Feature Explanations (XAI)
-                  </h3>
-                  <div className="space-y-2.5">
-                    {detail.feature_explanations.slice(0, 10).map((fe, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold shrink-0 ${
-                          fe.direction === 'POSITIVE'
-                            ? 'bg-[#c0272d]/10 text-[#c0272d]'
-                            : 'bg-[#00a89c]/10 text-[#00a89c]'
-                        }`}>
-                          {fe.direction === 'POSITIVE' ? '↑' : '↓'}
-                        </div>
-                        <span className="flex-1 text-xs text-foreground truncate">{featureLabel(fe.feature_name)}</span>
-                        <div
-                          className="w-20 bg-muted rounded-full h-2"
-                          role="progressbar"
-                          aria-valuenow={Math.abs(fe.contribution) * 100}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        >
-                          <div
-                            className={`h-2 rounded-full ${
-                              fe.direction === 'POSITIVE' ? 'bg-[#c0272d]/60' : 'bg-[#00a89c]/60'
-                            }`}
-                            style={{ width: `${Math.min(Math.abs(fe.contribution) * 400, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-muted-foreground w-9 text-right shrink-0">
-                          {(fe.contribution * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    ↑ increases infection risk · ↓ decreases infection risk
-                  </p>
-                </div>
-              )}
-
-              <Button
-                className="w-full gap-2"
-                onClick={() => { setSheetOpen(false); navigate('/doctor/predictions/new'); }}
-              >
-                <Brain className="h-4 w-4" /> Run New Prediction
-              </Button>
+          {/* Pagination controls */}
+          {pagination && pagination.pages > 1 && (
+            <div className="flex items-center justify-between border-t border-border/50 pt-4 mt-6">
+              <p className="text-sm text-muted-foreground">
+                Page {pagination.page} of {pagination.pages} · {pagination.total} predictions
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
+                  disabled={page >= pagination.pages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
     </div>
   );
 }

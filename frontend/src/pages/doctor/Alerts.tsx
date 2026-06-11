@@ -1,138 +1,314 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAlerts } from '@/contexts/AlertsContext';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/formatDate';
-import { Bell, CheckCircle2, AlertTriangle, TrendingUp, Info } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Bell, CheckCircle2, AlertTriangle, TrendingUp,
+  Info, FlaskConical, AlertCircle, CheckCheck,
+  UserPlus, UserCheck, ChevronLeft, ChevronRight,
+  type LucideIcon,
+} from 'lucide-react';
+
+// ─── Extended alert type ──────────────────────────────────────────────────────
+// The AlertsContext interface is minimal; the backend may return patient_id and
+// patient_name. We cast to EnrichedAlert to access these optional fields safely.
+type EnrichedAlert = {
+  alert_id:     string;
+  alert_type:   string;
+  message:      string;
+  is_read:      boolean;
+  created_at:   string;
+  patient_id?:  string;
+  patient_name?: string;
+};
+
+// ─── Alert type → config ──────────────────────────────────────────────────────
+
+type Severity = 'critical' | 'high' | 'warning' | 'info' | 'success';
+
+interface AlertConfig {
+  sev:   Severity;
+  Icon:  LucideIcon;
+  label: string;
+  cta:   string;
+}
+
+const ALERT_CONFIG: Record<string, AlertConfig> = {
+  RISK_CRITICAL:   { sev: 'critical', Icon: AlertTriangle, label: 'Critical risk',    cta: 'View patient'  },
+  RISK_HIGH:       { sev: 'high',     Icon: TrendingUp,    label: 'High risk',         cta: 'View patient'  },
+  RISK_MODERATE:   { sev: 'warning',  Icon: AlertCircle,   label: 'Moderate risk',     cta: 'View patient'  },
+  RISK_LOW:        { sev: 'success',  Icon: CheckCircle2,  label: 'Low risk',          cta: 'View patient'  },
+  RESULT_READY:    { sev: 'info',     Icon: FlaskConical,  label: 'Lab result',        cta: 'View results'  },
+  CRITICAL_RESULT: { sev: 'critical', Icon: AlertTriangle, label: 'Critical result',   cta: 'View results'  },
+  ABNORMAL_RESULT: { sev: 'warning',  Icon: AlertCircle,   label: 'Abnormal result',   cta: 'View results'  },
+  NEW_LAB_ORDER:   { sev: 'info',     Icon: FlaskConical,  label: 'Lab order',         cta: 'View order'    },
+  PATIENT_ASSIGNED: { sev: 'info',    Icon: UserPlus,      label: 'New patient',       cta: 'View patient'  },
+  PRIMARY_TRANSFERRED: { sev: 'info', Icon: UserCheck,     label: 'Primary doctor',    cta: 'View patient'  },
+};
+
+const getAlertConfig = (type: string): AlertConfig =>
+  ALERT_CONFIG[type] ?? { sev: 'info', Icon: Info, label: type, cta: 'View' };
+
+// ─── Severity display tokens ──────────────────────────────────────────────────
+
+const SEV: Record<Severity, {
+  borderColor: string;
+  iconBg:      string;
+  iconColor:   string;
+  badgeBg:     string;
+  badgeText:   string;
+}> = {
+  critical: {
+    borderColor: '#c0272d',
+    iconBg:      'bg-[#c0272d]/10',
+    iconColor:   'text-[#c0272d]',
+    badgeBg:     'bg-[#c0272d]/10',
+    badgeText:   'text-[#c0272d]',
+  },
+  high: {
+    borderColor: '#e07020',
+    iconBg:      'bg-[#e07020]/10',
+    iconColor:   'text-[#e07020]',
+    badgeBg:     'bg-[#e07020]/10',
+    badgeText:   'text-[#e07020]',
+  },
+  warning: {
+    borderColor: '#faaf3a',
+    iconBg:      'bg-[#faaf3a]/15',
+    iconColor:   'text-[#a2680a]',
+    badgeBg:     'bg-[#faaf3a]/15',
+    badgeText:   'text-[#a2680a]',
+  },
+  info: {
+    borderColor: 'hsl(var(--primary))',
+    iconBg:      'bg-primary/10',
+    iconColor:   'text-primary',
+    badgeBg:     'bg-primary/10',
+    badgeText:   'text-primary',
+  },
+  success: {
+    borderColor: '#00a89c',
+    iconBg:      'bg-[#00a89c]/10',
+    iconColor:   'text-[#007a71]',
+    badgeBg:     'bg-[#00a89c]/10',
+    badgeText:   'text-[#007a71]',
+  },
+};
+
+// ─── Filter types ─────────────────────────────────────────────────────────────
+
+type FilterKey = 'ALL' | 'UNREAD' | 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' | 'LAB_RESULTS' | 'SYSTEM';
+
+const FILTERS: { value: FilterKey; label: (unread: number) => string }[] = [
+  { value: 'ALL',         label: (u) => `All` },
+  { value: 'UNREAD',      label: (u) => `Unread${u > 0 ? ` (${u})` : ''}` },
+  { value: 'CRITICAL',    label: () => 'Critical' },
+  { value: 'HIGH',        label: () => 'High' },
+  { value: 'MODERATE',    label: () => 'Moderate' },
+  { value: 'LOW',         label: () => 'Low' },
+  { value: 'LAB_RESULTS', label: () => 'Lab results' },
+  { value: 'SYSTEM',      label: () => 'System' },
+];
+
+const matchFilter = (a: EnrichedAlert, f: FilterKey): boolean => {
+  if (f === 'UNREAD')      return !a.is_read;
+  if (f === 'CRITICAL')    return a.alert_type === 'RISK_CRITICAL' || a.alert_type === 'CRITICAL_RESULT';
+  if (f === 'HIGH')        return a.alert_type === 'RISK_HIGH';
+  if (f === 'MODERATE')    return a.alert_type === 'RISK_MODERATE';
+  if (f === 'LOW')         return a.alert_type === 'RISK_LOW';
+  if (f === 'LAB_RESULTS') return ['RESULT_READY', 'CRITICAL_RESULT', 'ABNORMAL_RESULT', 'NEW_LAB_ORDER'].includes(a.alert_type);
+  if (f === 'SYSTEM')      return ['PATIENT_ASSIGNED', 'PRIMARY_TRANSFERRED', 'OVERAGE_STARTED'].includes(a.alert_type);
+  return true;
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Alerts() {
-  const { alerts, markRead, markAllRead, isLoading, unreadCount } = useAlerts();
-  const [filter, setFilter] = useState<'ALL' | 'UNREAD' | 'CRITICAL'>('ALL');
+  const { alerts: rawAlerts, markRead, markAllRead, isLoading, unreadCount, pagination, page, setPage } = useAlerts();
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<FilterKey>('ALL');
 
-  const filteredAlerts = alerts.filter(a => {
-    if (filter === 'UNREAD')   return !a.is_read;
-    if (filter === 'CRITICAL') return a.type === 'CRITICAL';
-    return true;
-  });
+  useEffect(() => {
+    setPage(1);
+  }, [filter, setPage]);
 
-  const getIconMeta = (type: string) => {
-    switch (type) {
-      case 'CRITICAL': return { icon: AlertTriangle, bg: 'bg-[#c0272d]/10', color: 'text-[#c0272d]' };
-      case 'HIGH':     return { icon: TrendingUp,    bg: 'bg-[#e07020]/10', color: 'text-[#e07020]' };
-      default:         return { icon: Info,          bg: 'bg-primary/10',   color: 'text-primary'   };
+  // Cast to enriched type — patient_id / patient_name may be present in API response
+  const alerts = rawAlerts as unknown as EnrichedAlert[];
+
+  const filtered = alerts.filter(a => matchFilter(a, filter));
+
+  const handleCta = (alert: EnrichedAlert) => {
+    const cfg = getAlertConfig(alert.alert_type);
+    if (cfg.cta === 'View patient') {
+      navigate(alert.patient_id
+        ? `/doctor/patients/${alert.patient_id}`
+        : '/doctor/patients'
+      );
+    } else {
+      // Lab result alerts — route to patient detail if patient_id available
+      navigate(alert.patient_id
+        ? `/doctor/patients/${alert.patient_id}`
+        : '/doctor/patients'
+      );
     }
   };
 
-  const FILTERS: { value: 'ALL' | 'UNREAD' | 'CRITICAL'; label: string }[] = [
-    { value: 'ALL',      label: 'All' },
-    { value: 'UNREAD',   label: `Unread${unreadCount > 0 ? ` (${unreadCount})` : ''}` },
-    { value: 'CRITICAL', label: 'Critical' },
-  ];
-
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-5 w-full">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight flex items-center gap-2">
-            <Bell className="h-5 w-5 text-muted-foreground" /> Alerts
+          <h1 className="text-[22px] font-medium tracking-tight text-foreground flex items-center gap-2">
+            <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            Alerts
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {unreadCount > 0 ? `${unreadCount} unread alert${unreadCount > 1 ? 's' : ''}` : 'All caught up'}
+            {unreadCount > 0
+              ? `${unreadCount} unread alert${unreadCount > 1 ? 's' : ''}`
+              : 'All caught up'
+            }
           </p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllRead}>
-            Mark all as read
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={markAllRead}>
+            <CheckCheck className="h-3.5 w-3.5" /> Mark all read
           </Button>
         )}
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2">
-        {FILTERS.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => setFilter(value)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-              filter === value
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-primary/40'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* ── Filter chips ────────────────────────────────────────────────── */}
+      <div className="flex gap-2 flex-wrap" role="group" aria-label="Filter alerts">
+        {FILTERS.map(({ value, label }) => {
+          const count = value === 'UNREAD' ? unreadCount : alerts.filter(a => matchFilter(a, value)).length;
+          return (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                filter === value
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-primary/40'
+              }`}
+            >
+              {label(unreadCount)}{value !== 'ALL' && value !== 'UNREAD' && count > 0 ? ` (${count})` : ''}
+            </button>
+          );
+        })}
       </div>
 
-      {/* List */}
+      {/* ── Alert list ──────────────────────────────────────────────────── */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-[var(--radius)]" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-[var(--radius)]" />)}
         </div>
-      ) : filteredAlerts.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="h-6 w-6 text-[#00a89c]" />
-            </div>
-            <p className="text-sm font-medium text-foreground">All caught up!</p>
-            <p className="text-sm text-muted-foreground mt-1">No alerts found for this filter.</p>
-          </CardContent>
-        </Card>
+
+      ) : filtered.length === 0 ? (
+        <div className="rounded-[var(--radius)] border border-border bg-card py-14 text-center">
+          <div className="w-11 h-11 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
+          </div>
+          <p className="text-sm font-medium text-foreground">All caught up</p>
+          <p className="text-sm text-muted-foreground mt-1">No alerts match this filter.</p>
+        </div>
+
       ) : (
         <div className="space-y-2">
-          {filteredAlerts.map(alert => {
-            const { icon: Icon, bg, color } = getIconMeta(alert.type);
+          {filtered.map(alert => {
+            const cfg  = getAlertConfig(alert.alert_type);
+            const sev  = SEV[cfg.sev];
+            const Icon = cfg.Icon;
+
             return (
-              <Card
+              <div
                 key={alert.alert_id}
-                className={`transition-all ${
-                  alert.is_read
-                    ? 'opacity-60'
-                    : 'border-l-[3px] border-l-primary'
-                }`}
+                className="rounded-[var(--radius)] border border-border bg-card p-3.5 flex items-start gap-3 transition-opacity"
+                style={{
+                  borderLeftWidth: '3px',
+                  borderLeftColor: sev.borderColor,
+                  opacity: alert.is_read ? 0.5 : 1,
+                }}
+                role="article"
+                aria-label={`${cfg.label} alert${alert.patient_name ? ` for ${alert.patient_name}` : ''}`}
               >
-                <CardContent className="p-4 flex gap-4">
-                  {/* Icon */}
-                  <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                    <Icon className={`h-4 w-4 ${color}`} />
+                {/* Severity icon */}
+                <div className={`w-8 h-8 rounded-md ${sev.iconBg} flex items-center justify-center shrink-0 mt-0.5`}
+                  aria-hidden="true">
+                  <Icon className={`h-4 w-4 ${sev.iconColor}`} />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    {/* Type badge */}
+                    <span className={`text-[10px] font-medium uppercase tracking-[0.04em] px-1.5 py-0.5 rounded ${sev.badgeBg} ${sev.badgeText}`}>
+                      {cfg.label}
+                    </span>
+
+                    {/* Patient name */}
+                    {alert.patient_name && (
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {alert.patient_name}
+                      </span>
+                    )}
+
+                    {/* Unread dot */}
+                    {!alert.is_read && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-label="Unread" />
+                    )}
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className={`text-sm ${alert.is_read ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
-                        {alert.message}
-                      </p>
-                      {!alert.is_read && (
-                        <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
-                          New
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDate(alert.created_at)}
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground leading-snug">{alert.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatDate(alert.created_at)}</p>
+                </div>
 
-                  {/* Mark read */}
+                {/* Actions */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs whitespace-nowrap gap-1"
+                    onClick={() => handleCta(alert)}
+                  >
+                    {cfg.cta} →
+                  </Button>
                   {!alert.is_read && (
-                    <div className="shrink-0 flex items-center">
-                      <button
-                        className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
-                        onClick={() => markRead(alert.alert_id)}
-                      >
-                        Mark read
-                      </button>
-                    </div>
+                    <button
+                      className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors"
+                      onClick={() => markRead(alert.alert_id)}
+                    >
+                      Mark read
+                    </button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Pagination ──────────────────────────────────────────────────── */}
+      {pagination && pagination.pages > 1 && (
+        <div className="flex items-center justify-between py-3 border-t border-border mt-6">
+          <p className="text-xs text-muted-foreground">
+            Page {pagination.page} of {pagination.pages} · {pagination.total} alerts
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-8 gap-1"
+              disabled={page <= 1}
+              onClick={() => setPage(p => p - 1)}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 gap-1"
+              disabled={page >= pagination.pages}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -4,6 +4,8 @@ import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { assertDoctorAssignment } from '../utils/assertDoctorAssignment.js';
+import { runPrediction } from '../services/aiService.js';
+import type { ClinicalData, LabResult } from '../services/aiService.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STALE_THRESHOLD_MS  = 72 * 60 * 60 * 1000; // 72 hours
@@ -579,7 +581,7 @@ export const createLabOrder = catchAsync(async (req: Request, res: Response, nex
         JOIN   lab_technicians lt ON lt.user_id = u.user_id
         WHERE  u.organization_id = ${orgId} AND u.deleted_at IS NULL
       `;
-      techIds = (techs as Array<{ user_id: string }>).map(t => t.user_id);
+      techIds = (techs as unknown as Array<{ user_id: string }>).map(t => t.user_id);
     }
 
     if (techIds.length > 0) {
@@ -687,46 +689,27 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
     RETURNING request_id
   `;
 
-  // ── Step 4: Mock prediction (pending real ML integration) ─────────────────
-  const symptomCount = (clinicalRecord?.symptoms as string[] | null)?.length ?? 0;
-  const labAbnormal  = labResults.filter((r: Record<string, unknown>) =>
-    r.flag === 'ABNORMAL' || r.flag === 'CRITICAL').length;
-  const riskScore    = Math.min(0.15 + labAbnormal * 0.12 + symptomCount * 0.07, 0.98);
-  const riskLevel    = riskScore >= 0.85 ? 'CRITICAL'
-                     : riskScore >= 0.60 ? 'HIGH'
-                     : riskScore >= 0.35 ? 'MODERATE'
-                     : 'LOW';
-
-  const features: Array<{
-    feature_name: string; contribution: number;
-    direction: 'POSITIVE' | 'NEGATIVE'; rank: number;
-  }> = [
-    ...(labResults as Array<Record<string, unknown>>).map((r, i) => ({
-      feature_name: String(r.analyte_name),
-      contribution: r.flag === 'CRITICAL' ? 0.28 : r.flag === 'ABNORMAL' ? 0.12 : 0.02,
-      direction:    (r.flag !== 'NORMAL' ? 'POSITIVE' : 'NEGATIVE') as 'POSITIVE' | 'NEGATIVE',
-      rank:         i + 1,
+  // ── Step 4: Run clinical scoring engine ────────────────────────────────────
+  const aiPayload = {
+    clinical: clinicalRecord
+      ? {
+          vitals:   (clinicalRecord as Record<string, unknown>).vitals as ClinicalData['vitals'],
+          symptoms: ((clinicalRecord as Record<string, unknown>).symptoms as string[]) ?? [],
+        }
+      : null,
+    lab: (labResults as Array<Record<string, unknown>>).map(r => ({
+      analyte_name:   String(r.analyte_name),
+      value:          String(r.value),
+      flag:           r.flag as LabResult['flag'],
+      reference_low:  r.reference_low != null ? Number(r.reference_low) : undefined,
+      reference_high: r.reference_high != null ? Number(r.reference_high) : undefined,
     })),
-    ...((clinicalRecord?.symptoms as string[]) ?? []).map((s: string, i: number) => ({
-      feature_name: `Symptom: ${s}`,
-      contribution: 0.07,
-      direction:    'POSITIVE' as const,
-      rank:         labResults.length + i + 1,
-    })),
-  ];
+    model_version,
+  };
 
-  if (features.length === 0) {
-    features.push(
-      { feature_name: 'No clinical data', contribution: 0.10, direction: 'POSITIVE', rank: 1 },
-      { feature_name: 'No lab results',   contribution: 0.05, direction: 'NEGATIVE', rank: 2 },
-    );
-  }
+  const aiResult = await runPrediction(aiPayload);
 
-  const risk_score  = Math.round(riskScore * 1000) / 1000;
-  const dataScore   = (clinicalRecord ? 0.5 : 0) + (labResults.length > 0 ? 0.3 : 0) +
-                      (!clinicalDataStale ? 0.2 : 0);
-  const confidence  = Math.round((0.55 + dataScore * 0.4) * 1000) / 1000;
-  const raw_payload = { model: 'mock', model_version, features };
+  const { risk_score, risk_level: riskLevel, confidence, raw_payload, feature_explanations: features } = aiResult;
 
   // ── Step 5: Persist results ────────────────────────────────────────────────
   const [predResult] = await sql`
@@ -752,6 +735,41 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
 
   await sql`UPDATE prediction_requests SET status = 'COMPLETED' WHERE request_id = ${predRequest.request_id}`;
 
+  // ── Step 6: Generate risk-based alerts for the care team ───────────────────
+  const alertType = riskLevel === 'CRITICAL' ? 'RISK_CRITICAL'
+                  : riskLevel === 'HIGH'     ? 'RISK_HIGH'
+                  : riskLevel === 'MODERATE' ? 'RISK_MODERATE'
+                  : riskLevel === 'LOW'      ? 'RISK_LOW'
+                  : null;
+
+  if (alertType && riskLevel !== 'LOW') {
+    const alertMessage = `AI prediction: ${riskLevel} infection risk (score ${Math.round(risk_score * 100)}%, confidence ${Math.round(confidence * 100)}%)`;
+
+    if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
+      // Alert all doctors assigned to this patient
+      const assignedDoctors = await sql`
+        SELECT pa.doctor_id FROM patient_assignments pa
+        WHERE  pa.patient_id    = ${patient_id}
+          AND  pa.discharged_at IS NULL
+          AND  (pa.valid_until IS NULL OR pa.valid_until > NOW())
+      `;
+      const doctorIds = (assignedDoctors as unknown as Array<{ doctor_id: string }>).map(d => d.doctor_id);
+
+      if (doctorIds.length > 0) {
+        await sql`
+          INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
+          SELECT ${patient_id}, unnest(${sql.array(doctorIds)}::uuid[]), ${alertType}, ${alertMessage}
+        `;
+      }
+    } else {
+      // MODERATE — alert only the requesting doctor
+      await sql`
+        INSERT INTO alerts (patient_id, recipient_id, alert_type, message)
+        VALUES (${patient_id}, ${req.user!.user_id}, ${alertType}, ${alertMessage})
+      `;
+    }
+  }
+
   res.status(201).json({
     status: 'success',
     messageKey: ctx?.isOverage ? 'SUCCESS_PREDICTION_OVERAGE' : 'SUCCESS_PREDICTION_REQUESTED',
@@ -775,6 +793,39 @@ export const getPredictions = catchAsync(async (req: Request, res: Response) => 
   const orgId    = req.user!.org_id;
   const userId   = req.user!.user_id;
   const scopeMine = req.query.scope === 'mine';
+  const patientId = req.query.patient_id as string | undefined;
+  const search = req.query.search as string | undefined;
+  const risk = req.query.risk as string | undefined;
+  const dateRange = req.query.date_range as string | undefined;
+
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 8;
+  const offset = (page - 1) * limit;
+
+  // Build dynamic filters
+  const conditions = [sql`p.deleted_at IS NULL`];
+  if (orgId) conditions.push(sql`p.organization_id = ${orgId}`);
+  if (scopeMine) conditions.push(sql`pr.requested_by = ${userId}`);
+  if (patientId) conditions.push(sql`pr.patient_id = ${patientId}`);
+  
+  if (search) {
+    const q = `%${search.toLowerCase()}%`;
+    conditions.push(sql`LOWER(p.name) LIKE ${q}`);
+  }
+  if (risk && risk !== 'ALL') {
+    conditions.push(sql`pres.risk_level = ${risk}`);
+  }
+  if (dateRange && dateRange !== 'ALL') {
+    if (dateRange === 'TODAY') {
+      conditions.push(sql`pr.created_at >= NOW() - INTERVAL '1 day'`);
+    } else if (dateRange === '7DAYS') {
+      conditions.push(sql`pr.created_at >= NOW() - INTERVAL '7 days'`);
+    } else if (dateRange === '30DAYS') {
+      conditions.push(sql`pr.created_at >= NOW() - INTERVAL '30 days'`);
+    }
+  }
+
+  const whereClause = sql`${conditions.reduce((acc, condition, i) => i === 0 ? condition : sql`${acc} AND ${condition}`, sql``)}`;
 
   const predictions = await sql`
     SELECT
@@ -789,13 +840,46 @@ export const getPredictions = catchAsync(async (req: Request, res: Response) => 
     JOIN patients p       ON p.patient_id     = pr.patient_id
     LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
     LEFT JOIN clinical_data cd        ON cd.data_id      = pr.clinical_data_id
-    WHERE p.deleted_at IS NULL
-      ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
-      ${scopeMine ? sql`AND pr.requested_by = ${userId}` : sql``}
+    WHERE ${whereClause}
     ORDER BY pr.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}
   `;
 
-  res.status(200).json({ status: 'success', data: { predictions } });
+  const [countRow] = await sql`
+    SELECT COUNT(*)::int AS total
+    FROM prediction_requests pr
+    JOIN patients p       ON p.patient_id     = pr.patient_id
+    LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
+    WHERE ${whereClause}
+  `;
+
+  const riskCountsRows = await sql`
+    SELECT pres.risk_level, COUNT(*)::int AS count
+    FROM prediction_requests pr
+    JOIN patients p       ON p.patient_id     = pr.patient_id
+    LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
+    WHERE ${whereClause} AND pres.risk_level IS NOT NULL
+    GROUP BY pres.risk_level
+  `;
+
+  const riskCounts = riskCountsRows.reduce((acc, row) => {
+    acc[row.risk_level as string] = Number(row.count);
+    return acc;
+  }, {} as Record<string, number>);
+
+  res.status(200).json({ 
+    status: 'success', 
+    data: { 
+      predictions,
+      riskCounts,
+      pagination: {
+        total: Number(countRow.total),
+        page,
+        limit,
+        pages: Math.ceil(Number(countRow.total) / limit)
+      }
+    } 
+  });
 });
 
 export const getPredictionById = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
@@ -804,9 +888,13 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
   const [prediction] = await sql`
     SELECT
       pr.request_id, pr.patient_id, p.name AS patient_name,
+      p.age AS patient_age, p.gender AS patient_gender,
       pr.model_version, pr.status, pr.created_at,
+      u.username AS requested_by_name,
       pres.result_id, pres.risk_score, pres.risk_level, pres.confidence, pres.raw_payload,
       cd.data_id         AS clinical_data_id,
+      cd.vitals          AS clinical_vitals,
+      cd.symptoms        AS clinical_symptoms,
       cd.recorded_at     AS clinical_recorded_at,
       cd.visit_date      AS clinical_visit_date,
       cd.created_at      AS clinical_created_at,
@@ -828,11 +916,12 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
       ) AS feature_explanations
     FROM prediction_requests pr
     JOIN patients p ON p.patient_id = pr.patient_id
+    LEFT JOIN users u              ON u.user_id     = pr.requested_by
     LEFT JOIN prediction_results pres ON pres.request_id = pr.request_id
     LEFT JOIN clinical_data cd        ON cd.data_id      = pr.clinical_data_id
     LEFT JOIN feature_explanations fe ON fe.result_id    = pres.result_id
     WHERE pr.request_id = ${predictionId}
-    GROUP BY pr.request_id, p.name, pres.result_id, cd.data_id
+    GROUP BY pr.request_id, p.name, p.age, p.gender, u.username, pres.result_id, cd.data_id
     LIMIT 1
   `;
 
@@ -844,6 +933,10 @@ export const getPredictionById = catchAsync(async (req: Request, res: Response, 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 
 export const getAlerts = catchAsync(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 8;
+  const offset = (page - 1) * limit;
+
   const alerts = await sql`
     SELECT a.alert_id, a.patient_id, pat.name AS patient_name,
            a.alert_type, a.message, a.is_read, a.read_at, a.created_at
@@ -851,9 +944,35 @@ export const getAlerts = catchAsync(async (req: Request, res: Response) => {
     LEFT JOIN patients pat ON pat.patient_id = a.patient_id
     WHERE  a.recipient_id = ${req.user!.user_id}
     ORDER  BY a.created_at DESC
-    LIMIT  50
+    LIMIT  ${limit} OFFSET ${offset}
   `;
-  res.status(200).json({ status: 'success', data: { alerts } });
+
+  const [{ count }] = await sql`
+    SELECT COUNT(*)::int AS count
+    FROM alerts
+    WHERE recipient_id = ${req.user!.user_id}
+  `;
+
+  const [{ unread_count }] = await sql`
+    SELECT COUNT(*)::int AS unread_count
+    FROM alerts
+    WHERE recipient_id = ${req.user!.user_id}
+      AND is_read = false
+  `;
+
+  res.status(200).json({ 
+    status: 'success', 
+    data: { 
+      alerts,
+      unreadCount: unread_count,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        pages: Math.ceil(count / limit)
+      }
+    } 
+  });
 });
 
 export const markAlertRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
@@ -920,8 +1039,8 @@ export const acknowledgeResult = catchAsync(async (req: Request, res: Response, 
       ${orgId ? sql`AND p.organization_id = ${orgId}` : sql``}
     LIMIT 1
   `;
-  if (!result)                  return next(new AppError('ERROR_RESULT_NOT_FOUND', 404));
-  if (result.flag !== 'CRITICAL')    return next(new AppError('ERROR_NOT_CRITICAL', 400));
+  if (!result)                       return next(new AppError('ERROR_RESULT_NOT_FOUND', 404));
+  if (!['CRITICAL', 'ABNORMAL'].includes(result.flag)) return next(new AppError('ERROR_NOT_FLAGGED', 400));
   if (result.is_amended)             return next(new AppError('ERROR_RESULT_AMENDED', 409));
   if (result.acknowledged_at)        return next(new AppError('ERROR_ALREADY_ACKNOWLEDGED', 409));
 

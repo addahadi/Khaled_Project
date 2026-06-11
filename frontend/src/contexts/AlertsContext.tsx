@@ -4,15 +4,22 @@ import apiClient from '@/api/apiClient';
 
 interface Alert {
   alert_id: string;
-  type: string;
+  alert_type: string;
   message: string;
   is_read: boolean;
   created_at: string;
 }
 
+interface Pagination {
+  page: number; limit: number; total: number; pages: number;
+}
+
 interface AlertsContextType {
   alerts: Alert[];
   unreadCount: number;
+  pagination: Pagination | null;
+  page: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
   markRead: (alertId: string) => void;
   markAllRead: () => void;
   refreshAlerts: () => void;
@@ -23,21 +30,26 @@ const AlertsContext = createContext<AlertsContextType | undefined>(undefined);
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshAlerts = useCallback(() => {
     setIsLoading(true);
     ApiManager.execute({
-      queryKey: ['doctor', 'alerts'],
-      endpoint: '/doctor/alerts',
+      queryKey: ['doctor', 'alerts', String(page)],
+      endpoint: `/doctor/alerts?page=${page}&limit=8`,
       onSuccess: (data: unknown) => {
-        const fetchedAlerts = (data as { alerts: Alert[] }).alerts;
-        setAlerts(fetchedAlerts);
+        const payload = data as { alerts: Alert[], unreadCount: number, pagination: Pagination };
+        setAlerts(payload.alerts);
+        setUnreadCount(payload.unreadCount ?? 0);
+        setPagination(payload.pagination);
         setIsLoading(false);
       },
       onError: () => setIsLoading(false),
     });
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     refreshAlerts();
@@ -46,18 +58,18 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const markRead = (alertId: string) => {
     // Optimistic update
     setAlerts(prev => prev.map(a => a.alert_id === alertId ? { ...a, is_read: true } : a));
+    setUnreadCount(prev => Math.max(0, prev - 1));
     apiClient.patch(`/doctor/alerts/${alertId}/read`).catch(() => refreshAlerts());
   };
 
   const markAllRead = () => {
     setAlerts(prev => prev.map(a => ({ ...a, is_read: true })));
+    setUnreadCount(0);
     apiClient.post('/doctor/alerts/mark-all-read').catch(() => refreshAlerts());
   };
 
-  const unreadCount = alerts.filter(a => !a.is_read).length;
-
   return (
-    <AlertsContext.Provider value={{ alerts, unreadCount, markRead, markAllRead, refreshAlerts, isLoading }}>
+    <AlertsContext.Provider value={{ alerts, unreadCount, pagination, page, setPage, markRead, markAllRead, refreshAlerts, isLoading }}>
       {children}
     </AlertsContext.Provider>
   );

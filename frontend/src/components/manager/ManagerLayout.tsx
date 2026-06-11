@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { NavLink } from '@/components/NavLink';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   SidebarFooter, useSidebar,
 } from '@/components/ui/sidebar';
 import {
@@ -36,41 +36,41 @@ function ManagerSidebar() {
       collapsible="icon"
       className="border-r border-border bg-card shadow-[1px_0_0_0_hsl(var(--border))]"
     >
-      <SidebarContent>
-        <SidebarGroup>
-          {/* Logo area */}
-          <SidebarGroupLabel className="h-14 flex items-center px-4 border-b border-border mb-0">
-            {!collapsed ? (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/30">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <rect x="8.5" y="1" width="3" height="18" fill="white" />
-                    <rect x="1" y="8.5" width="18" height="3" fill="white" />
-                  </svg>
-                </div>
-                <span className="text-sm font-semibold text-foreground tracking-tight">DiagInfect</span>
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <rect x="8.5" y="1" width="3" height="18" fill="white" />
-                  <rect x="1" y="8.5" width="18" height="3" fill="white" />
-                </svg>
-              </div>
-            )}
-          </SidebarGroupLabel>
+      <SidebarHeader className={collapsed ? "h-14 flex items-center justify-center border-b border-border p-0" : "h-14 flex items-center px-4 border-b border-border"}>
+        {!collapsed ? (
+          <div className="flex items-center gap-3 w-full">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/30">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <rect x="8.5" y="1" width="3" height="18" fill="white" />
+                <rect x="1" y="8.5" width="18" height="3" fill="white" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-foreground tracking-tight">DiagInfect</span>
+          </div>
+        ) : (
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30 shrink-0">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect x="8.5" y="1" width="3" height="18" fill="white" />
+              <rect x="1" y="8.5" width="18" height="3" fill="white" />
+            </svg>
+          </div>
+        )}
+      </SidebarHeader>
 
-          <SidebarGroupContent className="pt-2 px-2">
+      <SidebarContent>
+        <SidebarGroup className="pt-2">
+          <SidebarGroupContent>
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-9 px-0">
+                  <SidebarMenuButton asChild className={collapsed ? "justify-center" : ""}>
                     <NavLink
                       to={item.url}
                       end={item.url === '/manager/dashboard'}
                       className={[
-                        "flex items-center w-full h-9 px-3 text-sm font-medium rounded-lg",
+                        "flex items-center w-full text-sm font-medium rounded-lg",
                         "text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150",
+                        collapsed ? "justify-center h-8 w-8 px-0" : "h-9 px-3"
                       ].join(" ")}
                       activeClassName="bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
                     >
@@ -88,7 +88,11 @@ function ManagerSidebar() {
       <SidebarFooter className="border-t border-border p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-muted transition-all duration-150 text-left">
+            <button className={[
+              "flex items-center w-full rounded-lg",
+              "hover:bg-muted transition-all duration-150 text-left",
+              collapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"
+            ].join(" ")}>
               <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center shrink-0 font-semibold shadow-sm">
                 {initials}
               </div>

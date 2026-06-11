@@ -141,7 +141,7 @@ export default function ManagerProfile() {
     ?? user?.username?.slice(0, 2).toUpperCase() ?? 'MG';
 
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">My Profile</h1>
         {!editing && profile && (

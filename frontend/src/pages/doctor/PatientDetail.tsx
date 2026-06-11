@@ -19,10 +19,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft, User, FlaskConical, Brain,
-  Activity, Thermometer, Heart, Plus, Pencil, Trash2,
+  Activity, Plus, Pencil, Trash2,
   AlertTriangle, Loader2, Clock, Calendar, Link,
   Users, Shield, ShieldCheck, UserCheck, UserPlus,
-  LockKeyhole,
+  LockKeyhole, CheckCircle2,
 } from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient   from '@/api/apiClient';
@@ -93,6 +93,57 @@ const ROLE_CONFIG: Record<string, { label: string; icon: typeof Shield; classNam
   CONSULTING: { label: 'Consulting', icon: UserCheck,   className: 'bg-[#2e368f]/10 text-[#2e368f] border border-[#2e368f]/20 rounded-full' },
 };
 
+// ─── Vitals HUD helpers (signature element) ───────────────────────────────────
+
+type VitalSev = 'normal' | 'warning' | 'elevated' | 'critical';
+
+const vitalSev = (name: string, v: number): VitalSev => {
+  if (name === 'temp')   return v >= 38.5 ? 'critical' : v >= 37.5 ? 'warning'  : 'normal';
+  if (name === 'hr')     return (v > 110 || v < 50) ? 'critical' : v > 100 ? 'elevated' : 'normal';
+  if (name === 'spo2')   return v < 93 ? 'critical' : v < 96 ? 'warning'  : 'normal';
+  if (name === 'bp_sys') return v >= 160 ? 'critical' : v >= 140 ? 'elevated' : 'normal';
+  return 'normal';
+};
+
+const VSTY: Record<VitalSev, { chip: string; label: string; val: string }> = {
+  critical: { chip: 'bg-[#c0272d]/10 border border-[#c0272d]/20', label: 'text-[#c0272d]',  val: 'text-[#c0272d]'  },
+  elevated: { chip: 'bg-[#e07020]/10 border border-[#e07020]/20', label: 'text-[#e07020]',  val: 'text-[#e07020]'  },
+  warning:  { chip: 'bg-[#faaf3a]/15 border border-[#faaf3a]/25', label: 'text-[#a2680a]',  val: 'text-[#a2680a]'  },
+  normal:   { chip: 'bg-[#00a89c]/10 border border-[#00a89c]/20', label: 'text-[#007a71]',  val: 'text-[#007a71]'  },
+};
+
+function VitalChip({ label, value, unit, sev }: {
+  label: string; value: string; unit: string; sev: VitalSev;
+}) {
+  const s = VSTY[sev];
+  return (
+    <div className={`p-2.5 rounded-md ${s.chip}`}>
+      <p className={`text-[9px] font-medium uppercase tracking-[0.07em] ${s.label}`}>{label}</p>
+      <p className={`text-[18px] font-medium leading-[1.3] tabular-nums mt-0.5 ${s.val}`}>
+        {value}
+        <span className={`text-[11px] font-normal opacity-70 ml-0.5 ${s.label}`}>{unit}</span>
+      </p>
+    </div>
+  );
+}
+
+// ─── Status strip config ──────────────────────────────────────────────────────
+
+type StripSev = 'critical' | 'high' | 'moderate' | 'info';
+
+const STRIP_BORDER: Record<StripSev, string> = {
+  critical: '#c0272d',
+  high:     '#e07020',
+  moderate: '#faaf3a',
+  info:     'hsl(var(--primary))',
+};
+const STRIP_BG: Record<StripSev, string> = {
+  critical: 'bg-[#c0272d]/[0.04]',
+  high:     'bg-[#e07020]/[0.04]',
+  moderate: 'bg-[#faaf3a]/[0.06]',
+  info:     'bg-primary/[0.04]',
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PatientDetail() {
@@ -115,17 +166,14 @@ export default function PatientDetail() {
   const [deleteTarget, setDeleteTarget] = useState<ClinicalRecord | null>(null);
   const [deletingClin, setDeletingClin] = useState(false);
 
-  // Lab results
-  const [resultsOpen,   setResultsOpen]   = useState(false);
-  const [activeLabTest, setActiveLabTest] = useState<LabTest | null>(null);
-  const [labResults,    setLabResults]    = useState<any[]>([]);
+  const [resultsOpen,    setResultsOpen]    = useState(false);
+  const [activeLabTest,  setActiveLabTest]  = useState<LabTest | null>(null);
+  const [labResults,     setLabResults]     = useState<any[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
 
-  // Lab order form
   const [labForm,  setLabForm]  = useState({ test_type: '', notes: '', assigned_to: 'any' });
   const [labTechs, setLabTechs] = useState<{user_id: string, username: string}[]>([]);
 
-  // Clinical data form
   const [clinForm, setClinForm] = useState({
     temperature: '', heart_rate: '', spo2: '',
     bp_sys: '', bp_dia: '',
@@ -134,7 +182,6 @@ export default function PatientDetail() {
     visit_date:  '',
   });
 
-  // ── Care team state ───────────────────────────────────────────────────────
   const [joining,       setJoining]       = useState(false);
   const [assignOpen,    setAssignOpen]     = useState(false);
   const [assigning,     setAssigning]      = useState(false);
@@ -159,10 +206,9 @@ export default function PatientDetail() {
     loadPatient();
     if (!patientId) return;
 
-    // Predictions: org-scoped, client-filter by patientId
     ApiManager.execute({
       queryKey: ['doctor', 'predictions', 'org'],
-      endpoint: '/doctor/predictions?scope=org',
+      endpoint: `/doctor/predictions?scope=org&patient_id=${patientId}&limit=50`,
       onSuccess: (d) => {
         const all = (d as { predictions: (Prediction & { patient_id: string })[] }).predictions;
         setPredictions(all.filter(p => p.patient_id === patientId));
@@ -175,7 +221,6 @@ export default function PatientDetail() {
       onSuccess: (d) => setLabTechs((d as any).techs ?? []),
     });
 
-    // Org doctors for assign-colleague dialog
     ApiManager.execute({
       queryKey: ['doctor', 'orgDoctors'],
       endpoint: '/doctor/org-doctors',
@@ -362,7 +407,7 @@ export default function PatientDetail() {
     const observedAt = cd.recorded_at ?? cd.created_at;
     return (
       <span title={`Observation time: ${new Date(observedAt).toLocaleString()}`}
-        className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 border border-yellow-200">
+        className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
         <Clock className="h-2.5 w-2.5" /> Stale · {timeAgo(observedAt)}
       </span>
     );
@@ -372,18 +417,17 @@ export default function PatientDetail() {
     const count = Number(cd.linked_prediction_count);
     if (count === 0) return null;
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
-        <Link className="h-2.5 w-2.5" /> Used in {count} prediction{count > 1 ? 's' : ''}
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+        <Link className="h-2.5 w-2.5" /> {count} prediction{count > 1 ? 's' : ''}
       </span>
     );
   };
 
   // ─── Loading / not found ──────────────────────────────────────────────────
-
   if (isLoading) return (
     <div className="space-y-4">
       <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-32 w-full" />
+      <Skeleton className="h-20 w-full" />
       <Skeleton className="h-64 w-full" />
     </div>
   );
@@ -394,211 +438,349 @@ export default function PatientDetail() {
   const latestClinical = patient.clinicalData[0] ?? null;
   const isAssigned     = patient.is_assigned;
 
-  // Is the current user the PRIMARY for this patient?
   const isPrimary = patient.assignments.some(
     a => a.doctor_id === user?.user_id && a.role === 'PRIMARY',
   );
 
+  // ── Status strip ──────────────────────────────────────────────────────────
+  const getStripSev = (): StripSev | null => {
+    if (patient.risk_level === 'CRITICAL') return 'critical';
+    if (patient.risk_level === 'HIGH')     return 'high';
+    if (patient.risk_level === 'MODERATE') return 'moderate';
+    if (latestClinical?.is_stale)          return 'moderate';
+    if (!isAssigned)                       return 'info';
+    return null;
+  };
+  const stripSev = getStripSev();
+
+  const openAddVitals = () => {
+    setEditingClin(null);
+    setClinForm({ temperature: '', heart_rate: '', spo2: '', bp_sys: '', bp_dia: '', symptoms: [], recorded_at: '', visit_date: '' });
+    setClinicOpen(true);
+  };
+
+  // ─── Patient name initials ────────────────────────────────────────────────
+  const initials = patient.name
+    .split(' ')
+    .slice(0, 2)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase();
+
   // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-0 max-w-5xl">
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      {/* ── Breadcrumb ────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
         <button onClick={() => navigate('/doctor/patients')}
-          className="hover:text-primary transition-colors flex items-center gap-1">
-          <ArrowLeft className="h-4 w-4" /> Patients
+          className="hover:text-primary transition-colors flex items-center gap-1.5">
+          <ArrowLeft className="h-3.5 w-3.5" /> Patients
         </button>
-        <span>/</span>
+        <span className="text-border">/</span>
         <span className="text-foreground font-medium">{patient.name}</span>
       </div>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">{patient.name}</h1>
-            {isAssigned && (
-              <Badge variant="outline" className="text-xs gap-1 text-primary border-primary/30">
-                <ShieldCheck className="h-3 w-3" /> Assigned
-              </Badge>
+      {/* ── Patient identity bar ──────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
+            aria-hidden="true">
+            <span className="text-base font-medium text-primary">{initials}</span>
+          </div>
+          <div>
+            <h1 className="text-[22px] font-medium tracking-tight text-foreground leading-tight">
+              {patient.name}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {patient.age} yrs · {patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}
+              · Patient since {formatDate(patient.created_at)}
+            </p>
+            {/* Role + assignment badges */}
+            {patient.assignments.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {patient.assignments
+                  .filter(a => a.doctor_id === user?.user_id)
+                  .map(a => {
+                    const cfg = ROLE_CONFIG[a.role];
+                    const RoleIcon = cfg?.icon ?? Shield;
+                    return (
+                      <span key={a.assignment_id}
+                        className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${cfg?.className ?? ''}`}>
+                        <RoleIcon className="h-3 w-3" />
+                        {cfg?.label ?? a.role}
+                      </span>
+                    );
+                  })
+                }
+                {isAssigned && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25">
+                    <ShieldCheck className="h-3 w-3" /> Assigned
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          <p className="text-muted-foreground text-sm">
-            {patient.age} yrs · {patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}
-          </p>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          {/* Write actions require assignment */}
-          {isAssigned && (
-            <>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setLabOpen(true)}>
-                <FlaskConical className="h-4 w-4" /> Order Lab
-              </Button>
-              <Button
-                variant="outline" size="sm" className="gap-2"
-                onClick={() => {
-                  setEditingClin(null);
-                  setClinForm({ temperature: '', heart_rate: '', spo2: '', bp_sys: '', bp_dia: '', symptoms: [], recorded_at: '', visit_date: '' });
-                  setClinicOpen(true);
-                }}
-              >
-                <Activity className="h-4 w-4" /> Add Vitals
-              </Button>
-              <Button
-                size="sm" className="gap-2"
-                onClick={() => navigate('/doctor/predictions/new', { state: { patientId: patient.patient_id } })}
-              >
-                <Brain className="h-4 w-4" /> Run AI Prediction
-              </Button>
-            </>
-          )}
-        </div>
+        {/* Primary actions — only when assigned */}
+        {isAssigned && (
+          <div className="flex gap-2 flex-wrap shrink-0">
+            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setLabOpen(true)}>
+              <FlaskConical className="h-3.5 w-3.5" /> Order lab
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={openAddVitals}>
+              <Activity className="h-3.5 w-3.5" /> Add vitals
+            </Button>
+            <Button size="sm" className="gap-1.5 h-8 text-xs"
+              onClick={() => navigate('/doctor/predictions/new', { state: { patientId: patient.patient_id } })}>
+              <Brain className="h-3.5 w-3.5" /> Run AI prediction
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* ── Not-assigned banner ──────────────────────────────────────────────── */}
-      {!isAssigned && (
-        <Card className="border-l-4 border-l-blue-400 bg-blue-50 dark:bg-blue-950/10">
-          <CardContent className="py-3 flex items-center gap-3">
-            <LockKeyhole className="h-5 w-5 text-blue-600 shrink-0" />
-            <div className="flex-1">
-              <p className="font-medium text-sm text-blue-800">Read-only access</p>
-              <p className="text-xs text-blue-700">
-                You are viewing this patient as an observer. You must be assigned by the primary doctor to gain write access.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Risk banner */}
-      {patient.risk_level && (
-        <Card className={`border-l-4 ${
-          patient.risk_level === 'CRITICAL' ? 'border-l-red-500 bg-red-50 dark:bg-red-950/10'
-          : patient.risk_level === 'HIGH'   ? 'border-l-orange-500 bg-orange-50 dark:bg-orange-950/10'
-          : 'border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950/10'
-        }`}>
-          <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className={`h-5 w-5 ${
-              patient.risk_level === 'CRITICAL' ? 'text-[#da1e28]'
-              : patient.risk_level === 'HIGH'   ? 'text-[#ff832b]' : 'text-[#a2680a]'
-            }`} />
-            <div>
-              <p className="font-normal text-sm">
-                {patient.risk_level} Risk — Score:{' '}
-                {patient.risk_score !== null ? `${Math.round(patient.risk_score * 100)}%` : '—'}
-              </p>
-              <p className="text-xs text-muted-foreground">Latest AI prediction result</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stale clinical data banner */}
-      {latestClinical?.is_stale && (
-        <Card className="border-l-4 border-l-yellow-400 bg-yellow-50 dark:bg-yellow-950/10">
-          <CardContent className="py-3 flex items-center gap-3">
-            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
-            <div>
-              <p className="font-medium text-sm text-yellow-800">Clinical data is stale</p>
-              <p className="text-xs text-yellow-700">
-                The latest observation is from {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}.
-                {isAssigned && ' Consider recording fresh vitals before running a new prediction.'}
-              </p>
-            </div>
-            {isAssigned && (
-              <Button size="sm" variant="outline" className="ml-auto shrink-0 border-yellow-300"
-                onClick={() => setClinicOpen(true)}>
-                Add Vitals
-              </Button>
+      {/* ── Status strip — single line, highest severity wins ─────────────── */}
+      {stripSev && (
+        <div
+          className={`flex items-center justify-between gap-3 px-3 py-2.5 text-sm mt-3 mb-2 rounded-r-lg ${STRIP_BG[stripSev]}`}
+          style={{ borderLeft: `3px solid ${STRIP_BORDER[stripSev]}` }}
+          role="status"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Pulsing dot for CRITICAL */}
+            {stripSev === 'critical' && (
+              <span className="w-2 h-2 rounded-full bg-[#c0272d] animate-pulse shrink-0" aria-hidden="true" />
             )}
-          </CardContent>
-        </Card>
+
+            {/* Not-assigned condition */}
+            {!isAssigned && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                <LockKeyhole className="h-3 w-3" /> Read-only access
+              </span>
+            )}
+
+            {/* Risk level condition */}
+            {patient.risk_level && patient.risk_score !== null && (
+              <>
+                {!isAssigned && <span className="text-border text-xs">·</span>}
+                <span className={`font-medium text-xs ${
+                  stripSev === 'critical' ? 'text-[#c0272d]' :
+                  stripSev === 'high'     ? 'text-[#e07020]' : 'text-[#a2680a]'
+                }`}>
+                  {patient.risk_level} risk
+                </span>
+                <span className="text-border text-xs">·</span>
+                <span className={`text-xs font-medium ${
+                  stripSev === 'critical' ? 'text-[#c0272d]' :
+                  stripSev === 'high'     ? 'text-[#e07020]' : 'text-[#a2680a]'
+                }`}>
+                  {Math.round(patient.risk_score * 100)}% score
+                </span>
+              </>
+            )}
+
+            {/* Stale data condition */}
+            {latestClinical?.is_stale && (
+              <>
+                {(patient.risk_level || !isAssigned) && <span className="text-border text-xs">·</span>}
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
+                  <Clock className="h-3 w-3" />
+                  Stale data — {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Strip CTA — update vitals link */}
+          {isAssigned && latestClinical?.is_stale && (
+            <button
+              onClick={openAddVitals}
+              className="text-[11px] font-medium text-primary hover:underline underline-offset-2 whitespace-nowrap shrink-0 transition-all"
+            >
+              Update vitals →
+            </button>
+          )}
+        </div>
       )}
 
       {/* ── Tabs ──────────────────────────────────────────────────────────────── */}
       <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="clinical">
-            Clinical Data
-            {patient.clinicalData.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs">{patient.clinicalData.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="lab">
-            Lab Tests
-            {patient.labTests.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs">{patient.labTests.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="predictions">
-            Predictions
-            {predictions.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs">{predictions.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="care-team">
-            Care Team
-            <Badge variant="secondary" className="ml-1.5 text-xs">
-              {patient.assignments.length}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
+        {/* Sticky tab bar */}
+        <div className="sticky top-0 z-10 bg-background pt-4 pb-2">
+          <TabsList className="flex items-center bg-card border border-border rounded-[var(--radius)] p-1.5 gap-1 h-auto shadow-sm w-full">
+            <TabsTrigger value="overview"
+              className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
+              Overview
+            </TabsTrigger>
 
-        {/* ── Overview ────────────────────────────────────────────────────── */}
-        <TabsContent value="overview" className="mt-4">
-          <div className="grid sm:grid-cols-2 gap-4">
+            {/* Clinical Data + add action */}
+            <div className="flex items-center gap-0.5">
+              <TabsTrigger value="clinical"
+                className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
+                Clinical data
+                {patient.clinicalData.length > 0 && (
+                  <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-current/10 data-[state=active]:bg-white/20">
+                    {patient.clinicalData.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              {isAssigned && (
+                <button
+                  className="w-5 h-5 rounded border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all text-xs shrink-0"
+                  title="Add clinical record"
+                  aria-label="Add new clinical record"
+                  onClick={(e) => { e.stopPropagation(); openAddVitals(); }}
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Lab Tests + order action */}
+            <div className="flex items-center gap-0.5">
+              <TabsTrigger value="lab"
+                className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
+                Lab tests
+                {patient.labTests.length > 0 && (
+                  <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                    {patient.labTests.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              {isAssigned && (
+                <button
+                  className="w-5 h-5 rounded border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all text-xs shrink-0"
+                  title="Order lab test"
+                  aria-label="Order new lab test"
+                  onClick={(e) => { e.stopPropagation(); setLabOpen(true); }}
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Predictions + run AI action */}
+            <div className="flex items-center gap-0.5">
+              <TabsTrigger value="predictions"
+                className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
+                Predictions
+                {predictions.length > 0 && (
+                  <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                    {predictions.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              {isAssigned && (
+                <button
+                  className="h-5 px-1.5 rounded border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all text-[10px] font-medium shrink-0"
+                  title="Run AI prediction"
+                  aria-label="Run new AI prediction"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/doctor/predictions/new', { state: { patientId: patient.patient_id } });
+                  }}
+                >
+                  AI
+                </button>
+              )}
+            </div>
+
+            <TabsTrigger value="care-team"
+              className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
+              Care team
+              <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                {patient.assignments.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* ── Overview ──────────────────────────────────────────────────────── */}
+        <TabsContent value="overview" className="mt-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            {/* Patient info */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <User className="h-4 w-4" /> Patient Info
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm flex items-center gap-2 font-medium">
+                  <User className="h-4 w-4 text-muted-foreground" /> Patient info
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {[
-                  ['Name',       patient.name],
-                  ['Age',        patient.age],
-                  ['Gender',     patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()],
-                  ['Registered', formatDate(patient.created_at)],
-                ].map(([label, val]) => (
-                  <div key={String(label)} className="flex justify-between">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className="font-medium">{val}</span>
-                  </div>
-                ))}
+              <CardContent className="pt-3">
+                <table className="w-full text-sm border-collapse">
+                  <tbody>
+                    {[
+                      ['Name',       patient.name],
+                      ['Age',        `${patient.age} years`],
+                      ['Gender',     patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()],
+                      ['Registered', formatDate(patient.created_at)],
+                    ].map(([label, val]) => (
+                      <tr key={String(label)} className="border-b border-muted/40 last:border-0">
+                        <td className="py-1.5 text-muted-foreground w-[42%]">{label}</td>
+                        <td className="py-1.5 font-medium">{val}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
 
+            {/* Vitals HUD — SIGNATURE ELEMENT */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Activity className="h-4 w-4" /> Latest Vitals
-                  {latestClinical?.is_stale && <Clock className="h-3.5 w-3.5 text-yellow-500 ml-auto" />}
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm flex items-center gap-2 font-medium">
+                  <Activity className="h-4 w-4 text-muted-foreground" /> Latest vitals
+                  {latestClinical?.is_stale && (
+                    <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" /> Stale
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-3">
                 {!latestClinical ? (
                   <p className="text-sm text-muted-foreground">No vitals recorded yet.</p>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {[
-                        { label: 'Temp',  val: latestClinical.vitals.temperature  ? `${latestClinical.vitals.temperature}°C` : null },
-                        { label: 'HR',    val: latestClinical.vitals.heart_rate   ? `${latestClinical.vitals.heart_rate} bpm` : null },
-                        { label: 'SpO2',  val: latestClinical.vitals.spo2         ? `${latestClinical.vitals.spo2}%` : null },
-                        { label: 'BP',    val: latestClinical.vitals.blood_pressure_systolic
-                            ? `${latestClinical.vitals.blood_pressure_systolic}/${latestClinical.vitals.blood_pressure_diastolic}` : null },
-                      ].filter(x => x.val).map(({ label, val }) => (
-                        <div key={label} className="flex flex-col">
-                          <span className="text-xs text-muted-foreground">{label}</span>
-                          <span className="font-medium">{val}</span>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-2 gap-2">
+                      {latestClinical.vitals.temperature != null && (
+                        <VitalChip
+                          label="Temp" unit="°C"
+                          value={String(latestClinical.vitals.temperature)}
+                          sev={vitalSev('temp', latestClinical.vitals.temperature)}
+                        />
+                      )}
+                      {latestClinical.vitals.heart_rate != null && (
+                        <VitalChip
+                          label="Heart rate" unit="bpm"
+                          value={String(latestClinical.vitals.heart_rate)}
+                          sev={vitalSev('hr', latestClinical.vitals.heart_rate)}
+                        />
+                      )}
+                      {latestClinical.vitals.spo2 != null && (
+                        <VitalChip
+                          label="SpO2" unit="%"
+                          value={String(latestClinical.vitals.spo2)}
+                          sev={vitalSev('spo2', latestClinical.vitals.spo2)}
+                        />
+                      )}
+                      {latestClinical.vitals.blood_pressure_systolic != null && (
+                        <VitalChip
+                          label="Blood pressure" unit=""
+                          value={`${latestClinical.vitals.blood_pressure_systolic}/${latestClinical.vitals.blood_pressure_diastolic}`}
+                          sev={vitalSev('bp_sys', latestClinical.vitals.blood_pressure_systolic)}
+                        />
+                      )}
+                      {!latestClinical.vitals.temperature &&
+                       !latestClinical.vitals.heart_rate &&
+                       !latestClinical.vitals.spo2 &&
+                       !latestClinical.vitals.blood_pressure_systolic && (
+                        <p className="text-xs text-muted-foreground col-span-2">No vitals in this entry.</p>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="text-xs text-muted-foreground mt-2.5 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
                       Observed {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}
                       {latestClinical.visit_date && ` · Visit ${latestClinical.visit_date}`}
                     </p>
@@ -607,48 +789,61 @@ export default function PatientDetail() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Symptoms — shown when latestClinical has symptoms */}
+          {latestClinical && Array.isArray(latestClinical.symptoms) && latestClinical.symptoms.length > 0 && (
+            <Card>
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm flex items-center gap-2 font-medium">
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" /> Reported symptoms
+                  <span className="text-xs font-normal text-muted-foreground ml-1">from latest record</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {latestClinical.symptoms.map(s => (
+                    <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        {/* ── Clinical Data ────────────────────────────────────────────────── */}
+        {/* ── Clinical Data ──────────────────────────────────────────────────── */}
         <TabsContent value="clinical" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {patient.clinicalData.length} record{patient.clinicalData.length !== 1 ? 's' : ''} — newest first.
               {patient.clinicalData.some(r => r.is_stale) && (
-                <span className="text-yellow-700 ml-2">Some records are stale (&gt;72h).</span>
+                <span className="text-[#a2680a] ml-2">Some records are stale (&gt;72h).</span>
               )}
             </p>
-            <Button
-              size="sm" variant="outline" className="gap-2"
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs"
               disabled={!isAssigned}
               title={!isAssigned ? 'Join the care team to add records' : undefined}
-              onClick={() => {
-                setEditingClin(null);
-                setClinForm({ temperature: '', heart_rate: '', spo2: '', bp_sys: '', bp_dia: '', symptoms: [], recorded_at: '', visit_date: '' });
-                setClinicOpen(true);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" /> New Record
+              onClick={openAddVitals}>
+              <Plus className="h-3.5 w-3.5" /> New record
             </Button>
           </div>
 
           {patient.clinicalData.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Activity className="mx-auto h-8 w-8 mb-2" />
-              <p>No clinical data yet.</p>
+              <p className="text-sm">No clinical data yet.</p>
               {isAssigned && (
-                <Button size="sm" variant="outline" className="mt-3 gap-2" onClick={() => setClinicOpen(true)}>
-                  <Plus className="h-4 w-4" /> Add First Record
+                <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={openAddVitals}>
+                  <Plus className="h-3.5 w-3.5" /> Add first record
                 </Button>
               )}
             </CardContent></Card>
           ) : patient.clinicalData.map((cd, idx) => (
-            <Card key={cd.data_id} className={cd.is_stale ? 'border-yellow-200' : ''}>
+            <Card key={cd.data_id} className={cd.is_stale ? 'border-[#faaf3a]/30' : ''}>
               <CardContent className="pt-4 pb-3">
-                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {idx === 0 && (
-                      <Badge className="text-xs bg-primary/10 text-primary border-none">Latest</Badge>
+                      <Badge className="text-[10px] bg-primary/10 text-primary border-none">Latest</Badge>
                     )}
                     {staleBadge(cd)}
                     {linkedBadge(cd)}
@@ -657,10 +852,9 @@ export default function PatientDetail() {
                       {cd.visit_date ?? formatDate(cd.recorded_at ?? cd.created_at)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Observed {timeAgo(cd.recorded_at ?? cd.created_at)}
+                      · {timeAgo(cd.recorded_at ?? cd.created_at)}
                     </span>
                   </div>
-                  {/* Edit/delete only when assigned */}
                   {isAssigned && (
                     <div className="flex gap-1 shrink-0">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(cd)}>
@@ -674,17 +868,15 @@ export default function PatientDetail() {
                   )}
                 </div>
 
-                <div className="grid sm:grid-cols-4 gap-3 text-sm mb-3">
-                  {cd.vitals.temperature    && <div><span className="text-muted-foreground">Temp: </span><strong>{cd.vitals.temperature}°C</strong></div>}
-                  {cd.vitals.heart_rate     && <div><span className="text-muted-foreground">HR: </span><strong>{cd.vitals.heart_rate} bpm</strong></div>}
-                  {cd.vitals.spo2           && <div><span className="text-muted-foreground">SpO2: </span><strong>{cd.vitals.spo2}%</strong></div>}
-                  {cd.vitals.blood_pressure_systolic && (
-                    <div><span className="text-muted-foreground">BP: </span>
-                      <strong>{cd.vitals.blood_pressure_systolic}/{cd.vitals.blood_pressure_diastolic}</strong>
-                    </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-2.5">
+                  {cd.vitals.temperature    != null && <span className="text-muted-foreground">Temp: <strong className="text-foreground">{cd.vitals.temperature}°C</strong></span>}
+                  {cd.vitals.heart_rate     != null && <span className="text-muted-foreground">HR: <strong className="text-foreground">{cd.vitals.heart_rate} bpm</strong></span>}
+                  {cd.vitals.spo2           != null && <span className="text-muted-foreground">SpO2: <strong className="text-foreground">{cd.vitals.spo2}%</strong></span>}
+                  {cd.vitals.blood_pressure_systolic != null && (
+                    <span className="text-muted-foreground">BP: <strong className="text-foreground">{cd.vitals.blood_pressure_systolic}/{cd.vitals.blood_pressure_diastolic}</strong></span>
                   )}
                   {!cd.vitals.temperature && !cd.vitals.heart_rate && !cd.vitals.spo2 && !cd.vitals.blood_pressure_systolic && (
-                    <span className="text-xs text-muted-foreground col-span-4">No vitals recorded in this entry.</span>
+                    <span className="text-xs text-muted-foreground">No vitals in this entry.</span>
                   )}
                 </div>
 
@@ -709,13 +901,13 @@ export default function PatientDetail() {
 
         {/* ── Lab Tests ──────────────────────────────────────────────────────── */}
         <TabsContent value="lab" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {patient.labTests.length} order{patient.labTests.length !== 1 ? 's' : ''}
             </p>
             {isAssigned && (
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setLabOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> New Order
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setLabOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> New order
               </Button>
             )}
           </div>
@@ -723,10 +915,10 @@ export default function PatientDetail() {
           {patient.labTests.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <FlaskConical className="mx-auto h-8 w-8 mb-2" />
-              <p>No lab orders yet.</p>
+              <p className="text-sm">No lab orders yet.</p>
               {isAssigned && (
-                <Button size="sm" variant="outline" className="mt-3 gap-2" onClick={() => setLabOpen(true)}>
-                  <Plus className="h-4 w-4" /> Order First Test
+                <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={() => setLabOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Order first test
                 </Button>
               )}
             </CardContent></Card>
@@ -741,8 +933,12 @@ export default function PatientDetail() {
                   <p className="text-xs text-muted-foreground mt-1">Ordered {formatDate(lt.ordered_at)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Badge className={`text-xs ${LAB_STATUS[lt.status] ?? ''}`}>{lt.status}</Badge>
-                  {lt.status === 'COMPLETED' && <span className="text-[10px] text-muted-foreground underline underline-offset-2">View Results</span>}
+                  <Badge className={`text-xs ${LAB_STATUS[lt.status] ?? ''}`}>
+                    {lt.status.charAt(0) + lt.status.slice(1).toLowerCase()}
+                  </Badge>
+                  {lt.status === 'COMPLETED' && (
+                    <span className="text-[10px] text-primary underline underline-offset-2">View results</span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -751,14 +947,26 @@ export default function PatientDetail() {
 
         {/* ── Predictions ──────────────────────────────────────────────────── */}
         <TabsContent value="predictions" className="mt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {predictions.length} prediction{predictions.length !== 1 ? 's' : ''} — newest first
+            </p>
+            {isAssigned && (
+              <Button size="sm" className="gap-1.5 h-8 text-xs"
+                onClick={() => navigate(`/doctor/predictions/new?patient_id=${patient.patient_id}`)}>
+                <Brain className="h-3.5 w-3.5" /> Run prediction
+              </Button>
+            )}
+          </div>
+
           {predictions.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Brain className="mx-auto h-8 w-8 mb-2" />
-              <p>No predictions yet.</p>
+              <p className="text-sm">No predictions yet.</p>
               {isAssigned && (
-                <Button size="sm" className="mt-3 gap-2"
+                <Button size="sm" className="mt-3 gap-1.5"
                   onClick={() => navigate(`/doctor/predictions/new?patient_id=${patient.patient_id}`)}>
-                  <Brain className="h-4 w-4" /> Run First Prediction
+                  <Brain className="h-3.5 w-3.5" /> Run first prediction
                 </Button>
               )}
             </CardContent></Card>
@@ -770,17 +978,21 @@ export default function PatientDetail() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge className={`text-xs ${RISK_STYLE[pr.risk_level] ?? ''}`}>{pr.risk_level}</Badge>
-                    <span className="text-sm font-medium">Score: {Math.round(pr.risk_score * 100)}%</span>
-                    <span className="text-xs text-muted-foreground">· Confidence: {Math.round(pr.confidence * 100)}%</span>
+                    <span className="text-sm font-medium">{Math.round(pr.risk_score * 100)}% risk</span>
+                    <span className="text-xs text-muted-foreground">· Confidence {Math.round(pr.confidence * 100)}%</span>
                     {pr.clinical_data_stale && (
-                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 border border-yellow-200">
-                        <Clock className="h-2.5 w-2.5" /> stale data
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
+                        <Clock className="h-2.5 w-2.5" /> Stale input
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{new Date(pr.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(pr.created_at).toLocaleString()}
+                  </p>
                 </div>
-                <Badge variant={pr.status === 'COMPLETED' ? 'default' : 'secondary'} className="text-xs">
+                <Badge
+                  variant={pr.status === 'COMPLETED' ? 'default' : 'secondary'}
+                  className="text-xs shrink-0">
                   {pr.status}
                 </Badge>
               </CardContent>
@@ -789,15 +1001,14 @@ export default function PatientDetail() {
         </TabsContent>
 
         {/* ── Care Team ────────────────────────────────────────────────────── */}
-        <TabsContent value="care-team" className="mt-4 space-y-4">
+        <TabsContent value="care-team" className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {patient.assignments.length} active member{patient.assignments.length !== 1 ? 's' : ''} on this patient's care team.
             </p>
-            {/* Only the PRIMARY can invite colleagues */}
             {isPrimary && (
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setAssignOpen(true)}>
-                <UserPlus className="h-3.5 w-3.5" /> Assign Colleague
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setAssignOpen(true)}>
+                <UserPlus className="h-3.5 w-3.5" /> Assign colleague
               </Button>
             )}
           </div>
@@ -805,7 +1016,7 @@ export default function PatientDetail() {
           {patient.assignments.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Users className="mx-auto h-8 w-8 mb-2" />
-              <p>No care team members found.</p>
+              <p className="text-sm">No care team members found.</p>
               <p className="text-xs mt-1">This may indicate the patient was created before the assignment system was introduced.</p>
             </CardContent></Card>
           ) : (
@@ -821,7 +1032,9 @@ export default function PatientDetail() {
                     <CardContent className="pt-4 pb-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {a.doctor_name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase()}
+                          </span>
                         </div>
                         <div>
                           <p className="text-sm font-medium">
@@ -839,12 +1052,10 @@ export default function PatientDetail() {
                           <RoleIcon className="h-3 w-3" /> {cfg?.label ?? a.role}
                         </Badge>
                         {canDischarge && (
-                          <Button
-                            variant="ghost" size="sm"
+                          <Button variant="ghost" size="sm"
                             className="h-7 text-xs text-muted-foreground hover:text-destructive"
                             disabled={discharging === a.assignment_id}
-                            onClick={() => handleDischargeAssignment(a.assignment_id)}
-                          >
+                            onClick={() => handleDischargeAssignment(a.assignment_id)}>
                             {discharging === a.assignment_id
                               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               : 'Remove'
@@ -859,13 +1070,12 @@ export default function PatientDetail() {
             </div>
           )}
 
-          {/* Not assigned: show prominent join CTA inside the tab too */}
           {!isAssigned && (
             <Card className="border-dashed">
               <CardContent className="py-8 text-center">
                 <UserPlus className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                 <p className="text-sm font-medium">You are not on this care team</p>
-                <p className="text-xs text-muted-foreground mt-1 mb-4">
+                <p className="text-xs text-muted-foreground mt-1">
                   You must be assigned by the primary doctor to gain write access.
                 </p>
               </CardContent>
@@ -874,7 +1084,11 @@ export default function PatientDetail() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Lab Order Dialog ──────────────────────────────────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════════════
+          ALL DIALOGS — UNCHANGED
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {/* Lab Order Dialog */}
       <Dialog open={labOpen} onOpenChange={setLabOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Order Lab Test</DialogTitle></DialogHeader>
@@ -915,7 +1129,7 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Clinical Data Dialog ─────────────────────────────────────────────── */}
+      {/* Clinical Data Dialog */}
       <Dialog open={clinicOpen} onOpenChange={(open) => {
         if (!open) { setEditingClin(null); setClinErrors({}); }
         setClinicOpen(open);
@@ -986,7 +1200,7 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirmation ───────────────────────────────────────────────── */}
+      {/* Delete Confirmation Dialog */}
       <Dialog open={deleteClinId !== null}
         onOpenChange={(open) => { if (!open) { setDeleteClinId(null); setDeleteTarget(null); } }}>
         <DialogContent className="max-w-sm">
@@ -1013,7 +1227,7 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Assign Colleague Dialog ───────────────────────────────────────────── */}
+      {/* Assign Colleague Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Assign Colleague</DialogTitle></DialogHeader>
@@ -1038,9 +1252,7 @@ export default function PatientDetail() {
             <div className="space-y-1">
               <Label>Role</Label>
               <Select value={assignForm.role} onValueChange={v => setAssignForm(p => ({ ...p, role: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="CONSULTING">Consulting — specialist opinion, limited scope</SelectItem>
                   <SelectItem value="COVERING">Covering — full access while you are away</SelectItem>
@@ -1051,7 +1263,8 @@ export default function PatientDetail() {
             {assignForm.role === 'COVERING' && (
               <div className="space-y-1">
                 <Label>Valid Until</Label>
-                <Input type="datetime-local" value={assignForm.valid_until} onChange={e => setAssignForm(p => ({ ...p, valid_until: e.target.value }))}
+                <Input type="datetime-local" value={assignForm.valid_until}
+                  onChange={e => setAssignForm(p => ({ ...p, valid_until: e.target.value }))}
                   className={assignErrors.valid_until ? 'border-destructive' : ''} />
                 {assignErrors.valid_until && <p className="text-xs text-destructive">{assignErrors.valid_until}</p>}
               </div>
@@ -1076,7 +1289,7 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── View Lab Results Dialog ───────────────────────────────────────────── */}
+      {/* View Lab Results Dialog */}
       <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Lab Test Results</DialogTitle></DialogHeader>
@@ -1110,7 +1323,7 @@ export default function PatientDetail() {
                   </TableHeader>
                   <TableBody>
                     {labResults.map(r => {
-                      const isAmended  = r.is_amended;
+                      const isAmended   = r.is_amended;
                       const isCorrected = r.original_result_id !== null;
                       return (
                         <TableRow key={r.result_id}
@@ -1140,9 +1353,11 @@ export default function PatientDetail() {
                           <TableCell className="text-right">
                             {isAmended ? (
                               <span className="text-[10px] text-muted-foreground">Archived</span>
+                            ) : !['CRITICAL', 'ABNORMAL'].includes(r.flag ?? '') ? (
+                              <span className="text-[10px] text-muted-foreground">—</span>
                             ) : r.acknowledged_at ? (
                               <span className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                                <Clock className="h-3 w-3" /> Ack'd
+                                <CheckCircle2 className="h-3 w-3" /> Ack'd
                               </span>
                             ) : (
                               <Button variant="outline" size="sm" className="h-7 text-xs"
