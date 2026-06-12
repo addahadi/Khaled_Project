@@ -1,0 +1,175 @@
+{
+  "dashboard": {
+    "title": "Lab Dashboard",
+    "welcome": "Welcome back, {{name}}",
+    "pendingOrders": "Pending Orders",
+    "inProgress": "In Progress",
+    "completedToday": "Completed Today",
+    "totalCompleted": "Total Completed",
+    "kpis": {
+      "pendingOrders": "Pending Orders",
+      "inProgress": "In Progress",
+      "completedToday": "Completed Today",
+      "totalCompleted": "Total Completed"
+    },
+    "pendingAndInProgress": "Pending & In-Progress Orders",
+    "pendingOrdersTitle": "Pending & In-Progress Orders",
+    "allCaughtUp": "All caught up!",
+    "noPendingOrders": "No pending orders at the moment.",
+    "patient": "Patient",
+    "testType": "Test Type",
+    "orderedBy": "Ordered By",
+    "status": "Status",
+    "waiting": "Waiting",
+    "enterResults": "Enter Results",
+    "viewAll": "View all",
+    "table": {
+      "patient": "Patient",
+      "testType": "Test Type",
+      "orderedBy": "Ordered By",
+      "status": "Status",
+      "waiting": "Waiting"
+    },
+    "actions": {
+      "start": "Start",
+      "enterResults": "Enter Results"
+    }
+  },
+  "orders": {
+    "title": "Lab Orders",
+    "subtitle": "Manage and track laboratory test orders.",
+    "searchPlaceholder": "Search by patient or test type...",
+    "noOrders": "No lab orders found.",
+    "noMatch": "No orders match your search.",
+    "clearFilters": "Clear Filters",
+    "startOrder": "Start",
+    "enterResults": "Enter Results",
+    "totalOrders": "{{count}} total orders",
+    "sortPlaceholder": "Sort by",
+    "sortRecent": "Most recent",
+    "sortOlder": "Oldest first",
+    "sortAZ": "A – Z",
+    "orderClaimed": "Order claimed",
+    "orderReleased": "Order released",
+    "you": "You",
+    "unassigned": "Unassigned",
+    "table": {
+      "patient": "Patient",
+      "testType": "Test Type",
+      "orderedBy": "Ordered By",
+      "assignedTo": "Assigned To",
+      "status": "Status",
+      "orderedAt": "Ordered At"
+    },
+    "status": {
+      "PENDING": "Pending",
+      "INPROGRESS": "In Progress",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled"
+    },
+    "statusFilters": {
+      "PENDING": "Pending",
+      "INPROGRESS": "In Progress",
+      "COMPLETED": "Completed"
+    },
+    "actions": {
+      "claim": "Claim",
+      "enterResults": "Enter Results",
+      "release": "Release",
+      "view": "View"
+    },
+    "pagination": "Page {{page}} of {{pages}} · {{total}} orders"
+  },
+  "results": {
+    "title": "Enter Results",
+    "subtitle": "Record laboratory test results.",
+    "enterResults": "Enter Results",
+    "viewResults": "View Results",
+    "orderNotFound": "Order not found.",
+    "patientInfo": "Patient Info",
+    "age": "Age",
+    "gender": "Gender",
+    "notes": "Notes",
+    "resultEntries": "Result Entries",
+    "analyte": "Analyte",
+    "analyteName": "Analyte",
+    "value": "Value",
+    "unit": "Unit",
+    "referenceRange": "Reference Range",
+    "refLow": "Ref Low",
+    "refHigh": "Ref High",
+    "subPanel": "Sub-panel",
+    "flag": "Flag",
+    "auto": "auto",
+    "serverComputed": "Server-computed",
+    "flags": {
+      "NORMAL": "Normal",
+      "ABNORMAL": "Abnormal",
+      "CRITICAL": "Critical"
+    },
+    "placeholders": {
+      "analyte": "e.g. Hemoglobin",
+      "value": "e.g. 14.2",
+      "subPanel": "e.g. CBC"
+    },
+    "normal": "Normal",
+    "abnormal": "Abnormal",
+    "critical": "Critical",
+    "submitResults": "Submit Results",
+    "addRow": "Add Row",
+    "addAnalyte": "Add Analyte",
+    "loadTemplate": "Load Template",
+    "markAsComplete": "Mark as Complete",
+    "amended": "Amended",
+    "corrected": "Corrected",
+    "orderCompleted": "Order completed",
+    "orderCompletedDesc": "The order has been marked as complete.",
+    "validationError": "Validation error",
+    "validationErrorDesc": "Please check all fields before submitting.",
+    "resultAmended": "Result amended",
+    "resultAmendedDesc": "The result has been updated.",
+    "resultsSubmitted": "Results submitted"
+  },
+  "alerts": {
+    "title": "Lab Alerts",
+    "subtitle": "Laboratory notifications and critical result alerts.",
+    "noAlerts": "No alerts",
+    "unreadCount": "{{count}} unread",
+    "allCaughtUp": "All caught up",
+    "allMarkedRead": "All alerts marked as read",
+    "markAllRead": "Mark all read",
+    "markRead": "Mark read",
+    "filters": {
+      "ALL": "All",
+      "UNREAD": "Unread",
+      "NEW_ORDERS": "New orders",
+      "CRITICAL": "Critical",
+      "ABNORMAL": "Abnormal"
+    },
+    "types": {
+      "CRITICAL_RESULT": {
+        "label": "Critical result",
+        "cta": "Enter results"
+      },
+      "NEW_LAB_ORDER": {
+        "label": "New order",
+        "cta": "Open order"
+      },
+      "ABNORMAL_RESULT": {
+        "label": "Abnormal result",
+        "cta": "View results"
+      },
+      "RESULT_READY": {
+        "label": "Result ready",
+        "cta": "View results"
+      }
+    },
+    "pagination": "Page {{page}} of {{pages}} · {{total}} alerts"
+  },
+  "statusLabels": {
+    "pending": "Pending",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  }
+}

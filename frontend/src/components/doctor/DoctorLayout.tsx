@@ -16,28 +16,34 @@ import {
   DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAlerts } from '@/contexts/AlertsContext';
+import { useTranslation } from 'react-i18next';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const NAV_ITEMS = [
-  { title: 'Dashboard',   url: '/doctor/dashboard',  icon: LayoutDashboard },
-  { title: 'Patients',    url: '/doctor/patients',   icon: Users },
-  { title: 'Predictions', url: '/doctor/predictions', icon: Brain },
-  { title: 'Alerts',      url: '/doctor/alerts',     icon: Bell },
-  { title: 'Profile',     url: '/doctor/profile',    icon: UserCircle },
+  { key: 'dashboard',   url: '/doctor/dashboard',   icon: LayoutDashboard },
+  { key: 'patients',    url: '/doctor/patients',    icon: Users },
+  { key: 'predictions', url: '/doctor/predictions', icon: Brain },
+  { key: 'alerts',      url: '/doctor/alerts',      icon: Bell },
+  { key: 'profile',     url: '/doctor/profile',     icon: UserCircle },
 ];
 
 function DoctorSidebar() {
+  const { t }      = useTranslation('common');
   const { state }  = useSidebar();
   const collapsed  = state === 'collapsed';
   const { user, logout } = useAuth();
   const navigate   = useNavigate();
   const { unreadCount: unread } = useAlerts();
+  const { dir } = useLanguage();
 
   const initials = user?.username?.slice(0, 2).toUpperCase() ?? 'DR';
 
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-border bg-card shadow-[1px_0_0_0_hsl(var(--border))]"
+      side={dir === 'rtl' ? 'right' : 'left'}
+      className="border-border bg-card ltr:border-r ltr:shadow-[1px_0_0_0_hsl(var(--border))] rtl:border-l rtl:shadow-[-1px_0_0_0_hsl(var(--border))]"
     >
       <SidebarHeader className={collapsed ? "h-14 flex items-center justify-center border-b border-border p-0" : "h-14 flex items-center px-4 border-b border-border"}>
         {!collapsed ? (
@@ -65,7 +71,7 @@ function DoctorSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton asChild className={collapsed ? "justify-center" : ""}>
                     <NavLink
                       to={item.url}
@@ -79,9 +85,9 @@ function DoctorSidebar() {
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       {!collapsed && (
-                        <span className="ml-2.5 flex-1">{item.title}</span>
+                        <span className="ml-2.5 flex-1">{t(`sidebar.${item.key}`)}</span>
                       )}
-                      {!collapsed && item.title === 'Alerts' && unread > 0 && (
+                      {!collapsed && item.key === 'alerts' && unread > 0 && (
                         <span className="ml-auto bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
                           {unread > 9 ? '9+' : unread}
                         </span>
@@ -111,17 +117,17 @@ function DoctorSidebar() {
                   <span className="text-sm font-medium text-foreground truncate">
                     {user?.username}
                   </span>
-                  <span className="text-xs text-muted-foreground">Doctor</span>
+                  <span className="text-xs text-muted-foreground">{t('roles.doctor')}</span>
                 </div>
               )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="end" className="w-44 rounded-xl">
             <DropdownMenuItem onClick={() => navigate('/doctor/profile')} className="text-sm rounded-lg">
-              <UserCircle className="mr-2 h-4 w-4" /> Profile
+              <UserCircle className="mr-2 h-4 w-4" /> {t('sidebar.profile')}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive text-sm rounded-lg" onClick={logout}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+              <LogOut className="mr-2 h-4 w-4" /> {t('actions.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -133,27 +139,31 @@ function DoctorSidebar() {
 export function DoctorLayout() {
   const navigate = useNavigate();
   const { unreadCount: unread } = useAlerts();
+  const { dir } = useLanguage();
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full" dir={dir}>
         <DoctorSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top header bar */}
           <header className="h-14 flex items-center justify-between border-b border-border px-4 shrink-0 bg-card shadow-sm">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-all duration-150" />
-            <button
-              aria-label={`View alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
-              onClick={() => navigate('/doctor/alerts')}
-              className="relative flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150"
-            >
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <button
+                aria-label={`View alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
+                onClick={() => navigate('/doctor/alerts')}
+                className="relative flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150"
+              >
               <Bell className="h-4.5 w-4.5" />
               {unread > 0 && (
                 <span className="absolute top-1 right-1 bg-destructive text-destructive-foreground text-[9px] font-semibold rounded-full w-4 h-4 flex items-center justify-center">
                   {unread > 9 ? '9+' : unread}
                 </span>
               )}
-            </button>
+              </button>
+            </div>
           </header>
           {/* Page content */}
           <main className="flex-1 overflow-auto bg-background p-6">

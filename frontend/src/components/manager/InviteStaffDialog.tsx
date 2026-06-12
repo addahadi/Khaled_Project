@@ -18,6 +18,7 @@ import { useDelayedLoading } from '../../api/useDelayedLoading';
 import UpgradePrompt from '../auth/UpgradePrompt';
 import { inviteStaffSchema, flattenZodErrors } from '../../api/schemas';
 import { formatDate } from '@/lib/formatDate';
+import { useTranslation } from 'react-i18next';
 
 interface Department { department_id: string; name: string }
 interface Invitation {
@@ -36,11 +37,13 @@ interface InviteStaffDialogProps {
   onSent?: () => void;
 }
 
-const ROLE_OPTIONS = [
-  { value: 'DOCTOR',   label: 'Doctor' },
-  { value: 'LAB_TECH', label: 'Lab Technician' },
-  { value: 'MANAGER',  label: 'Manager' },
-];
+const ROLE_OPTIONS = ['DOCTOR', 'LAB_TECH', 'MANAGER'] as const;
+
+const FIELD_ERROR_KEYS: Record<string, string> = {
+  'Email is required.': 'staff.validation.emailRequired',
+  'Valid email required.': 'staff.validation.emailInvalid',
+  'Role is required.': 'staff.validation.roleRequired',
+};
 
 const STATUS_STYLE: Record<string, string> = {
   PENDING:  'bg-yellow-100 text-yellow-800',
@@ -50,6 +53,8 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaffDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('manager');
+  const { t: c } = useTranslation('common');
 
   const [email, setEmail]   = useState('');
   const [role, setRole]     = useState('');
@@ -87,9 +92,16 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
     setFieldErrors({});
   };
 
+  const roleLabel = (value: string) => t(`staff.roles.${value}`, { defaultValue: value });
+  const translateFieldErrors = (errors: Record<string, string>) =>
+    Object.fromEntries(Object.entries(errors).map(([field, message]) => [
+      field,
+      FIELD_ERROR_KEYS[message] ? t(FIELD_ERROR_KEYS[message]) : message,
+    ]));
+
   const handleSend = () => {
     const result = inviteStaffSchema.safeParse({ email, role, dept_id: deptId || undefined });
-    if (!result.success) { setFieldErrors(flattenZodErrors(result.error)); return; }
+    if (!result.success) { setFieldErrors(translateFieldErrors(flattenZodErrors(result.error))); return; }
     setFieldErrors({});
 
     ApiManager.executeMutation({
@@ -108,9 +120,9 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
         };
 
         toast({
-          title:       'Invitation sent',
+          title:       t('staff.invitationSent'),
           description: res.overage_notice
-            ? `${msg} — ${res.overage_notice.message}`
+            ? `${msg} - ${res.overage_notice.message}`
             : msg,
           variant: res.overage_notice ? 'default' : 'default',
         });
@@ -131,9 +143,9 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
         if (message.includes('trial') || message.includes('limit')) {
           setShowUpgrade(true);
         } else if (fields) {
-          setFieldErrors(fields);
+          setFieldErrors(translateFieldErrors(fields));
         } else {
-          toast({ title: 'Error', description: message, variant: 'destructive' });
+          toast({ title: t('staff.error'), description: message, variant: 'destructive' });
         }
       },
       onFinal: () => setSubmitting(false),
@@ -146,11 +158,11 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
       invalidateKeys: [['manager', 'invitations']],
       onStart: () => setCancellingId(invitationId),
       onSuccess: (_d, msg) => {
-        toast({ title: 'Cancelled', description: msg });
+        toast({ title: t('staff.cancelled'), description: msg });
         setInvitations(prev => prev.filter(i => i.invitation_id !== invitationId));
       },
       onError: ({ message }) =>
-        toast({ title: 'Error', description: message, variant: 'destructive' }),
+        toast({ title: t('staff.error'), description: message, variant: 'destructive' }),
       onFinal: () => setCancellingId(null),
     });
   };
@@ -158,20 +170,20 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" /> Invite Staff Member
+              <UserPlus className="h-5 w-5" /> {t('staff.inviteTitle')}
             </DialogTitle>
             <DialogDescription>
-              Send an email invitation. The staff member will set their password via the link.
+              {t('staff.inviteDescription')}
             </DialogDescription>
           </DialogHeader>
 
           {/* Invite form */}
           <div className="grid sm:grid-cols-3 gap-3 p-4 border rounded-lg bg-muted/20">
             <div className="space-y-1">
-              <Label className="text-xs">Email</Label>
+              <Label className="text-xs">{t('staff.table.email')}</Label>
               <Input
                 type="email"
                 placeholder="doctor@hospital.dz"
@@ -185,14 +197,14 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Role</Label>
+              <Label className="text-xs">{t('staff.table.role')}</Label>
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger className={fieldErrors.role ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder={t('staff.selectRole')} />
                 </SelectTrigger>
                 <SelectContent>
                   {ROLE_OPTIONS.map(r => (
-                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -202,10 +214,10 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Department (optional)</Label>
+              <Label className="text-xs">{t('staff.departmentOptional')}</Label>
               <Select value={deptId} onValueChange={setDeptId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select dept." />
+                  <SelectValue placeholder={t('staff.selectDepartment')} />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map(d => (
@@ -225,7 +237,7 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Send className="h-4 w-4" />
                 }
-                Send Invitation
+                {t('staff.sendInvitation')}
               </Button>
             </div>
           </div>
@@ -234,21 +246,21 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
           <div>
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              Sent Invitations
+              {t('staff.sentInvitations')}
             </h3>
             {invLoading ? (
-              <div className="text-sm text-muted-foreground text-center py-4">Loading…</div>
+              <div className="text-sm text-muted-foreground text-center py-4">{c('misc.loading')}</div>
             ) : invitations.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No invitations sent yet.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t('staff.noInvitations')}</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
+                    <TableHead>{t('staff.table.email')}</TableHead>
+                    <TableHead>{t('staff.table.role')}</TableHead>
+                    <TableHead>{t('staff.table.department')}</TableHead>
+                    <TableHead>{t('staff.table.status')}</TableHead>
+                    <TableHead>{t('staff.expires')}</TableHead>
                     <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
@@ -258,15 +270,15 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
                       <TableCell className="text-sm">{inv.email}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">
-                          {inv.role === 'LAB_TECH' ? 'Lab Tech' : inv.role.charAt(0) + inv.role.slice(1).toLowerCase()}
+                          {roleLabel(inv.role)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {inv.department_name ?? '—'}
+                        {inv.department_name ?? t('staff.noDepartment')}
                       </TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${STATUS_STYLE[inv.status] ?? ''}`}>
-                          {inv.status}
+                          {t(`staff.invitationStatus.${inv.status}`, { defaultValue: inv.status })}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">

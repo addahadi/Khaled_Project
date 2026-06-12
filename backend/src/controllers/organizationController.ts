@@ -55,7 +55,7 @@ export const registerOrganization = catchAsync(
     if (conflict) return next(new AppError('ERROR_ACCOUNT_EXISTS', 409));
 
     const [plan] = await sql`
-      SELECT plan_id, name, is_trial FROM plans
+      SELECT plan_id, name_en, name_ar, is_trial FROM plans
       WHERE plan_id = ${plan_id} AND is_active = TRUE AND deleted_at IS NULL
       LIMIT 1
     `;
@@ -118,7 +118,7 @@ export const registerOrganization = catchAsync(
         org_id:     org.organization_id,
         org_name:   org.name,
         manager_id: manager.manager_id,
-        plan_name:  plan.name,
+        plan_name:  plan.name_en,
         is_trial:   plan.is_trial,
       },
     });

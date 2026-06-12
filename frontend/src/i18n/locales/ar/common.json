@@ -1,0 +1,115 @@
+{
+  "brand": "DiagInfect",
+  "nav": {
+    "features": "المميزات",
+    "pricing": "الأسعار",
+    "about": "حول",
+    "signIn": "تسجيل الدخول",
+    "getStarted": "ابدأ الآن",
+    "getStartedFree": "ابدأ مجاناً",
+    "goToDashboard": "الذهاب إلى لوحة التحكم"
+  },
+  "sidebar": {
+    "dashboard": "لوحة التحكم",
+    "patients": "المرضى",
+    "predictions": "التنبؤات",
+    "alerts": "التنبيهات",
+    "profile": "الملف الشخصي",
+    "staff": "الموظفون",
+    "departments": "الأقسام",
+    "subscription": "الاشتراك",
+    "reports": "التقارير",
+    "labOrders": "طلبات المختبر",
+    "enterResults": "إدخال النتائج"
+  },
+  "roles": {
+    "doctor": "طبيب",
+    "labTech": "فني مختبر",
+    "manager": "مدير المستشفى"
+  },
+  "actions": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "continue": "متابعة",
+    "submit": "إرسال",
+    "search": "بحث",
+    "filter": "تصفية",
+    "viewAll": "عرض الكل",
+    "markRead": "تمييز كمقروء",
+    "signOut": "تسجيل الخروج",
+    "learnMore": "اعرف المزيد",
+    "start": "بدء",
+    "amend": "تعديل",
+    "refresh": "تحديث",
+    "export": "تصدير",
+    "remove": "إزالة"
+  },
+  "status": {
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "suspended": "معلّق",
+    "pending": "قيد الانتظار",
+    "inProgress": "قيد التنفيذ",
+    "completed": "مكتمل",
+    "cancelled": "ملغى"
+  },
+  "fields": {
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "username": "اسم المستخدم",
+    "language": "اللغة",
+    "name": "الاسم",
+    "type": "النوع",
+    "role": "الدور",
+    "department": "القسم",
+    "status": "الحالة"
+  },
+  "filters": {
+    "all": "الكل"
+  },
+  "pagination": {
+    "previous": "السابق",
+    "next": "التالي"
+  },
+  "gender": {
+    "MALE": "ذكر",
+    "FEMALE": "أنثى",
+    "OTHER": "أخرى"
+  },
+  "labels": {
+    "optional": "اختياري"
+  },
+  "misc": {
+    "noData": "لا توجد بيانات",
+    "loading": "جاري التحميل...",
+    "allClear": "لا توجد تنبيهات",
+    "copyright": "© {{year}} DiagInfect — جامعة ابن خلدون، تيارت. جميع الحقوق محفوظة.",
+    "copyrightShort": "© {{year}} DiagInfect. جميع الحقوق محفوظة.",
+    "builtWith": "مبني بـ React · TypeScript · shadcn/ui",
+    "system": "النظام",
+    "panel": "لوحة",
+    "select": "اختر...",
+    "optional": "اختياري"
+  },
+  "footer": {
+    "platform": "المنصة",
+    "company": "الشركة",
+    "access": "الوصول",
+    "security": "الأمان",
+    "roadmap": "خارطة الطريق",
+    "contact": "اتصل بنا",
+    "privacy": "الخصوصية",
+    "terms": "الشروط",
+    "home": "الرئيسية",
+    "registerOrganization": "تسجيل مؤسسة",
+    "brandDescription": "دعم تشخيص الأمراض المعدية بالذكاء الاصطناعي للمستشفيات والعيادات."
+  },
+  "language": {
+    "en": "English",
+    "ar": "العربية"
+  }
+}

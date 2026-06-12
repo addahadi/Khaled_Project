@@ -14,27 +14,33 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useTranslation } from 'react-i18next';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const NAV_ITEMS = [
-  { title: 'Dashboard',    url: '/manager/dashboard',    icon: LayoutDashboard },
-  { title: 'Staff',        url: '/manager/staff',        icon: Users },
-  { title: 'Departments',  url: '/manager/departments',  icon: Building2 },
-  { title: 'Subscription', url: '/manager/subscription', icon: CreditCard },
-  { title: 'Reports',      url: '/manager/reports',      icon: BarChart3 },
-  { title: 'Profile',      url: '/manager/profile',      icon: UserCircle },
+  { key: 'dashboard',    url: '/manager/dashboard',    icon: LayoutDashboard },
+  { key: 'staff',        url: '/manager/staff',        icon: Users },
+  { key: 'departments',  url: '/manager/departments',  icon: Building2 },
+  { key: 'subscription', url: '/manager/subscription', icon: CreditCard },
+  { key: 'reports',      url: '/manager/reports',      icon: BarChart3 },
+  { key: 'profile',      url: '/manager/profile',      icon: UserCircle },
 ];
 
 function ManagerSidebar() {
+  const { t }            = useTranslation('common');
   const { state }        = useSidebar();
   const collapsed        = state === 'collapsed';
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
   const initials         = user?.username?.slice(0, 2).toUpperCase() ?? 'MG';
+  const { dir }          = useLanguage();
 
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-border bg-card shadow-[1px_0_0_0_hsl(var(--border))]"
+      side={dir === 'rtl' ? 'right' : 'left'}
+      className="border-border bg-card ltr:border-r ltr:shadow-[1px_0_0_0_hsl(var(--border))] rtl:border-l rtl:shadow-[-1px_0_0_0_hsl(var(--border))]"
     >
       <SidebarHeader className={collapsed ? "h-14 flex items-center justify-center border-b border-border p-0" : "h-14 flex items-center px-4 border-b border-border"}>
         {!collapsed ? (
@@ -62,7 +68,7 @@ function ManagerSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton asChild className={collapsed ? "justify-center" : ""}>
                     <NavLink
                       to={item.url}
@@ -75,7 +81,7 @@ function ManagerSidebar() {
                       activeClassName="bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span className="ml-2.5">{item.title}</span>}
+                      {!collapsed && <span className="ml-2.5">{t(`sidebar.${item.key}`)}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -101,17 +107,17 @@ function ManagerSidebar() {
                   <span className="text-sm font-medium text-foreground truncate">
                     {user?.username}
                   </span>
-                  <span className="text-xs text-muted-foreground">Hospital manager</span>
+                  <span className="text-xs text-muted-foreground">{t('roles.manager')}</span>
                 </div>
               )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="end" className="w-44 rounded-xl">
             <DropdownMenuItem onClick={() => navigate('/manager/profile')} className="text-sm rounded-lg">
-              <UserCircle className="mr-2 h-4 w-4" /> Profile
+              <UserCircle className="mr-2 h-4 w-4" /> {t('sidebar.profile')}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive text-sm rounded-lg" onClick={logout}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+              <LogOut className="mr-2 h-4 w-4" /> {t('actions.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -121,13 +127,16 @@ function ManagerSidebar() {
 }
 
 export function ManagerLayout() {
+  const { dir } = useLanguage();
+
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full" dir={dir}>
         <ManagerSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center border-b border-border px-4 shrink-0 bg-card shadow-sm">
+          <header className="h-14 flex items-center justify-between border-b border-border px-4 shrink-0 bg-card shadow-sm">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-all duration-150" />
+            <LanguageToggle />
           </header>
           <main className="flex-1 overflow-auto bg-background p-6">
             <Outlet />

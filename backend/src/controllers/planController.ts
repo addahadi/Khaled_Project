@@ -6,8 +6,10 @@ export const getPlans = catchAsync(async (_req: Request, res: Response) => {
   const plans = await sql`
     SELECT
       p.plan_id,
-      p.name,
-      p.description,
+      p.name_en,
+      p.name_ar,
+      p.description_en,
+      p.description_ar,
       p.price_monthly,
       p.price_annually,
       p.is_trial,
@@ -16,10 +18,11 @@ export const getPlans = catchAsync(async (_req: Request, res: Response) => {
         JSON_AGG(
           JSON_BUILD_OBJECT(
             'feature_id', pf.feature_id,
-            'name',       pf.name,
+            'name_en',    pf.name_en,
+            'name_ar',    pf.name_ar,
             'is_enabled', pf.is_enabled,
             'value',      pf.value
-          ) ORDER BY pf.name
+          ) ORDER BY pf.name_en
         ) FILTER (WHERE pf.feature_id IS NOT NULL),
         '[]'
       ) AS features
@@ -40,8 +43,10 @@ export const getPlanById = catchAsync(async (req: Request, res: Response) => {
   const [plan] = await sql`
     SELECT
       p.plan_id,
-      p.name,
-      p.description,
+      p.name_en,
+      p.name_ar,
+      p.description_en,
+      p.description_ar,
       p.price_monthly,
       p.price_annually,
       p.is_trial,
@@ -49,7 +54,8 @@ export const getPlanById = catchAsync(async (req: Request, res: Response) => {
         JSON_AGG(
           JSON_BUILD_OBJECT(
             'feature_id', pf.feature_id,
-            'name',       pf.name,
+            'name_en',    pf.name_en,
+            'name_ar',    pf.name_ar,
             'is_enabled', pf.is_enabled,
             'value',      pf.value
           )

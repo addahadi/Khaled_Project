@@ -118,3 +118,21 @@
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 }
+
+/* ── RTL / Arabic support ──────────────────────────────────────────────────── */
+html[lang="ar"] body {
+  font-family: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* RTL sidebar border flip */
+html[dir="rtl"] [data-sidebar="sidebar"] {
+  border-right: none;
+  border-left: 1px solid hsl(var(--border));
+  box-shadow: -1px 0 0 0 hsl(var(--border));
+}
+
+/* RTL dropdown menu positioning */
+html[dir="rtl"] [data-side="right"] {
+  --radix-popper-transform-origin: left center;
+}
+

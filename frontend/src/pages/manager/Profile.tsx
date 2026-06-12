@@ -7,180 +7,110 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  UserCircle, Mail, Building2, Calendar, MapPin,
-  Pencil, Loader2, X, Check,
-} from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { UserCircle, Mail, Building2, Pencil, Loader2, X, Check, ShieldCheck } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
-import { formatDate } from '@/lib/formatDate';
+import { useTranslation } from 'react-i18next';
 
-interface UserProfile {
-  user_id:        string; username: string; email: string;
-  org_name:       string | null; department_id: string | null;
-  preferred_lang: string; status: string; role: string;
-  created_at?:    string;
-}
-
-interface OrganizationProfile {
-  organization_id: string;
-  name: string;
-  type: string;
-  email: string;
-  address: string;
-  created_at: string;
+interface Profile {
+  user_id: string; username: string; email: string;
+  org_name: string | null; status: string;
+  preferred_lang: string; role: string;
 }
 
 export default function ManagerProfile() {
+  const { t } = useTranslation('manager');
+  const { t: c } = useTranslation('common');
   const { user } = useAuth();
   const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
 
-  // Edit mode for Manager
-  const [editing, setEditing]   = useState(false);
+  const [profile,  setProfile]  = useState<Profile | null>(null);
+  const [editing,  setEditing]  = useState(false);
   const [editForm, setEditForm] = useState({ username: '', preferred_lang: 'en' });
-  const [saving, setSaving]     = useState(false);
-
-  // Edit mode for Org
-  const [orgEditing, setOrgEditing] = useState(false);
-  const [orgEditForm, setOrgEditForm] = useState({ name: '', type: '', email: '', address: '' });
-  const [orgSaving, setOrgSaving] = useState(false);
+  const [saving,   setSaving]   = useState(false);
 
   useEffect(() => {
     ApiManager.execute({
       queryKey: ['auth', 'me'],
-      endpoint: '/auth/me',
+      endpoint:  '/auth/me',
       onStart:   startLoading,
-      onSuccess: (data: unknown) => setProfile((data as { user: UserProfile }).user),
+      onSuccess: (d) => setProfile((d as { user: Profile }).user),
       onFinal:   stopLoading,
     });
-    if (user?.role === 'MANAGER') {
-      ApiManager.execute({
-        queryKey: ['manager', 'organization'],
-        endpoint: '/manager/organization',
-        onSuccess: (data: unknown) => setOrgProfile((data as { organization: OrganizationProfile }).organization),
-      });
-    }
-  }, [user?.role, startLoading, stopLoading]);
+  }, []);
 
   useEffect(() => {
-    if (profile && editing) {
-      setEditForm({ username: profile.username, preferred_lang: profile.preferred_lang });
-    }
+    if (profile && editing) setEditForm({ username: profile.username, preferred_lang: profile.preferred_lang });
   }, [editing, profile]);
-
-  useEffect(() => {
-    if (orgProfile && orgEditing) {
-      setOrgEditForm({
-        name: orgProfile.name || '',
-        type: orgProfile.type || '',
-        email: orgProfile.email || '',
-        address: orgProfile.address || '',
-      });
-    }
-  }, [orgEditing, orgProfile]);
 
   const handleSave = () => {
     if (!editForm.username.trim()) {
-      toast({ title: 'Validation Error', description: 'Username cannot be empty.', variant: 'destructive' });
+      toast({ title: t('profile.validationError'), description: t('profile.usernameRequired'), variant: 'destructive' });
       return;
     }
     ApiManager.executeMutation({
-      mutationFn: () => apiClient.patch('/auth/profile', {
-        username:       editForm.username.trim(),
-        preferred_lang: editForm.preferred_lang,
-      }),
+      mutationFn: () => apiClient.patch('/auth/profile', { username: editForm.username.trim(), preferred_lang: editForm.preferred_lang }),
       invalidateKeys: [['auth', 'me']],
       onStart:   () => setSaving(true),
-      onSuccess: (_data: unknown, msg: string) => {
-        toast({ title: 'Profile updated', description: msg || 'Your profile has been saved.' });
-        setProfile(prev => prev
-          ? { ...prev, username: editForm.username.trim(), preferred_lang: editForm.preferred_lang }
-          : prev);
+      onSuccess: (_d, msg) => {
+        toast({ title: t('profile.updated'), description: msg || t('profile.saved') });
+        setProfile(prev => prev ? { ...prev, username: editForm.username.trim(), preferred_lang: editForm.preferred_lang } : prev);
         setEditing(false);
       },
-      onError: ({ message }: { message: string }) => {
-        toast({ title: 'Error', description: message, variant: 'destructive' });
-      },
+      onError: ({ message }) => toast({ title: t('profile.error'), description: message, variant: 'destructive' }),
       onFinal: () => setSaving(false),
     });
   };
 
-  const handleOrgSave = () => {
-    if (!orgEditForm.name.trim()) {
-      toast({ title: 'Validation Error', description: 'Organization name cannot be empty.', variant: 'destructive' });
-      return;
-    }
-    ApiManager.executeMutation({
-      mutationFn: () => apiClient.patch('/manager/organization', {
-        name: orgEditForm.name.trim(),
-        type: orgEditForm.type,
-        email: orgEditForm.email.trim(),
-        address: orgEditForm.address.trim(),
-      }),
-      invalidateKeys: [['manager', 'organization']],
-      onStart: () => setOrgSaving(true),
-      onSuccess: (data: unknown, msg: string) => {
-        toast({ title: 'Organization updated', description: msg || 'Organization profile has been saved.' });
-        setOrgProfile((data as { organization: OrganizationProfile }).organization);
-        setOrgEditing(false);
-      },
-      onError: ({ message }: { message: string }) => {
-        toast({ title: 'Error', description: message, variant: 'destructive' });
-      },
-      onFinal: () => setOrgSaving(false),
-    });
-  };
-
-  const initials = profile?.username?.slice(0, 2).toUpperCase()
-    ?? user?.username?.slice(0, 2).toUpperCase() ?? 'MG';
+  const initials = profile?.username?.slice(0, 2).toUpperCase() ?? user?.username?.slice(0, 2).toUpperCase() ?? 'MG';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-xl">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">My Profile</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('profile.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t('profile.manageAccount')}</p>
+        </div>
         {!editing && profile && (
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
-            <Pencil className="h-3.5 w-3.5" /> Edit
+            <Pencil className="h-3.5 w-3.5" /> {c('actions.edit')}
           </Button>
         )}
       </div>
 
       {/* Avatar card */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-5">
           {isLoading ? (
             <div className="flex items-center gap-4">
               <Skeleton className="h-16 w-16 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-4 w-24" />
-              </div>
+              <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-4 w-28" /></div>
             </div>
           ) : (
             <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarFallback className="text-xl font-bold bg-violet-600 text-white">
-                  {initials}
-                </AvatarFallback>
+              <Avatar className="h-16 w-16 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
+                <AvatarFallback className="text-xl font-semibold bg-primary text-primary-foreground">{initials}</AvatarFallback>
               </Avatar>
               <div>
-                <h2 className="text-xl font-bold">{profile?.username}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge className="text-xs bg-violet-100 text-violet-800">
-                    {profile?.role === 'LAB_TECH' ? 'Lab Technician' : 'Manager'}
-                  </Badge>
-                  <Badge
-                    variant={profile?.status === 'ACTIVE' ? 'default' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {profile?.status}
-                  </Badge>
+                <h2 className="text-lg font-semibold text-foreground">{profile?.username}</h2>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#2e368f]/10 text-[#2e368f] border border-[#2e368f]/20">
+                    <ShieldCheck className="h-3 w-3" />
+                    {t(`staff.roles.${profile?.role}`, { defaultValue: profile?.role ?? '' })}
+                  </span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                    profile?.status === 'ACTIVE'
+                      ? 'bg-[#00a89c]/10 text-[#007a71] border-[#00a89c]/25'
+                      : 'bg-muted text-muted-foreground border-border'
+                  }`}>
+                    {t(`staff.status.${profile?.status}`, { defaultValue: profile?.status ?? '' })}
+                  </span>
                 </div>
               </div>
             </div>
@@ -190,90 +120,68 @@ export default function ManagerProfile() {
 
       {/* Details card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <UserCircle className="h-4 w-4" /> Account Details
+        <CardHeader className="px-5 pt-5 pb-3">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {t('profile.accountDetails')}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-5">
           {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
+            <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>
           ) : editing ? (
-            /* ── Edit mode ── */
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="edit-username">Username</Label>
-                <Input
-                  id="edit-username"
-                  value={editForm.username}
-                  onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
-                />
+                <Label className="text-sm">{t('profile.username')}</Label>
+                <Input value={editForm.username} onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))} />
               </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+              <div className="flex items-center gap-3 p-3 rounded-[var(--radius)] bg-muted/50 border border-border">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                   <Mail className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <p className="text-sm font-medium">{profile?.email ?? '—'}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">{t('profile.email')}</p>
+                  <p className="text-sm font-medium truncate">{profile?.email ?? '—'}</p>
                 </div>
-                <Badge variant="secondary" className="ml-auto text-xs">Read-only</Badge>
+                <Badge variant="secondary" className="text-xs shrink-0">{t('profile.readOnly')}</Badge>
               </div>
-
               <div className="space-y-1.5">
-                <Label>Preferred Language</Label>
-                <Select
-                  value={editForm.preferred_lang}
-                  onValueChange={v => setEditForm(prev => ({ ...prev, preferred_lang: v }))}
-                >
+                <Label className="text-sm">{t('profile.language')}</Label>
+                <Select value={editForm.preferred_lang} onValueChange={v => setEditForm(prev => ({ ...prev, preferred_lang: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">العربية</SelectItem>
+                    <SelectItem value="en">{c('language.en')}</SelectItem>
+                    <SelectItem value="ar">{c('language.ar')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+              <div className="flex items-center gap-3 p-3 rounded-[var(--radius)] bg-muted/50 border border-border">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Organization</p>
-                  <p className="text-sm font-medium">{profile?.org_name ?? 'Not linked'}</p>
+                  <p className="text-xs text-muted-foreground">{t('profile.organization')}</p>
+                  <p className="text-sm font-medium">{profile?.org_name ?? t('profile.notLinked')}</p>
                 </div>
               </div>
-
-              <div className="flex gap-2 pt-2 border-t">
-                <Button
-                  variant="outline" className="flex-1 gap-1"
-                  onClick={() => setEditing(false)} disabled={saving}
-                >
-                  <X className="h-3.5 w-3.5" /> Cancel
+              <div className="flex gap-2 pt-2 border-t border-border">
+                <Button variant="outline" className="flex-1 gap-1.5" onClick={() => setEditing(false)} disabled={saving}>
+                  <X className="h-3.5 w-3.5" /> {c('actions.cancel')}
                 </Button>
-                <Button className="flex-1 gap-1" onClick={handleSave} disabled={saving}>
-                  {saving
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Check className="h-3.5 w-3.5" />}
-                  Save Changes
+                <Button className="flex-1 gap-1.5" onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  {c('actions.save')}
                 </Button>
               </div>
             </div>
           ) : (
-            /* ── View mode ── */
-            <div className="space-y-4">
+            <div className="space-y-2">
               {[
-                { icon: UserCircle, label: 'Username',     value: profile?.username },
-                { icon: Mail,       label: 'Email',        value: profile?.email },
-                { icon: Building2,  label: 'Organization', value: profile?.org_name ?? 'Not linked' },
-                { icon: MapPin,     label: 'Language',     value: profile?.preferred_lang === 'ar' ? 'Arabic' : 'English' },
-                ...(profile?.created_at ? [{ icon: Calendar, label: 'Member since', value: formatDate(profile.created_at) }] : []),
+                { icon: UserCircle,  label: t('profile.username'),     value: profile?.username                               },
+                { icon: Mail,        label: t('profile.email'),        value: profile?.email                                  },
+                { icon: Building2,   label: t('profile.organization'), value: profile?.org_name ?? t('profile.notLinked')     },
               ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                <div key={label} className="flex items-center gap-3 p-3 rounded-[var(--radius)] hover:bg-muted/50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Icon className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
@@ -286,111 +194,6 @@ export default function ManagerProfile() {
           )}
         </CardContent>
       </Card>
-
-      {/* Organization Details Card */}
-      {user?.role === 'MANAGER' && (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Building2 className="h-4 w-4" /> Organization Details
-          </CardTitle>
-          {!orgEditing && orgProfile && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setOrgEditing(true)}>
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {isLoading && !orgProfile ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : orgEditing ? (
-            /* ── Org Edit mode ── */
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-org-name">Organization Name</Label>
-                <Input
-                  id="edit-org-name"
-                  value={orgEditForm.name}
-                  onChange={e => setOrgEditForm(prev => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Organization Type</Label>
-                <Select
-                  value={orgEditForm.type}
-                  onValueChange={v => setOrgEditForm(prev => ({ ...prev, type: v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="HOSPITAL">Hospital</SelectItem>
-                    <SelectItem value="CLINIC">Clinic</SelectItem>
-                    <SelectItem value="LAB">Laboratory</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-org-email">Contact Email</Label>
-                <Input
-                  id="edit-org-email"
-                  type="email"
-                  value={orgEditForm.email}
-                  onChange={e => setOrgEditForm(prev => ({ ...prev, email: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-org-address">Address</Label>
-                <Input
-                  id="edit-org-address"
-                  value={orgEditForm.address}
-                  onChange={e => setOrgEditForm(prev => ({ ...prev, address: e.target.value }))}
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t">
-                <Button
-                  variant="outline" className="flex-1 gap-1"
-                  onClick={() => setOrgEditing(false)} disabled={orgSaving}
-                >
-                  <X className="h-3.5 w-3.5" /> Cancel
-                </Button>
-                <Button className="flex-1 gap-1" onClick={handleOrgSave} disabled={orgSaving}>
-                  {orgSaving
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Check className="h-3.5 w-3.5" />}
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* ── Org View mode ── */
-            <div className="space-y-4">
-              {[
-                { icon: Building2, label: 'Organization Name', value: orgProfile?.name },
-                { icon: Building2, label: 'Type',              value: orgProfile?.type === 'HOSPITAL' ? 'Hospital' : orgProfile?.type === 'CLINIC' ? 'Clinic' : orgProfile?.type === 'LAB' ? 'Laboratory' : 'Other' },
-                { icon: Mail,      label: 'Contact Email',     value: orgProfile?.email },
-                { icon: MapPin,    label: 'Address',           value: orgProfile?.address },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-sm font-medium">{value || '—'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      )}
     </div>
   );
 }

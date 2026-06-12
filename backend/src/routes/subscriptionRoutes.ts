@@ -8,9 +8,12 @@ import {
   getUsage,
   getOverageEvents,
   cancelSubscription,
+  verifyChangePlan,
 } from '../controllers/subscriptionController.js';
 
 const router = Router();
+
+router.post('/verify-change', verifyChangePlan);
 
 router.use(authenticate);
 router.use(requireRole('MANAGER'));

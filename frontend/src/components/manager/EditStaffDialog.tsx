@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, UserCog } from 'lucide-react';
 import ApiManager from '../../api/ApiManager';
 import apiClient from '../../api/apiClient';
+import { useTranslation } from 'react-i18next';
 
 interface Department { department_id: string; name: string }
 
@@ -24,6 +25,8 @@ interface EditStaffDialogProps {
 
 export default function EditStaffDialog({ open, onClose, onSaved, staff }: EditStaffDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('manager');
+  const { t: c } = useTranslation('common');
 
   const [username, setUsername] = useState('');
   const [deptId, setDeptId] = useState('');
@@ -59,12 +62,12 @@ export default function EditStaffDialog({ open, onClose, onSaved, staff }: EditS
       invalidateKeys: [['manager', 'staff']],
       onStart: () => setSubmitting(true),
       onSuccess: (_d, msg) => {
-        toast({ title: 'Profile updated', description: msg });
+        toast({ title: t('staff.edit.profileUpdated'), description: msg });
         onSaved?.();
         onClose();
       },
       onError: ({ message }) => {
-        toast({ title: 'Error', description: message, variant: 'destructive' });
+        toast({ title: t('staff.error'), description: message, variant: 'destructive' });
       },
       onFinal: () => setSubmitting(false),
     });
@@ -75,31 +78,31 @@ export default function EditStaffDialog({ open, onClose, onSaved, staff }: EditS
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserCog className="h-5 w-5" /> Edit Staff Profile
+            <UserCog className="h-5 w-5" /> {t('staff.edit.title')}
           </DialogTitle>
           <DialogDescription>
-            Update department or username. Role changes require deleting and re-inviting the staff member.
+            {t('staff.edit.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label>{t('staff.table.name')}</Label>
             <Input
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="Full name"
+              placeholder={t('staff.edit.namePlaceholder')}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Department</Label>
+            <Label>{t('staff.table.department')}</Label>
             <Select value={deptId} onValueChange={setDeptId}>
               <SelectTrigger>
-                <SelectValue placeholder="Select dept." />
+                <SelectValue placeholder={t('staff.selectDepartment')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No Department</SelectItem>
+                <SelectItem value="none">{t('staff.noDepartment')}</SelectItem>
                 {departments.map(d => (
                   <SelectItem key={d.department_id} value={d.department_id}>{d.name}</SelectItem>
                 ))}
@@ -109,10 +112,10 @@ export default function EditStaffDialog({ open, onClose, onSaved, staff }: EditS
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{c('actions.cancel')}</Button>
           <Button onClick={handleSave} disabled={submitting || !username}>
             {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Changes
+            {t('staff.edit.saveChanges')}
           </Button>
         </DialogFooter>
       </DialogContent>

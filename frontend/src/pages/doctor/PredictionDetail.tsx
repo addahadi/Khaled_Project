@@ -16,6 +16,7 @@ import { formatDateTime, timeAgo } from '@/lib/formatDate';
 import { getRiskConfig } from '@/lib/riskConfig';
 import type { RiskLevel } from '@/lib/riskConfig';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTranslation, Trans } from 'react-i18next';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,6 +201,8 @@ function RingGauge({ value, color, trackColor, size = 80, strokeWidth = 7 }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function PredictionDetailPage() {
+  const { t } = useTranslation('doctor');
+  const { t: c } = useTranslation('common');
   const { predictionId } = useParams<{ predictionId: string }>();
   const navigate = useNavigate();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
@@ -277,7 +280,7 @@ export default function PredictionDetailPage() {
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <button onClick={() => navigate('/doctor/predictions')}
           className="hover:text-primary transition-colors flex items-center gap-1.5">
-          <ArrowLeft className="h-3.5 w-3.5" /> Predictions
+          <ArrowLeft className="h-3.5 w-3.5" /> {t('predictions.title')}
         </button>
         <span className="text-border">/</span>
         <span className="text-foreground font-medium truncate">
@@ -301,9 +304,9 @@ export default function PredictionDetailPage() {
                 </div>
                 <div>
                   <p className={`text-3xl font-bold tracking-tight ${heroCfg.color}`}>
-                    {prediction.risk_level}
+                    {t(`patients.riskLevels.${prediction.risk_level}`) ?? prediction.risk_level}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">Infection Risk Level</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{t('predictionDetail.infectionRiskLevel')}</p>
                 </div>
               </div>
 
@@ -318,7 +321,7 @@ export default function PredictionDetailPage() {
                 <div className="text-left">
                   <p className="text-sm font-medium text-foreground">{prediction.patient_name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {prediction.patient_age} yrs · {prediction.patient_gender?.charAt(0)}{prediction.patient_gender?.slice(1).toLowerCase()}
+                    {prediction.patient_age} {t('dashboard.yrs')} · {c(`gender.${prediction.patient_gender}`) ?? (prediction.patient_gender?.charAt(0) + prediction.patient_gender?.slice(1).toLowerCase())}
                   </p>
                 </div>
               </button>
@@ -327,7 +330,7 @@ export default function PredictionDetailPage() {
             {/* Risk score bar */}
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-muted-foreground font-medium">Risk Score</span>
+                <span className="text-muted-foreground font-medium">{t('predictionDetail.riskScore')}</span>
                 <span className={`font-bold text-lg ${heroCfg.color}`}>
                   {prediction.risk_score !== null ? `${Math.round(prediction.risk_score * 100)}%` : '—'}
                 </span>
@@ -345,13 +348,13 @@ export default function PredictionDetailPage() {
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-1 cursor-help">
                       <Info className="h-3 w-3" />
-                      Confidence: <span className="font-medium text-foreground">
+                      {t('predictionDetail.confidence')}: <span className="font-medium text-foreground">
                         {prediction.confidence !== null ? `${Math.round(prediction.confidence * 100)}%` : '—'}
                       </span>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
-                    Confidence reflects data completeness and freshness. Higher values mean more clinical data was available for scoring.
+                    {t('predictionDetail.confidenceTooltip')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -359,7 +362,7 @@ export default function PredictionDetailPage() {
               <span className="text-border">·</span>
               <span className="inline-flex items-center gap-1">
                 <Brain className="h-3 w-3" />
-                Model: {prediction.model_version}
+                {t('predictionDetail.model')}: {prediction.model_version}
               </span>
               <span className="text-border">·</span>
               <span className="inline-flex items-center gap-1">
@@ -369,7 +372,7 @@ export default function PredictionDetailPage() {
               {prediction.requested_by_name && (
                 <>
                   <span className="text-border">·</span>
-                  <span>By Dr. {prediction.requested_by_name}</span>
+                  <span>{t('predictionDetail.by')} {t('predictionDetail.dr')} {prediction.requested_by_name}</span>
                 </>
               )}
             </div>
@@ -378,7 +381,7 @@ export default function PredictionDetailPage() {
             {prediction.clinical_data_stale && (
               <div className="flex gap-2 p-3 bg-[#faaf3a]/10 rounded-lg border border-[#faaf3a]/25 text-xs text-[#a2680a]">
                 <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span>Clinical data was stale at prediction time. Confidence may be reduced.</span>
+                <span>{t('predictionDetail.staleWarning')}</span>
               </div>
             )}
           </CardContent>
@@ -390,7 +393,7 @@ export default function PredictionDetailPage() {
         <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-              <TrendingUp className="h-4 w-4" /> Scoring Breakdown
+              <TrendingUp className="h-4 w-4" /> {t('predictionDetail.scoringBreakdown')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5">
@@ -404,15 +407,15 @@ export default function PredictionDetailPage() {
                     size={76}
                     strokeWidth={6}
                   />
-                  <div className="mt-2.5">
-                    <p className="text-xs font-semibold text-foreground flex items-center gap-1 justify-center">
-                      <DIcon className="h-3 w-3" style={{ color }} />
-                      {label}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Weight: {weight}
-                    </p>
-                  </div>
+                    <div className="mt-2.5">
+                      <p className="text-xs font-semibold text-foreground flex items-center gap-1 justify-center">
+                        <DIcon className="h-3 w-3" style={{ color }} />
+                        {t(`predictionDetail.domains.${key}`) ?? label}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {t('predictionDetail.weight')}: {weight}
+                      </p>
+                    </div>
                 </div>
               ))}
             </div>
@@ -425,10 +428,10 @@ export default function PredictionDetailPage() {
         <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-              <Activity className="h-4 w-4" /> Clinical Data Used
+              <Activity className="h-4 w-4" /> {t('predictionDetail.clinicalDataUsed')}
               {prediction.clinical_data_stale && (
                 <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 flex items-center gap-1 normal-case tracking-normal">
-                  <Clock className="h-2.5 w-2.5" /> Stale at prediction time
+                  <Clock className="h-2.5 w-2.5" /> {t('predictionDetail.staleAtPrediction')}
                 </span>
               )}
             </CardTitle>
@@ -439,28 +442,28 @@ export default function PredictionDetailPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {vitals.temperature != null && (
                   <VitalChip
-                    label="Temp" unit="°C" icon={Thermometer}
+                    label={t('predictionDetail.vitals.temp')} unit="°C" icon={Thermometer}
                     value={String(vitals.temperature)}
                     sev={vitalSev('temp', vitals.temperature)}
                   />
                 )}
                 {vitals.heart_rate != null && (
                   <VitalChip
-                    label="Heart Rate" unit="bpm" icon={Heart}
+                    label={t('predictionDetail.vitals.hr')} unit="bpm" icon={Heart}
                     value={String(vitals.heart_rate)}
                     sev={vitalSev('hr', vitals.heart_rate)}
                   />
                 )}
                 {vitals.spo2 != null && (
                   <VitalChip
-                    label="SpO₂" unit="%" icon={Wind}
+                    label={t('predictionDetail.vitals.spo2')} unit="%" icon={Wind}
                     value={String(vitals.spo2)}
                     sev={vitalSev('spo2', vitals.spo2)}
                   />
                 )}
                 {vitals.blood_pressure_systolic != null && (
                   <VitalChip
-                    label="Blood Pressure" unit="" icon={Gauge}
+                    label={t('predictionDetail.vitals.bp')} unit="" icon={Gauge}
                     value={`${vitals.blood_pressure_systolic}/${vitals.blood_pressure_diastolic ?? '?'}`}
                     sev={vitalSev('bp_sys', vitals.blood_pressure_systolic)}
                   />
@@ -472,7 +475,7 @@ export default function PredictionDetailPage() {
             {symptoms.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Reported Symptoms ({symptoms.length})
+                  {t('predictionDetail.reportedSymptoms')} ({symptoms.length})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {symptoms.map((s, i) => (
@@ -488,15 +491,15 @@ export default function PredictionDetailPage() {
             {prediction.clinical_recorded_at && (
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Observed {timeAgo(prediction.clinical_recorded_at)}
-                {prediction.clinical_visit_date && ` · Visit ${prediction.clinical_visit_date}`}
+                {t('predictionDetail.observed')} {timeAgo(prediction.clinical_recorded_at)}
+                {prediction.clinical_visit_date && ` · ${t('predictionDetail.visit')} ${prediction.clinical_visit_date}`}
               </p>
             )}
 
             {/* No data fallback */}
             {!vitals && symptoms.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No clinical data was linked to this prediction.
+                {t('predictionDetail.noClinicalDataLinked')}
               </p>
             )}
           </CardContent>
@@ -511,9 +514,9 @@ export default function PredictionDetailPage() {
               <AlertTriangle className="h-4 w-4 text-[#a2680a]" />
             </div>
             <div>
-              <p className="text-sm font-medium text-[#a2680a]">No Clinical Data</p>
+              <p className="text-sm font-medium text-[#a2680a]">{t('predictionDetail.noClinicalData')}</p>
               <p className="text-xs text-[#a2680a]/80 mt-0.5">
-                This prediction was run without any linked clinical data. Accuracy and confidence are reduced.
+                {t('predictionDetail.noClinicalDataDesc')}
               </p>
             </div>
           </CardContent>
@@ -525,7 +528,7 @@ export default function PredictionDetailPage() {
         <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-              <TrendingUp className="h-4 w-4" /> Feature Explanations (XAI)
+              <TrendingUp className="h-4 w-4" /> {t('predictionDetail.featureExplanations')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5">
@@ -574,11 +577,11 @@ export default function PredictionDetailPage() {
             <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm bg-[#c0272d]/50" />
-                <span className="text-xs text-muted-foreground">↑ Increases infection risk</span>
+                <span className="text-xs text-muted-foreground">{t('predictionDetail.increasesRisk')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm bg-[#00a89c]/50" />
-                <span className="text-xs text-muted-foreground">↓ Decreases infection risk</span>
+                <span className="text-xs text-muted-foreground">{t('predictionDetail.decreasesRisk')}</span>
               </div>
             </div>
           </CardContent>
@@ -591,13 +594,13 @@ export default function PredictionDetailPage() {
           variant="outline" className="gap-2 flex-1"
           onClick={() => navigate(`/doctor/patients/${prediction.patient_id}`)}
         >
-          <User className="h-4 w-4" /> View Patient
+          <User className="h-4 w-4" /> {t('predictionDetail.viewPatient')}
         </Button>
         <Button
           className="gap-2 flex-1"
           onClick={() => navigate('/doctor/predictions/new', { state: { patientId: prediction.patient_id } })}
         >
-          <Brain className="h-4 w-4" /> Run New Prediction
+          <Brain className="h-4 w-4" /> {t('predictionDetail.runNewPrediction')}
         </Button>
       </div>
     </div>

@@ -3,7 +3,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { queryClient }   from '@/api/queryClientSetup';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 import ProtectedRoute    from '@/components/auth/ProtectedRoute';
+import '@/i18n';
 
 // ─── Layouts ──────────────────────────────────────────────────────────────────
 import { DoctorLayout }  from '@/components/doctor/DoctorLayout';
@@ -21,6 +23,7 @@ import ActivateAccount      from '@/pages/auth/ActivateAccount';      // invitat
 import ForgotPassword       from '@/pages/auth/ForgotPassword';       // password reset stub
 import ResetPassword        from '@/pages/auth/ResetPassword';
 import VerifyEmail          from '@/pages/auth/VerifyEmail';
+import VerifySubscriptionChange from '@/pages/manager/VerifySubscriptionChange';
 
 // ─── Doctor pages ─────────────────────────────────────────────────────────────
 import DoctorDashboard   from '@/pages/doctor/Dashboard';
@@ -66,6 +69,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <LanguageProvider>
           <Routes>
 
             {/* ── Public ────────────────────────────────────────────────── */}
@@ -87,6 +91,7 @@ export default function App() {
             <Route path="/verify-email"           element={<VerifyEmail />} />
             <Route path="/forgot-password"        element={<ForgotPassword />} />
             <Route path="/reset-password"         element={<ResetPassword />} />
+            <Route path="/verify-subscription"    element={<VerifySubscriptionChange />} />
 
             {/* ── Doctor panel ──────────────────────────────────────────── */}
             <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
@@ -134,6 +139,7 @@ export default function App() {
 
           </Routes>
           <Toaster />
+          </LanguageProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

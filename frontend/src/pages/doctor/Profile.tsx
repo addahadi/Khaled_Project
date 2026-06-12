@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
+import { useTranslation } from 'react-i18next';
 
 interface Profile {
   user_id: string; username: string; email: string;
@@ -21,6 +22,7 @@ interface Profile {
 }
 
 export default function DoctorProfile() {
+  const { t } = useTranslation(['doctor', 'common']);
   const { user } = useAuth();
   const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
@@ -47,7 +49,7 @@ export default function DoctorProfile() {
 
   const handleSave = () => {
     if (!editForm.username.trim()) {
-      toast({ title: 'Validation Error', description: 'Username cannot be empty.', variant: 'destructive' });
+      toast({ title: t('profile.validationError'), description: t('profile.usernameEmpty'), variant: 'destructive' });
       return;
     }
     ApiManager.executeMutation({
@@ -58,12 +60,12 @@ export default function DoctorProfile() {
       invalidateKeys: [['auth', 'me']],
       onStart:   () => setSaving(true),
       onSuccess: (_data: unknown, msg: string) => {
-        toast({ title: 'Profile updated', description: msg || 'Your profile has been saved.' });
+        toast({ title: t('profile.profileUpdated'), description: msg || t('profile.profileSaved') });
         setProfile(prev => prev ? { ...prev, username: editForm.username.trim(), preferred_lang: editForm.preferred_lang } : prev);
         setEditing(false);
       },
       onError: ({ message }: { message: string }) => {
-        toast({ title: 'Error', description: message, variant: 'destructive' });
+        toast({ title: t('profile.error'), description: message, variant: 'destructive' });
       },
       onFinal: () => setSaving(false),
     });
@@ -78,12 +80,12 @@ export default function DoctorProfile() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">My Profile</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Manage your account settings</p>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('profile.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t('profile.subtitle')}</p>
         </div>
         {!editing && profile && (
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
-            <Pencil className="h-3.5 w-3.5" /> Edit
+            <Pencil className="h-3.5 w-3.5" /> {t('profile.editProfile')}
           </Button>
         )}
       </div>
@@ -110,7 +112,7 @@ export default function DoctorProfile() {
                 <h2 className="text-lg font-semibold text-foreground">{profile?.username}</h2>
                 <div className="flex items-center gap-2 mt-1.5">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-                    Doctor
+                    {t('profile.doctor')}
                   </span>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
                     profile?.status === 'ACTIVE'
@@ -130,7 +132,7 @@ export default function DoctorProfile() {
       <Card>
         <CardHeader className="px-5 pt-5 pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-            <Stethoscope className="h-4 w-4" /> Account Details
+            <Stethoscope className="h-4 w-4" /> {t('profile.accountDetails')}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-5 pb-5">
@@ -142,7 +144,7 @@ export default function DoctorProfile() {
             /* Edit mode */
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-sm">Username</Label>
+                <Label className="text-sm">{t('profile.username')}</Label>
                 <Input
                   value={editForm.username}
                   onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
@@ -155,22 +157,22 @@ export default function DoctorProfile() {
                   <Mail className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="text-xs text-muted-foreground">{t('profile.email')}</p>
                   <p className="text-sm font-medium truncate">{profile?.email ?? '—'}</p>
                 </div>
-                <Badge variant="secondary" className="text-xs shrink-0">Read-only</Badge>
+                <Badge variant="secondary" className="text-xs shrink-0">{t('profile.readOnly')}</Badge>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Preferred Language</Label>
+                <Label className="text-sm">{t('profile.preferredLang')}</Label>
                 <Select
                   value={editForm.preferred_lang}
                   onValueChange={v => setEditForm(prev => ({ ...prev, preferred_lang: v }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">العربية</SelectItem>
+                    <SelectItem value="en">{t('profile.english')}</SelectItem>
+                    <SelectItem value="ar">{t('profile.arabic')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -181,18 +183,18 @@ export default function DoctorProfile() {
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Organization</p>
-                  <p className="text-sm font-medium">{profile?.org_name ?? 'Not linked'}</p>
+                  <p className="text-xs text-muted-foreground">{t('profile.organization')}</p>
+                  <p className="text-sm font-medium">{profile?.org_name ?? t('profile.notLinked')}</p>
                 </div>
               </div>
 
               <div className="flex gap-2 pt-2 border-t border-border">
                 <Button variant="outline" className="flex-1 gap-1.5" onClick={() => setEditing(false)} disabled={saving}>
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" /> {t('profile.cancelEdit')}
                 </Button>
                 <Button className="flex-1 gap-1.5" onClick={handleSave} disabled={saving}>
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Changes
+                  {t('profile.saveChanges')}
                 </Button>
               </div>
             </div>
@@ -200,9 +202,9 @@ export default function DoctorProfile() {
             /* View mode */
             <div className="space-y-2">
               {[
-                { icon: UserCircle,  label: 'Username',     value: profile?.username },
-                { icon: Mail,        label: 'Email',        value: profile?.email },
-                { icon: Building2,   label: 'Organization', value: profile?.org_name ?? 'Not linked' },
+                { icon: UserCircle,  label: t('profile.username'),     value: profile?.username },
+                { icon: Mail,        label: t('profile.email'),        value: profile?.email },
+                { icon: Building2,   label: t('profile.organization'), value: profile?.org_name ?? t('profile.notLinked') },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-center gap-3 p-3 rounded-[var(--radius)] hover:bg-muted/50 transition-colors">
                   <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">

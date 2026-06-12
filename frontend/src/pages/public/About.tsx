@@ -2,49 +2,32 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Target, Users, Lightbulb, Activity } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
+import { useTranslation } from 'react-i18next';
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Icon / style maps (visual-only, not translated) ──────────────────────────
 
-const VALUES = [
-  {
-    icon: Target,
-    title: 'Accuracy first',
-    desc: 'Every model is rigorously validated before deployment. Clinical safety is non-negotiable.',
-    color: 'text-primary',
-    bg: 'bg-primary/10',
-  },
-  {
-    icon: Users,
-    title: 'Clinician-centered',
-    desc: "Built with and for clinicians — our workflows mirror how hospitals actually operate.",
-    color: 'text-[#00a89c]',
-    bg: 'bg-[#00a89c]/10',
-  },
-  {
-    icon: Lightbulb,
-    title: 'Explainable AI',
-    desc: "We don't just give predictions — we explain them, building trust between AI and clinicians.",
-    color: 'text-[#2e368f]',
-    bg: 'bg-[#2e368f]/10',
-  },
-  {
-    icon: Activity,
-    title: 'Continuous learning',
-    desc: 'Our models improve over time with anonymised feedback from real clinical outcomes.',
-    color: 'text-[#88c540]',
-    bg: 'bg-[#88c540]/10',
-  },
-];
+const VALUE_ICONS = {
+  accuracy: { icon: Target,    color: 'text-primary',     bg: 'bg-primary/10'     },
+  clinician: { icon: Users,    color: 'text-[#00a89c]',   bg: 'bg-[#00a89c]/10'  },
+  xai:       { icon: Lightbulb,color: 'text-[#2e368f]',   bg: 'bg-[#2e368f]/10'  },
+  learning:  { icon: Activity, color: 'text-[#88c540]',   bg: 'bg-[#88c540]/10'  },
+} as const;
 
-const HOW_IT_WORKS = [
-  { step: '01', label: 'Input',   desc: 'CRP, CBC, ESR, NFS, temperature, clinical indicators', color: 'bg-primary/10 text-primary' },
-  { step: '02', label: 'Analyse', desc: 'Random Forest, XGBoost, and Neural Network ensemble',  color: 'bg-[#2e368f]/10 text-[#2e368f]' },
-  { step: '03', label: 'Output',  desc: 'Infection risk score + ranked factor explanations',      color: 'bg-[#00a89c]/10 text-[#00a89c]' },
+const STEP_COLORS = [
+  'bg-primary/10 text-primary',
+  'bg-[#2e368f]/10 text-[#2e368f]',
+  'bg-[#00a89c]/10 text-[#00a89c]',
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function About() {
+  const { t }  = useTranslation('landing');
+  const { t: c } = useTranslation('common');
+
+  const valueKeys = ['accuracy', 'clinician', 'xai', 'learning'] as const;
+  const stepKeys  = ['input', 'analyse', 'output'] as const;
+
   return (
     <div className="min-h-screen bg-background">
       <PublicNavbar />
@@ -62,14 +45,13 @@ export default function About() {
         />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8">
           <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
-            About DiagInfect
+            {t('about.eyebrow')}
           </p>
           <h1 className="text-4xl md:text-5xl font-semibold text-white leading-tight tracking-tight mb-6 max-w-2xl">
-            AI diagnostics built for the realities of clinical work.
+            {t('about.heroTitle')}
           </h1>
           <p className="text-lg text-white/60 max-w-xl leading-relaxed">
-            We believe AI, built responsibly, can help clinicians detect infectious diseases
-            earlier — reducing delays, antibiotic misuse, and preventable outcomes.
+            {t('about.heroDescription')}
           </p>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
@@ -83,39 +65,41 @@ export default function About() {
             {/* Mission */}
             <div>
               <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
-                Our mission
+                {t('about.missionEyebrow')}
               </p>
               <h2 className="text-3xl font-semibold text-foreground tracking-tight mb-6">
-                Close the diagnostic gap.
+                {t('about.missionTitle')}
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                Infectious disease diagnosis is time-critical. Every hour of delay carries real
-                clinical consequences — delayed treatment, inappropriate antibiotics, worse outcomes.
+                {t('about.missionP1')}
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                DiagInfect gives clinicians a powerful second opinion: one that synthesises
-                symptoms, lab data, and patient history in seconds, with full transparency
-                about how the conclusion was reached.
+                {t('about.missionP2')}
               </p>
             </div>
 
             {/* How it works */}
             <div>
               <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
-                Technology
+                {t('about.techEyebrow')}
               </p>
               <h2 className="text-3xl font-semibold text-foreground tracking-tight mb-8">
-                How it works.
+                {t('about.techTitle')}
               </h2>
               <div className="space-y-5">
-                {HOW_IT_WORKS.map(({ step, label, desc, color }) => (
-                  <div key={step} className="flex gap-4 items-start pb-5 border-b border-border last:border-0 last:pb-0">
-                    <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center text-xs font-bold shrink-0`}>
-                      {step}
+                {stepKeys.map((key, i) => (
+                  <div key={key} className="flex gap-4 items-start pb-5 border-b border-border last:border-0 last:pb-0">
+                    <div className={`w-9 h-9 rounded-lg ${STEP_COLORS[i]} flex items-center justify-center text-xs font-bold shrink-0`}>
+                      {String(i + 1).padStart(2, '0')}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-foreground mb-1">{label}</p>
-                      <p className="text-sm text-muted-foreground">{desc}</p>
+                      {/* UI label translated; description contains medical/algorithm terms kept in English */}
+                      <p className="text-sm font-semibold text-foreground mb-1">
+                        {t(`about.steps.${key}.label`)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {t(`about.steps.${key}.description`)}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -130,25 +114,32 @@ export default function About() {
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
           <div className="mb-14 max-w-2xl">
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
-              Principles
+              {t('about.valuesEyebrow')}
             </p>
             <h2 className="text-3xl font-semibold text-foreground tracking-tight">
-              What we stand for.
+              {t('about.valuesTitle')}
             </h2>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {VALUES.map(({ icon: Icon, title, desc, color, bg }) => (
-              <div
-                key={title}
-                className="bg-card border border-border rounded-[var(--radius)] p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200"
-              >
-                <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center mb-5`}>
-                  <Icon className={`h-5 w-5 ${color}`} />
+            {valueKeys.map((key) => {
+              const { icon: Icon, color, bg } = VALUE_ICONS[key];
+              return (
+                <div
+                  key={key}
+                  className="bg-card border border-border rounded-[var(--radius)] p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200"
+                >
+                  <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center mb-5`}>
+                    <Icon className={`h-5 w-5 ${color}`} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground mb-3">
+                    {t(`about.values.${key}.title`)}
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {t(`about.values.${key}.description`)}
+                  </p>
                 </div>
-                <h3 className="text-sm font-semibold text-foreground mb-3">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -159,10 +150,10 @@ export default function About() {
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8 py-20 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
           <div>
             <h2 className="text-3xl font-semibold text-primary-foreground mb-3 tracking-tight">
-              Ready to see it in action?
+              {t('about.ctaTitle')}
             </h2>
             <p className="text-primary-foreground/70 text-base leading-relaxed">
-              Start a 14-day free trial with full platform access.
+              {t('about.ctaDescription')}
             </p>
           </div>
           <Button
@@ -170,7 +161,7 @@ export default function About() {
             className="bg-white text-primary hover:bg-white/90 shadow-lg gap-2 shrink-0"
           >
             <Link to="/register-organization">
-              Get started free <ArrowRight className="h-4 w-4" />
+              {c('nav.getStartedFree')} <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </div>
@@ -189,11 +180,11 @@ export default function About() {
             <span className="text-white text-sm font-semibold tracking-tight">DiagInfect</span>
           </div>
           <p className="text-xs text-white/30">
-            © {new Date().getFullYear()} DiagInfect. All rights reserved.
+            {c('misc.copyrightShort', { year: new Date().getFullYear() })}
           </p>
           <div className="flex gap-5">
-            <Link to="/"      className="text-sm text-white/50 hover:text-white transition-colors">Home</Link>
-            <Link to="/login" className="text-sm text-white/50 hover:text-white transition-colors">Sign in</Link>
+            <Link to="/"      className="text-sm text-white/50 hover:text-white transition-colors">{c('footer.home')}</Link>
+            <Link to="/login" className="text-sm text-white/50 hover:text-white transition-colors">{c('nav.signIn')}</Link>
           </div>
         </div>
       </footer>

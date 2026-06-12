@@ -524,10 +524,10 @@ export const completeOrder = catchAsync(async (req: Request, res: Response, next
     const riskLevel = hasCritical ? 'CRITICAL' : 'HIGH';
     const riskScore = hasCritical ? 0.9 : 0.65;
     await sql`
-      INSERT INTO infection_risks (patient_id, risk_score, risk_level, message, model_version)
+      INSERT INTO infection_risks (patient_id, risk_score, risk_level, message_en, message_ar, model_version)
       VALUES (
         ${test.patient_id}, ${riskScore}, ${riskLevel},
-        ${'Risk inferred from lab results'}, ${'rule-engine-v1'}
+        ${'Risk inferred from lab results'}, ${'الخطر مستنتج من نتائج المختبر'}, ${'rule-engine-v1'}
       )
     `;
   }
@@ -612,25 +612,28 @@ export const amendResult = catchAsync(async (req: Request, res: Response, next: 
     // Only insert a new infection_risk entry when the overall level changes
     let newRiskLevel: string | null = null;
     let newRiskScore: number | null = null;
-    let riskMessage: string | null  = null;
+    let riskMessageEn: string | null = null;
+    let riskMessageAr: string | null = null;
 
     if (!hasCritical && !hasAbnormal) {
       newRiskLevel = 'LOW';
       newRiskScore = 0.10;
-      riskMessage  = 'Risk reassessed after result amendment — all values now within normal range.';
+      riskMessageEn  = 'Risk reassessed after result amendment — all values now within normal range.';
+      riskMessageAr  = 'أعيد تقييم المخاطر بعد تعديل النتيجة — جميع القيم الآن ضمن النطاق الطبيعي.';
     } else if (!hasCritical && hasAbnormal) {
       newRiskLevel = 'HIGH';
       newRiskScore = 0.65;
-      riskMessage  = 'Risk reassessed after result amendment — abnormal values remain.';
+      riskMessageEn  = 'Risk reassessed after result amendment — abnormal values remain.';
+      riskMessageAr  = 'أعيد تقييم المخاطر بعد تعديل النتيجة — القيم غير الطبيعية لا تزال موجودة.';
     }
     // If still CRITICAL after amendment, no downgrade needed
 
     if (newRiskLevel !== null) {
       await sql`
-        INSERT INTO infection_risks (patient_id, risk_score, risk_level, message, model_version)
+        INSERT INTO infection_risks (patient_id, risk_score, risk_level, message_en, message_ar, model_version)
         VALUES (
           ${testMeta.patient_id}, ${newRiskScore!}, ${newRiskLevel},
-          ${riskMessage!}, ${'rule-engine-v1'}
+          ${riskMessageEn!}, ${riskMessageAr!}, ${'rule-engine-v1'}
         )
       `;
     }
@@ -712,7 +715,7 @@ export const markLabAlertRead = catchAsync(async (req: Request, res: Response, n
 // GET /api/lab/units
 export const getUnits = catchAsync(async (_req: Request, res: Response) => {
   const units = await sql`
-    SELECT unit_id, name, symbol FROM units ORDER BY name ASC
+    SELECT unit_id, name_en, name_ar, symbol FROM units ORDER BY name_en ASC
   `;
   res.status(200).json({ status: 'success', data: { units } });
 });
@@ -734,8 +737,8 @@ export const createUnit = catchAsync(async (req: Request, res: Response, next: N
   if (existing) return next(new AppError('ERROR_UNIT_SYMBOL_EXISTS', 409));
 
   const [unit] = await sql`
-    INSERT INTO units (name, symbol) VALUES (${name}, ${symbol})
-    RETURNING unit_id, name, symbol
+    INSERT INTO units (name_en, symbol) VALUES (${name}, ${symbol})
+    RETURNING unit_id, name_en, symbol
   `;
 
   res.status(201).json({ status: 'success', data: { unit } });

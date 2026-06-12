@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
 import sql from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
+import { sendSubscriptionChangeEmail } from '../services/emailService.js';
 
 const createSubscriptionSchema = z.object({
   plan_id: z.string().uuid({ message: 'ERR_PLAN_INVALID' }),
@@ -29,15 +31,18 @@ export const getMySubscription = catchAsync(async (req: Request, res: Response, 
       s.trial_end_at,
       s.external_payment_ref,
       s.created_at,
-      p.name        AS plan_name,
-      p.description AS plan_description,
+      p.name_en,
+      p.name_ar,
+      p.description_en,
+      p.description_ar,
       p.price_monthly,
       p.price_annually,
       p.is_trial,
       COALESCE(
         JSON_AGG(
           JSON_BUILD_OBJECT(
-            'name',       pf.name,
+            'name_en',    pf.name_en,
+            'name_ar',    pf.name_ar,
             'is_enabled', pf.is_enabled,
             'value',      pf.value
           )
@@ -156,7 +161,7 @@ export const createSubscription = catchAsync(async (req: Request, res: Response,
   });
 });
 
-// PATCH /api/subscriptions/change-plan — switch to a different plan
+// PATCH /api/subscriptions/change-plan — switch to a different plan (initiate)
 export const changePlan = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user?.org_id) return next(new AppError('ERROR_NO_ORGANIZATION', 403));
 
@@ -170,24 +175,71 @@ export const changePlan = catchAsync(async (req: Request, res: Response, next: N
   const { plan_id, external_payment_ref } = val.data;
 
   const [plan] = await sql`
-    SELECT plan_id, is_trial FROM plans
+    SELECT plan_id, name_en, name_ar, is_trial FROM plans
     WHERE plan_id = ${plan_id} AND is_active = TRUE AND deleted_at IS NULL
     LIMIT 1
   `;
   if (!plan) return next(new AppError('ERROR_PLAN_NOT_FOUND', 404));
 
-  // Bug-fix: trial plans cannot be selected via changePlan (prevents infinite trial extension)
   if (plan.is_trial) {
     return next(new AppError('ERROR_TRIAL_NOT_ALLOWED', 403));
   }
 
-  // Bug-fix: wrap cancel + create + usage insert in a transaction to prevent orphaned orgs
+  const [user] = await sql`SELECT email FROM users WHERE user_id = ${req.user!.user_id} LIMIT 1`;
+  if (!user) return next(new AppError('ERROR_USER_NOT_FOUND', 404));
+
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+
+  await sql`
+    INSERT INTO subscription_change_tokens (organization_id, user_id, new_plan_id, token_hash, expires_at)
+    VALUES (${req.user!.org_id}, ${req.user!.user_id}, ${plan_id}, ${tokenHash}, NOW() + INTERVAL '1 hour')
+  `;
+
+  const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-subscription?token=${verifyToken}`;
+  
+  sendSubscriptionChangeEmail({
+    to: user.email,
+    verify_url: verifyUrl,
+    plan_name: plan.name_en
+  }).catch(err => console.error('Failed to send subscription change email:', err));
+
+  res.status(200).json({
+    status: 'success',
+    messageKey: 'SUCCESS_PLAN_CHANGE_EMAIL_SENT',
+  });
+});
+
+const verifyChangeSchema = z.object({
+  token: z.string().min(1, { message: 'ERR_TOKEN_REQUIRED' }),
+  external_payment_ref: z.string().optional(),
+});
+
+// POST /api/subscriptions/verify-change — complete the plan switch
+export const verifyChangePlan = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const val = verifyChangeSchema.safeParse(req.body);
+  if (!val.success) return next(new AppError('ERROR_VALIDATION_FAILED', 422));
+
+  const { token, external_payment_ref } = val.data;
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const [storedToken] = await sql`
+    SELECT token_id, organization_id, new_plan_id, expires_at, used_at
+    FROM subscription_change_tokens
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1
+  `;
+
+  if (!storedToken || storedToken.used_at || new Date(storedToken.expires_at) < new Date()) {
+    return next(new AppError('ERROR_TOKEN_INVALID', 400));
+  }
+
   const subscription = await sql.begin(async (tx) => {
     // Cancel current
     await tx`
       UPDATE subscriptions
       SET status = 'CANCELLED', cancelled_at = NOW()
-      WHERE organization_id = ${req.user!.org_id} AND status = 'ACTIVE'
+      WHERE organization_id = ${storedToken.organization_id} AND status = 'ACTIVE'
     `;
 
     // Create new
@@ -197,8 +249,8 @@ export const changePlan = catchAsync(async (req: Request, res: Response, next: N
         current_cycle_start, current_cycle_end, external_payment_ref
       )
       VALUES (
-        ${req.user!.org_id},
-        ${plan_id},
+        ${storedToken.organization_id},
+        ${storedToken.new_plan_id},
         'ACTIVE',
         NOW()::DATE,
         NOW()::DATE + INTERVAL '30 days',
@@ -214,6 +266,12 @@ export const changePlan = catchAsync(async (req: Request, res: Response, next: N
         ${sub.current_cycle_start},
         ${sub.current_cycle_end}
       )
+    `;
+
+    await tx`
+      UPDATE subscription_change_tokens
+      SET used_at = NOW()
+      WHERE token_id = ${storedToken.token_id}
     `;
 
     return sub;
@@ -261,7 +319,7 @@ export const getUsage = catchAsync(async (req: Request, res: Response, next: Nex
     FROM subscriptions s
     JOIN usage_records ur ON ur.subscription_id = s.subscription_id
     LEFT JOIN plan_features pf
-      ON pf.plan_id = s.plan_id AND pf.name = 'predictions_per_month'
+      ON pf.plan_id = s.plan_id AND pf.name_en = 'predictions_per_month'
     WHERE s.organization_id = ${req.user.org_id}
       AND s.status = 'ACTIVE'
       AND ur.cycle_start <= NOW()::DATE
@@ -287,7 +345,8 @@ export const getOverageEvents = catchAsync(async (req: Request, res: Response, n
       oe.created_at,
       s.plan_id
     FROM overage_events oe
-    JOIN subscriptions s ON s.subscription_id = oe.subscription_id
+    JOIN usage_records ur ON ur.usage_id = oe.usage_id
+    JOIN subscriptions s ON s.subscription_id = ur.subscription_id
     WHERE s.organization_id = ${req.user.org_id}
     ORDER BY oe.created_at DESC
   `;

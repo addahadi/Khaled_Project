@@ -3,6 +3,7 @@ import {
   useCallback, useRef, type ReactNode,
 } from 'react';
 import apiClient from '@/api/apiClient';
+import i18n from '@/i18n';
 
 export type UserRole = 'DOCTOR' | 'LAB_TECH' | 'MANAGER';
 
@@ -29,6 +30,15 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Sync the user's preferred_lang from DB to i18n, localStorage, and <html> */
+function syncLang(lang: string) {
+  const validLang = lang === 'ar' ? 'ar' : 'en';
+  localStorage.setItem('app_lang', validLang);
+  document.documentElement.lang = validLang;
+  document.documentElement.dir  = validLang === 'ar' ? 'rtl' : 'ltr';
+  if (i18n.language !== validLang) i18n.changeLanguage(validLang);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user:            null,
@@ -51,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         // The interceptor handles saving the accessToken if a refresh occurred.
         setState({ user: res.data.user, isLoading: false, isAuthenticated: true });
+        // Sync language from user's DB preference
+        syncLang(res.data.user.preferred_lang);
       } catch {
         setState({ user: null, isLoading: false, isAuthenticated: false });
       }
@@ -70,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setAuthenticated = useCallback((user: AuthUser, accessToken: string) => {
     sessionStorage.setItem('accessToken', accessToken);
     setState({ user, isLoading: false, isAuthenticated: true });
+    // Sync language from user's DB preference
+    syncLang(user.preferred_lang);
   }, []);
 
   const logout = useCallback(async () => {

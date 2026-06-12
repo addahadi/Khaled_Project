@@ -197,10 +197,10 @@ export const getPatientById = catchAsync(async (req: Request, res: Response, nex
   const [patient] = await sql`
     SELECT
       p.patient_id, p.name, p.age, p.gender, p.medical_history, p.created_at,
-      ir.risk_level, ir.risk_score
+      ir.risk_level, ir.risk_score, ir.message_en, ir.message_ar
     FROM patients p
     LEFT JOIN LATERAL (
-      SELECT risk_level, risk_score FROM infection_risks
+      SELECT risk_level, risk_score, message_en, message_ar FROM infection_risks
       WHERE patient_id = p.patient_id ORDER BY created_at DESC LIMIT 1
     ) ir ON TRUE
     WHERE p.patient_id = ${patientId}
@@ -726,10 +726,11 @@ export const createPrediction = catchAsync(async (req: Request, res: Response, n
   }
 
   await sql`
-    INSERT INTO infection_risks (patient_id, risk_score, risk_level, model_version, message)
+    INSERT INTO infection_risks (patient_id, risk_score, risk_level, model_version, message_en, message_ar)
     VALUES (
       ${patient_id}, ${risk_score}, ${riskLevel}, ${model_version},
-      ${`AI prediction: ${riskLevel} infection risk (confidence ${Math.round(confidence * 100)}%)`}
+      ${`AI prediction: ${riskLevel} infection risk (confidence ${Math.round(confidence * 100)}%)`},
+      ${`تنبؤ الذكاء الاصطناعي: خطر عدوى ${riskLevel} (ثقة ${Math.round(confidence * 100)}%)`}
     )
   `;
 

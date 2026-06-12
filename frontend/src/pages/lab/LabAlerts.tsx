@@ -10,6 +10,7 @@ import {
   Bell, CheckCircle2, AlertTriangle, AlertCircle,
   ClipboardList, CheckCheck, ChevronLeft, ChevronRight, type LucideIcon,
 } from 'lucide-react';
+import { useTranslation, Trans } from 'react-i18next';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,8 @@ const matchFilter = (a: LabAlert, f: FilterKey): boolean => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LabAlerts() {
+  const { t } = useTranslation('lab');
+  const { t: c } = useTranslation('common');
   const navigate      = useNavigate();
   const { toast }     = useToast();
   const [alerts,      setAlerts]     = useState<LabAlert[]>([]);
@@ -206,7 +209,7 @@ export default function LabAlerts() {
           }))
         );
         setUnreadCount(0);
-        toast({ title: 'All alerts marked as read' });
+        toast({ title: t('alerts.allMarkedRead') });
       },
       onError: ({ message }) =>
         toast({ title: 'Error', description: message, variant: 'destructive' }),
@@ -234,12 +237,12 @@ export default function LabAlerts() {
         <div>
           <h1 className="text-[22px] font-medium tracking-tight text-foreground flex items-center gap-2">
             <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            Alerts
+            {t('alerts.title')}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
-            Lab technician panel
-            {unreadCount > 0 && <span>· {unreadCount} unread</span>}
+            {t('alerts.subtitle')}
+            {unreadCount > 0 && <span>· {t('alerts.unreadCount', { count: unreadCount })}</span>}
           </p>
         </div>
 
@@ -252,7 +255,7 @@ export default function LabAlerts() {
             disabled={markingAll}
           >
             <CheckCheck className="h-3.5 w-3.5" />
-            Mark all read
+            {t('alerts.markAllRead')}
           </Button>
         )}
       </div>
@@ -277,7 +280,7 @@ export default function LabAlerts() {
                   : 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-primary/40'
               }`}
             >
-              {label}{count > 0 && value !== 'ALL' ? ` (${count})` : ''}
+              {t(`alerts.filters.${value}`) ?? label}{count > 0 && value !== 'ALL' ? ` (${count})` : ''}
             </button>
           );
         })}
@@ -296,8 +299,8 @@ export default function LabAlerts() {
           <div className="w-11 h-11 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
             <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
           </div>
-          <p className="text-sm font-medium text-foreground">All caught up</p>
-          <p className="text-sm text-muted-foreground mt-1">No alerts match this filter.</p>
+          <p className="text-sm font-medium text-foreground">{t('alerts.allCaughtUp')}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t('alerts.noAlerts')}</p>
         </div>
 
       ) : (
@@ -331,7 +334,7 @@ export default function LabAlerts() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className={`text-[10px] font-medium uppercase tracking-[0.04em] px-1.5 py-0.5 rounded ${sev.badgeBg} ${sev.badgeText}`}>
-                      {cfg.label}
+                      {t(`alerts.types.${alert.alert_type}.label`) ?? cfg.label}
                     </span>
                     {alert.patient_name && (
                       <span className="text-sm font-medium text-foreground truncate">
@@ -355,14 +358,14 @@ export default function LabAlerts() {
                     className="h-7 text-xs whitespace-nowrap gap-1"
                     onClick={() => handleCta(alert)}
                   >
-                    {cfg.cta} →
+                    {t(`alerts.types.${alert.alert_type}.cta`) ?? cfg.cta} →
                   </Button>
                   {!alert.is_read && (
                     <button
                       className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors"
                       onClick={() => handleMarkRead(alert.alert_id)}
                     >
-                      Mark read
+                      {t('alerts.markRead')}
                     </button>
                   )}
                 </div>
@@ -376,20 +379,20 @@ export default function LabAlerts() {
       {pagination && pagination.pages > 1 && (
         <div className="flex items-center justify-between py-3 border-t border-border mt-6">
           <p className="text-xs text-muted-foreground">
-            Page {pagination.page} of {pagination.pages} · {pagination.total} alerts
+            <Trans i18nKey="alerts.pagination" t={t} values={{page: pagination.page, pages: pagination.pages, total: pagination.total}}>Page {{page: pagination.page}} of {{pages: pagination.pages}} · {{total: pagination.total}} alerts</Trans>
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-8 gap-1"
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
             >
-              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              <ChevronLeft className="h-3.5 w-3.5" /> {c('pagination.previous')}
             </Button>
             <Button size="sm" variant="outline" className="h-8 gap-1"
               disabled={page >= pagination.pages}
               onClick={() => setPage(p => p + 1)}
             >
-              Next <ChevronRight className="h-3.5 w-3.5" />
+              {c('pagination.next')} <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

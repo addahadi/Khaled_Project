@@ -5,87 +5,12 @@ import {
   Check, AlertTriangle, TrendingUp, CheckCircle2,
 } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
+import { useTranslation } from 'react-i18next';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const FEATURES = [
-  {
-    icon: Brain,
-    eyebrow: 'AI prediction',
-    title: 'Early risk assessment',
-    description:
-      'Machine learning models (Random Forest, XGBoost, Neural Networks) trained on real infectious disease datasets deliver risk scores in under 2 seconds — before culture results are available.',
-    color: 'text-primary',
-    bg: 'bg-primary/10',
-  },
-  {
-    icon: FlaskConical,
-    eyebrow: 'Lab integration',
-    title: 'Seamless lab workflow',
-    description:
-      'Bidirectional data flow between doctors and lab technicians. CRP, CBC, ESR, and NFS results link directly to patient records with anomaly alerts built in.',
-    color: 'text-[#00a89c]',
-    bg: 'bg-[#00a89c]/10',
-  },
-  {
-    icon: Shield,
-    eyebrow: 'Explainable AI',
-    title: 'Decisions you can trust',
-    description:
-      'Every prediction comes with a ranked explanation of the contributing factors. Clinical trust requires transparency — not a black box.',
-    color: 'text-[#2e368f]',
-    bg: 'bg-[#2e368f]/10',
-  },
-  {
-    icon: Activity,
-    eyebrow: 'Role-based access',
-    title: 'Built for the whole team',
-    description:
-      'Separate, optimised panels for doctors, lab technicians, and hospital managers. Each role sees exactly what it needs, nothing more.',
-    color: 'text-[#88c540]',
-    bg: 'bg-[#88c540]/10',
-  },
-];
-
-const PLANS = [
-  {
-    name: 'Trial',
-    price: 'Free',
-    period: '14 days',
-    description: 'Full platform access with no commitment.',
-    features: ['50 AI predictions', 'Up to 3 doctors', 'Lab integration', 'Email support'],
-    cta: 'Start free trial',
-    featured: false,
-    accentBg: 'bg-card',
-    accentBorder: 'border-border',
-  },
-  {
-    name: 'Clinic',
-    price: '$299',
-    period: '/month',
-    description: 'For small and medium clinics.',
-    features: ['500 AI predictions', 'Up to 15 doctors', 'Full lab integration', 'XAI explanations', 'Priority support'],
-    cta: 'Get started',
-    featured: true,
-    accentBg: 'bg-primary/5',
-    accentBorder: 'border-primary',
-  },
-  {
-    name: 'Hospital',
-    price: '$799',
-    period: '/month',
-    description: 'Enterprise-grade for hospital networks.',
-    features: ['Unlimited predictions', 'Unlimited staff', 'Full lab integration', 'XAI explanations', 'Dedicated support', 'API access'],
-    cta: 'Contact sales',
-    featured: false,
-    accentBg: 'bg-card',
-    accentBorder: 'border-border',
-  },
-];
-
-// ─── Hero mockup card ─────────────────────────────────────────────────────────
-
 function PredictionMockup() {
+  const { t } = useTranslation('landing');
   return (
     <div className="relative w-full max-w-sm mx-auto">
       {/* Glow behind card */}
@@ -99,9 +24,9 @@ function PredictionMockup() {
             <div className="w-7 h-7 rounded-lg bg-[#c0272d]/10 flex items-center justify-center">
               <AlertTriangle className="h-3.5 w-3.5 text-[#c0272d]" />
             </div>
-            <span className="text-sm font-semibold text-foreground">Prediction Result</span>
+            <span className="text-sm font-semibold text-foreground">{t('mockup.predictionResult')}</span>
           </div>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#c0272d]/10 text-[#c0272d] border border-[#c0272d]/20">CRITICAL</span>
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#c0272d]/10 text-[#c0272d] border border-[#c0272d]/20">{t('mockup.critical')}</span>
         </div>
 
         {/* Patient row */}
@@ -116,7 +41,7 @@ function PredictionMockup() {
         {/* Risk score */}
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Risk Score</span>
+            <span className="text-xs text-muted-foreground">{t('mockup.riskScore')}</span>
             <span className="text-sm font-semibold text-[#c0272d]">91%</span>
           </div>
           {/* Progress bar */}
@@ -125,14 +50,14 @@ function PredictionMockup() {
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Confidence: 88%</span>
-            <span>Model v2.3.1</span>
+            <span>{t('mockup.confidence')}: 88%</span>
+            <span>{t('mockup.modelVersion')}</span>
           </div>
         </div>
 
         {/* XAI factors */}
         <div className="px-5 pb-4 space-y-2">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Top factors</p>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('mockup.topFactors')}</p>
           {[
             { label: 'CRP Level',      dir: '↑', pct: 88, color: 'bg-[#c0272d]/60' },
             { label: 'WBC Count',      dir: '↑', pct: 74, color: 'bg-[#c0272d]/40' },
@@ -151,10 +76,10 @@ function PredictionMockup() {
 
         {/* Footer */}
         <div className="px-5 py-3 bg-muted/40 border-t border-border flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">DiagInfect · AI diagnosis support</span>
+          <span className="text-[10px] text-muted-foreground">{t('mockup.aiSupport')}</span>
           <div className="flex items-center gap-1">
             <div className="w-1.5 h-1.5 rounded-full bg-[#00a89c] animate-pulse" />
-            <span className="text-[10px] text-[#007a71] font-medium">Live</span>
+            <span className="text-[10px] text-[#007a71] font-medium">{t('mockup.live')}</span>
           </div>
         </div>
       </div>
@@ -165,8 +90,8 @@ function PredictionMockup() {
           <CheckCircle2 className="h-3.5 w-3.5 text-[#00a89c]" />
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-foreground">Lab results linked</p>
-          <p className="text-[9px] text-muted-foreground">CBC · CRP · ESR — ready</p>
+          <p className="text-[10px] font-semibold text-foreground">{t('mockup.labLinked')}</p>
+          <p className="text-[9px] text-muted-foreground">{t('mockup.labReady')}</p>
         </div>
       </div>
 
@@ -174,8 +99,8 @@ function PredictionMockup() {
       <div className="absolute -top-4 -right-4 bg-card border border-border rounded-xl shadow-lg px-3 py-2 flex items-center gap-2 z-10">
         <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
         <div>
-          <p className="text-[10px] font-semibold text-foreground">Model v2.3.1</p>
-          <p className="text-[9px] text-muted-foreground">88% confidence</p>
+          <p className="text-[10px] font-semibold text-foreground">{t('mockup.modelVersion')}</p>
+          <p className="text-[9px] text-muted-foreground">88% {t('mockup.confidence').toLowerCase()}</p>
         </div>
       </div>
     </div>
@@ -185,6 +110,79 @@ function PredictionMockup() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Landing() {
+  const { t } = useTranslation('landing');
+  const { t: c } = useTranslation('common');
+
+  const FEATURES = [
+    {
+      icon: Brain,
+      eyebrow: t('features.items.ai.eyebrow'),
+      title: t('features.items.ai.title'),
+      description: t('features.items.ai.description'),
+      color: 'text-primary',
+      bg: 'bg-primary/10',
+    },
+    {
+      icon: FlaskConical,
+      eyebrow: t('features.items.lab.eyebrow'),
+      title: t('features.items.lab.title'),
+      description: t('features.items.lab.description'),
+      color: 'text-[#00a89c]',
+      bg: 'bg-[#00a89c]/10',
+    },
+    {
+      icon: Shield,
+      eyebrow: t('features.items.xai.eyebrow'),
+      title: t('features.items.xai.title'),
+      description: t('features.items.xai.description'),
+      color: 'text-[#2e368f]',
+      bg: 'bg-[#2e368f]/10',
+    },
+    {
+      icon: Activity,
+      eyebrow: t('features.items.rbac.eyebrow'),
+      title: t('features.items.rbac.title'),
+      description: t('features.items.rbac.description'),
+      color: 'text-[#88c540]',
+      bg: 'bg-[#88c540]/10',
+    },
+  ];
+
+  const PLANS = [
+    {
+      name: t('pricing.plans.trial.name'),
+      price: c('pricing.free', 'Free'),
+      period: t('pricing.plans.trial.period'),
+      description: t('pricing.plans.trial.description'),
+      features: [t('pricing.features.predictions50'), t('pricing.features.doctors3'), t('pricing.features.labIntegration'), t('pricing.features.emailSupport')],
+      cta: t('pricing.plans.trial.cta'),
+      featured: false,
+      accentBg: 'bg-card',
+      accentBorder: 'border-border',
+    },
+    {
+      name: t('pricing.plans.clinic.name'),
+      price: '$299',
+      period: t('pricing.plans.clinic.period'),
+      description: t('pricing.plans.clinic.description'),
+      features: [t('pricing.features.predictions500'), t('pricing.features.doctors15'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.prioritySupport')],
+      cta: t('pricing.plans.clinic.cta'),
+      featured: true,
+      accentBg: 'bg-primary/5',
+      accentBorder: 'border-primary',
+    },
+    {
+      name: t('pricing.plans.hospital.name'),
+      price: '$799',
+      period: t('pricing.plans.hospital.period'),
+      description: t('pricing.plans.hospital.description'),
+      features: [t('pricing.features.unlimitedPredictions'), t('pricing.features.unlimitedStaff'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.dedicatedSupport'), t('pricing.features.apiAccess')],
+      cta: t('pricing.plans.hospital.cta'),
+      featured: false,
+      accentBg: 'bg-card',
+      accentBorder: 'border-border',
+    },
+  ];
   return (
     <div className="min-h-screen bg-background">
       <PublicNavbar />
@@ -209,28 +207,26 @@ export default function Landing() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/15 border border-primary/25 text-primary text-xs font-medium mb-6">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                AI-powered clinical decision support
+                {t('hero.tagline')}
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-[52px] font-semibold text-white leading-[1.12] tracking-tight mb-6">
-                Detect infectious<br />diseases earlier.<br />
-                <span className="text-primary">Act faster.</span>
+              <h1 className="text-4xl md:text-5xl lg:text-[52px] font-semibold text-white leading-[1.12] tracking-tight mb-6 whitespace-pre-line">
+                {t('hero.title')}<br />
+                <span className="text-primary">{t('hero.titleHighlight')}</span>
               </h1>
               <p className="text-lg text-white/60 leading-relaxed mb-10 max-w-lg">
-                DiagInfect analyses routine biological markers with AI to deliver
-                infection risk scores before culture results arrive — giving clinicians
-                a critical head start.
+                {t('hero.description')}
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="gap-2 shadow-lg shadow-primary/30">
                   <Link to="/register-organization">
-                    Get started free <ArrowRight className="h-4 w-4" />
+                    {c('nav.getStartedFree')} <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
                 <Button
                   asChild size="lg" variant="outline"
                   className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:text-white hover:border-white/30"
                 >
-                  <Link to="/about">Learn how it works</Link>
+                  <Link to="/about">{t('hero.learnHow')}</Link>
                 </Button>
               </div>
             </div>
@@ -251,14 +247,13 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
           <div className="mb-14 max-w-2xl">
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
-              Platform capabilities
+              {t('features.eyebrow')}
             </p>
             <h2 className="text-3xl font-semibold text-foreground tracking-tight mb-4">
-              Everything your clinical team needs
+              {t('features.title')}
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Built around the real workflows of doctors, lab technicians, and hospital managers —
-              not the other way around.
+              {t('features.description')}
             </p>
           </div>
 
@@ -287,12 +282,12 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
           <div className="mb-14 max-w-2xl">
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
-              Subscription plans
+              {t('pricing.eyebrow')}
             </p>
             <h2 className="text-3xl font-semibold text-foreground tracking-tight mb-3">
-              Simple, transparent pricing
+              {t('pricing.title')}
             </h2>
-            <p className="text-muted-foreground">Start free. Scale when you are ready.</p>
+            <p className="text-muted-foreground">{t('pricing.description')}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-5 max-w-5xl">
@@ -306,7 +301,7 @@ export default function Landing() {
                 {featured && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-3 py-1 rounded-full shadow-sm">
-                      Most popular
+                      {t('pricing.mostPopular')}
                     </span>
                   </div>
                 )}
@@ -351,14 +346,13 @@ export default function Landing() {
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8 py-20">
           <div className="max-w-2xl">
             <p className="text-sm text-primary-foreground/60 font-medium uppercase tracking-widest mb-4">
-              Ready to get started?
+              {t('cta.eyebrow')}
             </p>
-            <h2 className="text-3xl font-semibold text-primary-foreground mb-4 leading-tight tracking-tight">
-              Transform your infectious disease<br />diagnostic workflow today.
+            <h2 className="text-3xl font-semibold text-primary-foreground mb-4 leading-tight tracking-tight whitespace-pre-line">
+              {t('cta.title')}
             </h2>
             <p className="text-primary-foreground/70 mb-8 text-base leading-relaxed">
-              Join hospitals already using DiagInfect to improve patient outcomes
-              with AI-powered infection risk assessment.
+              {t('cta.description')}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
@@ -366,14 +360,14 @@ export default function Landing() {
                 className="bg-white text-primary hover:bg-white/90 shadow-lg gap-2"
               >
                 <Link to="/register-organization">
-                  Start free trial <ArrowRight className="h-4 w-4" />
+                  {t('cta.startTrial')} <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button
                 asChild size="lg" variant="ghost"
                 className="text-white/80 hover:text-white hover:bg-white/10 border border-white/20"
               >
-                <Link to="/about">Learn more</Link>
+                <Link to="/about">{c('actions.learnMore')}</Link>
               </Button>
             </div>
           </div>
@@ -393,18 +387,18 @@ export default function Landing() {
                     <rect x="1" y="8.5" width="18" height="3" fill="white" />
                   </svg>
                 </div>
-                <span className="text-white text-base font-semibold tracking-tight">DiagInfect</span>
+                <span className="text-white text-base font-semibold tracking-tight">{c('brand')}</span>
               </div>
               <p className="text-sm leading-relaxed">
-                AI-powered infectious disease diagnostic support for hospitals and clinics.
+                {c('footer.brandDescription')}
               </p>
             </div>
 
             {/* Platform links */}
             <div>
-              <p className="text-white text-sm font-semibold mb-4">Platform</p>
+              <p className="text-white text-sm font-semibold mb-4">{c('footer.platform')}</p>
               <ul className="space-y-2.5">
-                {['Features', 'Pricing', 'Security', 'Roadmap'].map(l => (
+                {[c('footer.home'), c('footer.pricing'), c('footer.security'), c('footer.roadmap')].map(l => (
                   <li key={l}>
                     <Link to="/" className="text-sm text-white/50 hover:text-white transition-colors">{l}</Link>
                   </li>
@@ -414,13 +408,13 @@ export default function Landing() {
 
             {/* Company links */}
             <div>
-              <p className="text-white text-sm font-semibold mb-4">Company</p>
+              <p className="text-white text-sm font-semibold mb-4">{c('footer.company')}</p>
               <ul className="space-y-2.5">
                 {[
-                  { label: 'About',   to: '/about' },
-                  { label: 'Contact', to: '/about' },
-                  { label: 'Privacy', to: '/'      },
-                  { label: 'Terms',   to: '/'      },
+                  { label: c('footer.about'),   to: '/about' },
+                  { label: c('footer.contact'), to: '/about' },
+                  { label: c('footer.privacy'), to: '/'      },
+                  { label: c('footer.terms'),   to: '/'      },
                 ].map(l => (
                   <li key={l.label}>
                     <Link to={l.to} className="text-sm text-white/50 hover:text-white transition-colors">{l.label}</Link>
@@ -431,13 +425,13 @@ export default function Landing() {
 
             {/* Access links */}
             <div>
-              <p className="text-white text-sm font-semibold mb-4">Access</p>
+              <p className="text-white text-sm font-semibold mb-4">{c('footer.access')}</p>
               <ul className="space-y-2.5">
                 <li>
-                  <Link to="/login" className="text-sm text-white/50 hover:text-white transition-colors">Sign in</Link>
+                  <Link to="/login" className="text-sm text-white/50 hover:text-white transition-colors">{c('nav.signIn')}</Link>
                 </li>
                 <li>
-                  <Link to="/register-organization" className="text-sm text-white/50 hover:text-white transition-colors">Register organization</Link>
+                  <Link to="/register-organization" className="text-sm text-white/50 hover:text-white transition-colors">{c('footer.registerOrganization')}</Link>
                 </li>
               </ul>
             </div>
@@ -445,9 +439,9 @@ export default function Landing() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <p className="text-xs text-white/30">
-              © {new Date().getFullYear()} DiagInfect — Ibn Khaldoun University of Tiaret. All rights reserved.
+              {c('misc.copyright', { year: new Date().getFullYear() })}
             </p>
-            <p className="text-xs text-white/30">Built with React · TypeScript · shadcn/ui</p>
+            <p className="text-xs text-white/30">{c('misc.builtWith')}</p>
           </div>
         </div>
       </footer>

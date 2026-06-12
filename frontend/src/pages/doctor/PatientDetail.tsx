@@ -31,6 +31,7 @@ import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { labOrderSchema, clinicalDataSchema, flattenZodErrors } from '@/api/schemas';
 import { TagInput } from '@/components/ui/tag-input';
 import { formatDate, timeAgo } from '@/lib/formatDate';
+import { useTranslation, Trans } from 'react-i18next';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,10 +88,10 @@ const LAB_STATUS: Record<string, string> = {
   INPROGRESS: 'bg-primary/10 text-primary border border-primary/20 rounded-full',
   COMPLETED:  'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25 rounded-full',
 };
-const ROLE_CONFIG: Record<string, { label: string; icon: typeof Shield; className: string }> = {
-  PRIMARY:    { label: 'Primary',    icon: ShieldCheck, className: 'bg-primary/10 text-primary border border-primary/20 rounded-full' },
-  COVERING:   { label: 'Covering',   icon: Shield,      className: 'bg-[#e07020]/10 text-[#a04c10] border border-[#e07020]/25 rounded-full' },
-  CONSULTING: { label: 'Consulting', icon: UserCheck,   className: 'bg-[#2e368f]/10 text-[#2e368f] border border-[#2e368f]/20 rounded-full' },
+const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; className: string }> = {
+  PRIMARY:    { labelKey: 'roles.PRIMARY',    icon: ShieldCheck, className: 'bg-primary/10 text-primary border border-primary/20 rounded-full' },
+  COVERING:   { labelKey: 'roles.COVERING',   icon: Shield,      className: 'bg-[#e07020]/10 text-[#a04c10] border border-[#e07020]/25 rounded-full' },
+  CONSULTING: { labelKey: 'roles.CONSULTING', icon: UserCheck,   className: 'bg-[#2e368f]/10 text-[#2e368f] border border-[#2e368f]/20 rounded-full' },
 };
 
 // ─── Vitals HUD helpers (signature element) ───────────────────────────────────
@@ -147,6 +148,8 @@ const STRIP_BG: Record<StripSev, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PatientDetail() {
+  const { t } = useTranslation('doctor');
+  const { t: c } = useTranslation('common');
   const { patientId } = useParams<{ patientId: string }>();
   const navigate       = useNavigate();
   const { toast }      = useToast();
@@ -408,7 +411,7 @@ export default function PatientDetail() {
     return (
       <span title={`Observation time: ${new Date(observedAt).toLocaleString()}`}
         className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
-        <Clock className="h-2.5 w-2.5" /> Stale · {timeAgo(observedAt)}
+        <Clock className="h-2.5 w-2.5" /> {t('patientDetail.stale')} · {timeAgo(observedAt)}
       </span>
     );
   };
@@ -432,7 +435,7 @@ export default function PatientDetail() {
     </div>
   );
   if (!patient) return (
-    <div className="text-center py-16 text-muted-foreground">Patient not found.</div>
+    <div className="text-center py-16 text-muted-foreground">{t('patientDetail.patientNotFound')}</div>
   );
 
   const latestClinical = patient.clinicalData[0] ?? null;
@@ -475,7 +478,7 @@ export default function PatientDetail() {
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
         <button onClick={() => navigate('/doctor/patients')}
           className="hover:text-primary transition-colors flex items-center gap-1.5">
-          <ArrowLeft className="h-3.5 w-3.5" /> Patients
+          <ArrowLeft className="h-3.5 w-3.5" /> {t('patients.title')}
         </button>
         <span className="text-border">/</span>
         <span className="text-foreground font-medium">{patient.name}</span>
@@ -494,8 +497,8 @@ export default function PatientDetail() {
               {patient.name}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {patient.age} yrs · {patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()}
-              · Patient since {formatDate(patient.created_at)}
+              {patient.age} {t('dashboard.yrs')} · {c(`gender.${patient.gender.toUpperCase()}`) ?? (patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase())}
+              · {t('patientDetail.patientSince')} {formatDate(patient.created_at)}
             </p>
             {/* Role + assignment badges */}
             {patient.assignments.length > 0 && (
@@ -509,14 +512,14 @@ export default function PatientDetail() {
                       <span key={a.assignment_id}
                         className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${cfg?.className ?? ''}`}>
                         <RoleIcon className="h-3 w-3" />
-                        {cfg?.label ?? a.role}
+                        {t(`roles.${a.role}`) ?? a.role}
                       </span>
                     );
                   })
                 }
                 {isAssigned && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25">
-                    <ShieldCheck className="h-3 w-3" /> Assigned
+                    <ShieldCheck className="h-3 w-3" /> {t('patientDetail.assigned')}
                   </span>
                 )}
               </div>
@@ -528,14 +531,14 @@ export default function PatientDetail() {
         {isAssigned && (
           <div className="flex gap-2 flex-wrap shrink-0">
             <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setLabOpen(true)}>
-              <FlaskConical className="h-3.5 w-3.5" /> Order lab
+              <FlaskConical className="h-3.5 w-3.5" /> {t('patientDetail.orderLab')}
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={openAddVitals}>
-              <Activity className="h-3.5 w-3.5" /> Add vitals
+              <Activity className="h-3.5 w-3.5" /> {t('patientDetail.addVitals')}
             </Button>
             <Button size="sm" className="gap-1.5 h-8 text-xs"
               onClick={() => navigate('/doctor/predictions/new', { state: { patientId: patient.patient_id } })}>
-              <Brain className="h-3.5 w-3.5" /> Run AI prediction
+              <Brain className="h-3.5 w-3.5" /> {t('patientDetail.runAiPrediction')}
             </Button>
           </div>
         )}
@@ -557,7 +560,7 @@ export default function PatientDetail() {
             {/* Not-assigned condition */}
             {!isAssigned && (
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
-                <LockKeyhole className="h-3 w-3" /> Read-only access
+                <LockKeyhole className="h-3 w-3" /> {t('patientDetail.readOnlyAccess')}
               </span>
             )}
 
@@ -565,19 +568,20 @@ export default function PatientDetail() {
             {patient.risk_level && patient.risk_score !== null && (
               <>
                 {!isAssigned && <span className="text-border text-xs">·</span>}
-                <span className={`font-medium text-xs ${
-                  stripSev === 'critical' ? 'text-[#c0272d]' :
-                  stripSev === 'high'     ? 'text-[#e07020]' : 'text-[#a2680a]'
-                }`}>
-                  {patient.risk_level} risk
-                </span>
-                <span className="text-border text-xs">·</span>
-                <span className={`text-xs font-medium ${
-                  stripSev === 'critical' ? 'text-[#c0272d]' :
-                  stripSev === 'high'     ? 'text-[#e07020]' : 'text-[#a2680a]'
-                }`}>
-                  {Math.round(patient.risk_score * 100)}% score
-                </span>
+                <div className="flex items-center gap-3">
+                  <div className={`px-2.5 py-1 text-xs font-semibold ${RISK_STYLE[patient.risk_level]}`}>
+                    {t(`riskLevels.${patient.risk_level.toLowerCase()}`)} {t('patientDetail.riskLabel', { defaultValue: 'risk' })}
+                  </div>
+                  <span className="text-sm font-medium" dir="ltr">
+                    {Math.round(patient.risk_score * 100)}%
+                  </span>
+                </div>
+                {/* Render the AI-generated message */}
+                {patient.message_ar && patient.message_en && (
+                  <p className="text-xs text-muted-foreground ml-1">
+                    {localStorage.getItem('app_lang') === 'ar' ? patient.message_ar : patient.message_en}
+                  </p>
+                )}
               </>
             )}
 
@@ -587,7 +591,7 @@ export default function PatientDetail() {
                 {(patient.risk_level || !isAssigned) && <span className="text-border text-xs">·</span>}
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
                   <Clock className="h-3 w-3" />
-                  Stale data — {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}
+                  {t('patientDetail.staleData', { time: timeAgo(latestClinical.recorded_at ?? latestClinical.created_at), defaultValue: `Stale data — ${timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}` })}
                 </span>
               </>
             )}
@@ -599,7 +603,7 @@ export default function PatientDetail() {
               onClick={openAddVitals}
               className="text-[11px] font-medium text-primary hover:underline underline-offset-2 whitespace-nowrap shrink-0 transition-all"
             >
-              Update vitals →
+              {t('patientDetail.updateVitals')} →
             </button>
           )}
         </div>
@@ -612,14 +616,14 @@ export default function PatientDetail() {
           <TabsList className="flex items-center bg-card border border-border rounded-[var(--radius)] p-1.5 gap-1 h-auto shadow-sm w-full">
             <TabsTrigger value="overview"
               className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
-              Overview
+              {t('patientDetail.tabs.overview')}
             </TabsTrigger>
 
             {/* Clinical Data + add action */}
             <div className="flex items-center gap-0.5">
               <TabsTrigger value="clinical"
                 className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
-                Clinical data
+                {t('patientDetail.tabs.clinicalData')}
                 {patient.clinicalData.length > 0 && (
                   <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-current/10 data-[state=active]:bg-white/20">
                     {patient.clinicalData.length}
@@ -642,7 +646,7 @@ export default function PatientDetail() {
             <div className="flex items-center gap-0.5">
               <TabsTrigger value="lab"
                 className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
-                Lab tests
+                {t('patientDetail.tabs.labTests')}
                 {patient.labTests.length > 0 && (
                   <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                     {patient.labTests.length}
@@ -665,7 +669,7 @@ export default function PatientDetail() {
             <div className="flex items-center gap-0.5">
               <TabsTrigger value="predictions"
                 className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
-                Predictions
+                {t('patientDetail.tabs.predictions')}
                 {predictions.length > 0 && (
                   <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                     {predictions.length}
@@ -689,7 +693,7 @@ export default function PatientDetail() {
 
             <TabsTrigger value="care-team"
               className="rounded-md text-sm h-9 px-4 border-b-0 mb-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-none hover:bg-muted/60">
-              Care team
+              {t('patientDetail.tabs.careTeam')}
               <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                 {patient.assignments.length}
               </span>
@@ -704,17 +708,17 @@ export default function PatientDetail() {
             <Card>
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm flex items-center gap-2 font-medium">
-                  <User className="h-4 w-4 text-muted-foreground" /> Patient info
+                  <User className="h-4 w-4 text-muted-foreground" /> {t('patientDetail.patientInfo')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-3">
                 <table className="w-full text-sm border-collapse">
                   <tbody>
                     {[
-                      ['Name',       patient.name],
-                      ['Age',        `${patient.age} years`],
-                      ['Gender',     patient.gender.charAt(0) + patient.gender.slice(1).toLowerCase()],
-                      ['Registered', formatDate(patient.created_at)],
+                      [t('patients.dialogs.fullName'),       patient.name],
+                      [t('patients.dialogs.age'),        `${patient.age} ${t('dashboard.yrs')}`],
+                      [t('patients.dialogs.gender'),     c(`gender.${patient.gender.toUpperCase()}`) ?? (patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1).toLowerCase())],
+                      [t('patientDetail.registered'), formatDate(patient.created_at)],
                     ].map(([label, val]) => (
                       <tr key={String(label)} className="border-b border-muted/40 last:border-0">
                         <td className="py-1.5 text-muted-foreground w-[42%]">{label}</td>
@@ -730,44 +734,44 @@ export default function PatientDetail() {
             <Card>
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm flex items-center gap-2 font-medium">
-                  <Activity className="h-4 w-4 text-muted-foreground" /> Latest vitals
+                  <Activity className="h-4 w-4 text-muted-foreground" /> {t('patientDetail.latestVitals')}
                   {latestClinical?.is_stale && (
                     <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30 flex items-center gap-1">
-                      <Clock className="h-2.5 w-2.5" /> Stale
+                      <Clock className="h-2.5 w-2.5" /> {t('patientDetail.stale')}
                     </span>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-3">
                 {!latestClinical ? (
-                  <p className="text-sm text-muted-foreground">No vitals recorded yet.</p>
+                  <p className="text-sm text-muted-foreground">{t('patientDetail.noVitalsRecorded')}</p>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       {latestClinical.vitals.temperature != null && (
                         <VitalChip
-                          label="Temp" unit="°C"
+                          label={t('predictionDetail.vitals.temp')} unit="°C"
                           value={String(latestClinical.vitals.temperature)}
                           sev={vitalSev('temp', latestClinical.vitals.temperature)}
                         />
                       )}
                       {latestClinical.vitals.heart_rate != null && (
                         <VitalChip
-                          label="Heart rate" unit="bpm"
+                          label={t('predictionDetail.vitals.hr')} unit="bpm"
                           value={String(latestClinical.vitals.heart_rate)}
                           sev={vitalSev('hr', latestClinical.vitals.heart_rate)}
                         />
                       )}
                       {latestClinical.vitals.spo2 != null && (
                         <VitalChip
-                          label="SpO2" unit="%"
+                          label={t('predictionDetail.vitals.spo2')} unit="%"
                           value={String(latestClinical.vitals.spo2)}
                           sev={vitalSev('spo2', latestClinical.vitals.spo2)}
                         />
                       )}
                       {latestClinical.vitals.blood_pressure_systolic != null && (
                         <VitalChip
-                          label="Blood pressure" unit=""
+                          label={t('predictionDetail.vitals.bp')} unit=""
                           value={`${latestClinical.vitals.blood_pressure_systolic}/${latestClinical.vitals.blood_pressure_diastolic}`}
                           sev={vitalSev('bp_sys', latestClinical.vitals.blood_pressure_systolic)}
                         />
@@ -776,13 +780,13 @@ export default function PatientDetail() {
                        !latestClinical.vitals.heart_rate &&
                        !latestClinical.vitals.spo2 &&
                        !latestClinical.vitals.blood_pressure_systolic && (
-                        <p className="text-xs text-muted-foreground col-span-2">No vitals in this entry.</p>
+                        <p className="text-xs text-muted-foreground col-span-2">{t('patientDetail.noVitalsInEntry')}</p>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-2.5 flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      Observed {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}
-                      {latestClinical.visit_date && ` · Visit ${latestClinical.visit_date}`}
+                      {t('predictionDetail.observed')} {timeAgo(latestClinical.recorded_at ?? latestClinical.created_at)}
+                      {latestClinical.visit_date && ` · ${t('predictionDetail.visit')} ${latestClinical.visit_date}`}
                     </p>
                   </>
                 )}
@@ -795,8 +799,8 @@ export default function PatientDetail() {
             <Card>
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm flex items-center gap-2 font-medium">
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" /> Reported symptoms
-                  <span className="text-xs font-normal text-muted-foreground ml-1">from latest record</span>
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" /> {t('predictionDetail.reportedSymptoms')}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">{t('patientDetail.fromLatestRecord')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-3">
@@ -814,26 +818,26 @@ export default function PatientDetail() {
         <TabsContent value="clinical" className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {patient.clinicalData.length} record{patient.clinicalData.length !== 1 ? 's' : ''} — newest first.
+              {patient.clinicalData.length} {t('patientDetail.records')} — {t('patientDetail.newestFirst')}.
               {patient.clinicalData.some(r => r.is_stale) && (
-                <span className="text-[#a2680a] ml-2">Some records are stale (&gt;72h).</span>
+                <span className="text-[#a2680a] ml-2">{t('patientDetail.someRecordsStale')}</span>
               )}
             </p>
             <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs"
               disabled={!isAssigned}
-              title={!isAssigned ? 'Join the care team to add records' : undefined}
+              title={!isAssigned ? t('patientDetail.joinTeamToAdd') : undefined}
               onClick={openAddVitals}>
-              <Plus className="h-3.5 w-3.5" /> New record
+              <Plus className="h-3.5 w-3.5" /> {t('patientDetail.newRecord')}
             </Button>
           </div>
 
           {patient.clinicalData.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Activity className="mx-auto h-8 w-8 mb-2" />
-              <p className="text-sm">No clinical data yet.</p>
+              <p className="text-sm">{t('patientDetail.noClinicalDataYet')}</p>
               {isAssigned && (
                 <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={openAddVitals}>
-                  <Plus className="h-3.5 w-3.5" /> Add first record
+                  <Plus className="h-3.5 w-3.5" /> {t('patientDetail.addFirstRecord')}
                 </Button>
               )}
             </CardContent></Card>
@@ -843,7 +847,7 @@ export default function PatientDetail() {
                 <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {idx === 0 && (
-                      <Badge className="text-[10px] bg-primary/10 text-primary border-none">Latest</Badge>
+                      <Badge className="text-[10px] bg-primary/10 text-primary border-none">{t('patientDetail.latest')}</Badge>
                     )}
                     {staleBadge(cd)}
                     {linkedBadge(cd)}
@@ -869,14 +873,14 @@ export default function PatientDetail() {
                 </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-2.5">
-                  {cd.vitals.temperature    != null && <span className="text-muted-foreground">Temp: <strong className="text-foreground">{cd.vitals.temperature}°C</strong></span>}
-                  {cd.vitals.heart_rate     != null && <span className="text-muted-foreground">HR: <strong className="text-foreground">{cd.vitals.heart_rate} bpm</strong></span>}
-                  {cd.vitals.spo2           != null && <span className="text-muted-foreground">SpO2: <strong className="text-foreground">{cd.vitals.spo2}%</strong></span>}
+                  {cd.vitals.temperature    != null && <span className="text-muted-foreground">{t('predictionDetail.vitals.temp')}: <strong className="text-foreground">{cd.vitals.temperature}°C</strong></span>}
+                  {cd.vitals.heart_rate     != null && <span className="text-muted-foreground">{t('predictionDetail.vitals.hr')}: <strong className="text-foreground">{cd.vitals.heart_rate} bpm</strong></span>}
+                  {cd.vitals.spo2           != null && <span className="text-muted-foreground">{t('predictionDetail.vitals.spo2')}: <strong className="text-foreground">{cd.vitals.spo2}%</strong></span>}
                   {cd.vitals.blood_pressure_systolic != null && (
-                    <span className="text-muted-foreground">BP: <strong className="text-foreground">{cd.vitals.blood_pressure_systolic}/{cd.vitals.blood_pressure_diastolic}</strong></span>
+                    <span className="text-muted-foreground">{t('predictionDetail.vitals.bp')}: <strong className="text-foreground">{cd.vitals.blood_pressure_systolic}/{cd.vitals.blood_pressure_diastolic}</strong></span>
                   )}
                   {!cd.vitals.temperature && !cd.vitals.heart_rate && !cd.vitals.spo2 && !cd.vitals.blood_pressure_systolic && (
-                    <span className="text-xs text-muted-foreground">No vitals in this entry.</span>
+                    <span className="text-xs text-muted-foreground">{t('patientDetail.noVitalsInEntry')}</span>
                   )}
                 </div>
 
@@ -891,7 +895,7 @@ export default function PatientDetail() {
                 {Number(cd.linked_prediction_count) > 0 && (
                   <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                     <Link className="h-3 w-3" />
-                    Edits to this record will be reflected in the linked prediction history.
+                    {t('patientDetail.editsReflectedInHistory')}
                   </p>
                 )}
               </CardContent>
@@ -903,11 +907,11 @@ export default function PatientDetail() {
         <TabsContent value="lab" className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {patient.labTests.length} order{patient.labTests.length !== 1 ? 's' : ''}
+              {patient.labTests.length} {t('patientDetail.orders')}
             </p>
             {isAssigned && (
               <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setLabOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> New order
+                <Plus className="h-3.5 w-3.5" /> {t('patientDetail.newOrder')}
               </Button>
             )}
           </div>
@@ -915,10 +919,10 @@ export default function PatientDetail() {
           {patient.labTests.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <FlaskConical className="mx-auto h-8 w-8 mb-2" />
-              <p className="text-sm">No lab orders yet.</p>
+              <p className="text-sm">{t('patientDetail.noLabOrdersYet')}</p>
               {isAssigned && (
                 <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={() => setLabOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Order first test
+                  <Plus className="h-3.5 w-3.5" /> {t('patientDetail.orderFirstTest')}
                 </Button>
               )}
             </CardContent></Card>
@@ -930,14 +934,14 @@ export default function PatientDetail() {
                 <div>
                   <p className="font-medium text-sm">{lt.test_type}</p>
                   {lt.notes && <p className="text-xs text-muted-foreground mt-0.5">{lt.notes}</p>}
-                  <p className="text-xs text-muted-foreground mt-1">Ordered {formatDate(lt.ordered_at)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('patientDetail.ordered')} {formatDate(lt.ordered_at)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge className={`text-xs ${LAB_STATUS[lt.status] ?? ''}`}>
-                    {lt.status.charAt(0) + lt.status.slice(1).toLowerCase()}
+                    {t(`lab.${lt.status}`) ?? lt.status}
                   </Badge>
                   {lt.status === 'COMPLETED' && (
-                    <span className="text-[10px] text-primary underline underline-offset-2">View results</span>
+                    <span className="text-[10px] text-primary underline underline-offset-2">{t('patientDetail.viewResults')}</span>
                   )}
                 </div>
               </CardContent>
@@ -949,12 +953,12 @@ export default function PatientDetail() {
         <TabsContent value="predictions" className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {predictions.length} prediction{predictions.length !== 1 ? 's' : ''} — newest first
+              {predictions.length} {t('patientDetail.predictions')} — {t('patientDetail.newestFirst')}
             </p>
             {isAssigned && (
               <Button size="sm" className="gap-1.5 h-8 text-xs"
                 onClick={() => navigate(`/doctor/predictions/new?patient_id=${patient.patient_id}`)}>
-                <Brain className="h-3.5 w-3.5" /> Run prediction
+                <Brain className="h-3.5 w-3.5" /> {t('patientDetail.runPrediction')}
               </Button>
             )}
           </div>
@@ -962,11 +966,11 @@ export default function PatientDetail() {
           {predictions.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Brain className="mx-auto h-8 w-8 mb-2" />
-              <p className="text-sm">No predictions yet.</p>
+              <p className="text-sm">{t('patientDetail.noPredictionsYet')}</p>
               {isAssigned && (
                 <Button size="sm" className="mt-3 gap-1.5"
                   onClick={() => navigate(`/doctor/predictions/new?patient_id=${patient.patient_id}`)}>
-                  <Brain className="h-3.5 w-3.5" /> Run first prediction
+                  <Brain className="h-3.5 w-3.5" /> {t('patientDetail.runFirstPrediction')}
                 </Button>
               )}
             </CardContent></Card>
@@ -977,12 +981,11 @@ export default function PatientDetail() {
               <CardContent className="pt-4 pb-3 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={`text-xs ${RISK_STYLE[pr.risk_level] ?? ''}`}>{pr.risk_level}</Badge>
-                    <span className="text-sm font-medium">{Math.round(pr.risk_score * 100)}% risk</span>
-                    <span className="text-xs text-muted-foreground">· Confidence {Math.round(pr.confidence * 100)}%</span>
+                    <Badge className={`text-xs ${RISK_STYLE[pr.risk_level] ?? ''}`}>{t(`patients.riskLevels.${pr.risk_level}`) ?? pr.risk_level}</Badge>
+                    <span className="text-sm font-medium" dir="ltr">{Math.round(pr.risk_score * 100)}% {t('dashboard.score')}</span>
                     {pr.clinical_data_stale && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
-                        <Clock className="h-2.5 w-2.5" /> Stale input
+                        <Clock className="h-2.5 w-2.5" /> {t('patientDetail.staleInput')}
                       </span>
                     )}
                   </div>
@@ -993,7 +996,7 @@ export default function PatientDetail() {
                 <Badge
                   variant={pr.status === 'COMPLETED' ? 'default' : 'secondary'}
                   className="text-xs shrink-0">
-                  {pr.status}
+                  {t(`predictions.${pr.status}`) ?? pr.status}
                 </Badge>
               </CardContent>
             </Card>
@@ -1004,11 +1007,11 @@ export default function PatientDetail() {
         <TabsContent value="care-team" className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {patient.assignments.length} active member{patient.assignments.length !== 1 ? 's' : ''} on this patient's care team.
+              {patient.assignments.length} {t('patientDetail.activeMembersOnCareTeam')}
             </p>
             {isPrimary && (
               <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setAssignOpen(true)}>
-                <UserPlus className="h-3.5 w-3.5" /> Assign colleague
+                <UserPlus className="h-3.5 w-3.5" /> {t('patientDetail.assignColleague')}
               </Button>
             )}
           </div>
@@ -1016,8 +1019,8 @@ export default function PatientDetail() {
           {patient.assignments.length === 0 ? (
             <Card><CardContent className="py-10 text-center text-muted-foreground">
               <Users className="mx-auto h-8 w-8 mb-2" />
-              <p className="text-sm">No care team members found.</p>
-              <p className="text-xs mt-1">This may indicate the patient was created before the assignment system was introduced.</p>
+              <p className="text-sm">{t('patientDetail.noCareTeamMembers')}</p>
+              <p className="text-xs mt-1">{t('patientDetail.noCareTeamMembersDesc')}</p>
             </CardContent></Card>
           ) : (
             <div className="space-y-2">
@@ -1039,17 +1042,17 @@ export default function PatientDetail() {
                         <div>
                           <p className="text-sm font-medium">
                             {a.doctor_name}
-                            {isSelf && <span className="text-muted-foreground text-xs ml-1.5">(you)</span>}
+                            {isSelf && <span className="text-muted-foreground text-xs ml-1.5">({t('patientDetail.you')})</span>}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Assigned {timeAgo(a.assigned_at)}
+                            {t('patientDetail.assignedLabel')} {timeAgo(a.assigned_at)}
                             {a.notes && ` · ${a.notes}`}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant="outline" className={`text-xs gap-1 ${cfg?.className ?? ''}`}>
-                          <RoleIcon className="h-3 w-3" /> {cfg?.label ?? a.role}
+                          <RoleIcon className="h-3 w-3" /> {t(`roles.${a.role}`) ?? a.role}
                         </Badge>
                         {canDischarge && (
                           <Button variant="ghost" size="sm"
@@ -1058,7 +1061,7 @@ export default function PatientDetail() {
                             onClick={() => handleDischargeAssignment(a.assignment_id)}>
                             {discharging === a.assignment_id
                               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              : 'Remove'
+                              : c('actions.remove')
                             }
                           </Button>
                         )}
@@ -1074,9 +1077,9 @@ export default function PatientDetail() {
             <Card className="border-dashed">
               <CardContent className="py-8 text-center">
                 <UserPlus className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">You are not on this care team</p>
+                <p className="text-sm font-medium">{t('patientDetail.notOnCareTeam')}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  You must be assigned by the primary doctor to gain write access.
+                  {t('patientDetail.notOnCareTeamDesc')}
                 </p>
               </CardContent>
             </Card>
@@ -1091,22 +1094,22 @@ export default function PatientDetail() {
       {/* Lab Order Dialog */}
       <Dialog open={labOpen} onOpenChange={setLabOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Order Lab Test</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('patientDetail.orderLabDialog.title')}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
-              <Label>Test Type</Label>
-              <Input placeholder="e.g. CBC, Blood Culture, Urinalysis"
+              <Label>{t('patientDetail.orderLabDialog.testType')}</Label>
+              <Input placeholder={t('patientDetail.orderLabDialog.testTypePlaceholder')}
                 value={labForm.test_type}
                 onChange={e => setLabForm(p => ({ ...p, test_type: e.target.value }))}
                 className={labErrors.test_type ? 'border-destructive' : ''} />
               {labErrors.test_type && <p className="text-xs text-destructive">{labErrors.test_type}</p>}
             </div>
             <div className="space-y-1">
-              <Label>Assign To <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Label>{t('patientDetail.orderLabDialog.assignTo')} <span className="text-muted-foreground text-xs">({c('labels.optional')})</span></Label>
               <Select value={labForm.assigned_to} onValueChange={val => setLabForm(p => ({ ...p, assigned_to: val }))}>
-                <SelectTrigger><SelectValue placeholder="Any Lab Technician" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('patientDetail.orderLabDialog.anyLabTechnician')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any Lab Technician</SelectItem>
+                  <SelectItem value="any">{t('patientDetail.orderLabDialog.anyLabTechnician')}</SelectItem>
                   {labTechs.map(tech => (
                     <SelectItem key={tech.user_id} value={tech.user_id}>{tech.username}</SelectItem>
                   ))}
@@ -1114,16 +1117,16 @@ export default function PatientDetail() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Input placeholder="Clinical indication or special instructions"
+              <Label>{t('patientDetail.orderLabDialog.notes')} <span className="text-muted-foreground text-xs">({c('labels.optional')})</span></Label>
+              <Input placeholder={t('patientDetail.orderLabDialog.notesPlaceholder')}
                 value={labForm.notes}
                 onChange={e => setLabForm(p => ({ ...p, notes: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLabOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setLabOpen(false)}>{c('actions.cancel')}</Button>
             <Button onClick={handleLabOrder} disabled={savingLab} className="gap-2">
-              {savingLab && <Loader2 className="h-4 w-4 animate-spin" />} Send Order
+              {savingLab && <Loader2 className="h-4 w-4 animate-spin" />} {t('patientDetail.orderLabDialog.sendOrder')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1136,15 +1139,17 @@ export default function PatientDetail() {
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingClin ? 'Edit Clinical Record' : 'Record Clinical Data'}</DialogTitle>
+            <DialogTitle>{editingClin ? t('patientDetail.clinicalDialog.editTitle') : t('patientDetail.clinicalDialog.addTitle')}</DialogTitle>
           </DialogHeader>
 
           {editingClin && Number(editingClin.linked_prediction_count) > 0 && (
             <div className="flex gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 -mt-2 mb-1">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
-                This record was used in {editingClin.linked_prediction_count} prediction(s).
-                Editing it will affect the data shown in those historical predictions.
+                <Trans i18nKey="patientDetail.clinicalDialog.editWarning" t={t} values={{ count: editingClin.linked_prediction_count }}>
+                  This record was used in {{count: editingClin.linked_prediction_count}} prediction(s).
+                  Editing it will affect the data shown in those historical predictions.
+                </Trans>
               </span>
             </div>
           )}
@@ -1152,11 +1157,11 @@ export default function PatientDetail() {
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Temperature (°C)', key: 'temperature', placeholder: '37.5' },
-                { label: 'Heart Rate (bpm)', key: 'heart_rate',  placeholder: '80' },
-                { label: 'SpO2 (%)',          key: 'spo2',        placeholder: '98' },
-                { label: 'BP Systolic',       key: 'bp_sys',      placeholder: '120' },
-                { label: 'BP Diastolic',      key: 'bp_dia',      placeholder: '80' },
+                { label: t('predictionDetail.vitals.temp') + ' (°C)', key: 'temperature', placeholder: '37.5' },
+                { label: t('predictionDetail.vitals.hr') + ' (bpm)', key: 'heart_rate',  placeholder: '80' },
+                { label: t('predictionDetail.vitals.spo2') + ' (%)',          key: 'spo2',        placeholder: '98' },
+                { label: t('patientDetail.clinicalDialog.bpSys'),       key: 'bp_sys',      placeholder: '120' },
+                { label: t('patientDetail.clinicalDialog.bpDia'),      key: 'bp_dia',      placeholder: '80' },
               ].map(({ label, key, placeholder }) => (
                 <div key={key} className="space-y-1">
                   <Label className="text-xs">{label}</Label>
@@ -1168,23 +1173,23 @@ export default function PatientDetail() {
             </div>
 
             <div className="space-y-1">
-              <Label>Symptoms</Label>
+              <Label>{t('predictionDetail.reportedSymptoms')}</Label>
               <TagInput
                 value={clinForm.symptoms}
                 onChange={(tags) => setClinForm(p => ({ ...p, symptoms: tags }))}
-                placeholder="Type a symptom (e.g. Fever)…"
+                placeholder={t('patientDetail.clinicalDialog.symptomPlaceholder')}
               />
-              <p className="text-xs text-muted-foreground">Press Enter or comma to add.</p>
+              <p className="text-xs text-muted-foreground">{t('patientDetail.clinicalDialog.symptomHint')}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Observed At</Label>
+                <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> {t('patientDetail.clinicalDialog.observedAt')}</Label>
                 <Input type="datetime-local" value={clinForm.recorded_at}
                   onChange={e => setClinForm(p => ({ ...p, recorded_at: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Visit Date</Label>
+                <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> {t('patientDetail.clinicalDialog.visitDate')}</Label>
                 <Input type="date" value={clinForm.visit_date}
                   onChange={e => setClinForm(p => ({ ...p, visit_date: e.target.value }))} />
               </div>
@@ -1192,9 +1197,9 @@ export default function PatientDetail() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClinicOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setClinicOpen(false)}>{c('actions.cancel')}</Button>
             <Button onClick={handleClinicalData} disabled={savingClin} className="gap-2">
-              {savingClin && <Loader2 className="h-4 w-4 animate-spin" />} Save
+              {savingClin && <Loader2 className="h-4 w-4 animate-spin" />} {c('actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1204,24 +1209,27 @@ export default function PatientDetail() {
       <Dialog open={deleteClinId !== null}
         onOpenChange={(open) => { if (!open) { setDeleteClinId(null); setDeleteTarget(null); } }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Archive Clinical Record</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('patientDetail.archiveDialog.title')}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This record will be <strong>archived</strong> (soft-deleted) and removed from future predictions for{' '}
-            <strong>{patient.name}</strong>.
+            <Trans i18nKey="patientDetail.archiveDialog.desc" t={t} values={{ name: patient.name }}>
+              This record will be <strong>archived</strong> (soft-deleted) and removed from future predictions for <strong>{{name: patient.name}}</strong>.
+            </Trans>
           </p>
           {deleteTarget && Number(deleteTarget.linked_prediction_count) > 0 && (
             <div className="flex gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
-                This record was used in {deleteTarget.linked_prediction_count} completed prediction(s).
-                Those historical records will be preserved but marked as referencing an archived snapshot.
+                <Trans i18nKey="patientDetail.archiveDialog.warning" t={t} values={{ count: deleteTarget.linked_prediction_count }}>
+                  This record was used in {{count: deleteTarget.linked_prediction_count}} completed prediction(s).
+                  Those historical records will be preserved but marked as referencing an archived snapshot.
+                </Trans>
               </span>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteClinId(null); setDeleteTarget(null); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setDeleteClinId(null); setDeleteTarget(null); }}>{c('actions.cancel')}</Button>
             <Button variant="destructive" onClick={handleDeleteClinicalData} disabled={deletingClin} className="gap-2">
-              {deletingClin && <Loader2 className="h-4 w-4 animate-spin" />} Archive
+              {deletingClin && <Loader2 className="h-4 w-4 animate-spin" />} {t('patientDetail.archiveDialog.archive')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1230,13 +1238,13 @@ export default function PatientDetail() {
       {/* Assign Colleague Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Assign Colleague</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('patientDetail.assignDialog.title')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label>Doctor</Label>
+              <Label>{t('patientDetail.assignDialog.doctor')}</Label>
               <Select value={assignForm.doctor_id} onValueChange={v => setAssignForm(p => ({ ...p, doctor_id: v }))}>
                 <SelectTrigger className={assignErrors.doctor_id ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select a doctor" />
+                  <SelectValue placeholder={t('patientDetail.assignDialog.selectDoctor')} />
                 </SelectTrigger>
                 <SelectContent>
                   {orgDoctors.filter(d =>
@@ -1250,19 +1258,19 @@ export default function PatientDetail() {
             </div>
 
             <div className="space-y-1">
-              <Label>Role</Label>
+              <Label>{t('patientDetail.assignDialog.role')}</Label>
               <Select value={assignForm.role} onValueChange={v => setAssignForm(p => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CONSULTING">Consulting — specialist opinion, limited scope</SelectItem>
-                  <SelectItem value="COVERING">Covering — full access while you are away</SelectItem>
+                  <SelectItem value="CONSULTING">{t('patientDetail.assignDialog.consultingDesc')}</SelectItem>
+                  <SelectItem value="COVERING">{t('patientDetail.assignDialog.coveringDesc')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {assignForm.role === 'COVERING' && (
               <div className="space-y-1">
-                <Label>Valid Until</Label>
+                <Label>{t('patientDetail.assignDialog.validUntil')}</Label>
                 <Input type="datetime-local" value={assignForm.valid_until}
                   onChange={e => setAssignForm(p => ({ ...p, valid_until: e.target.value }))}
                   className={assignErrors.valid_until ? 'border-destructive' : ''} />
@@ -1271,9 +1279,9 @@ export default function PatientDetail() {
             )}
 
             <div className="space-y-1">
-              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Label>{t('patientDetail.orderLabDialog.notes')} <span className="text-muted-foreground text-xs">({c('labels.optional')})</span></Label>
               <Textarea
-                placeholder="Reason for assignment or scope of consultation…"
+                placeholder={t('patientDetail.assignDialog.notesPlaceholder')}
                 value={assignForm.notes}
                 onChange={e => setAssignForm(p => ({ ...p, notes: e.target.value }))}
                 className="resize-none" rows={2}
@@ -1281,9 +1289,9 @@ export default function PatientDetail() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>{c('actions.cancel')}</Button>
             <Button onClick={handleAssignColleague} disabled={assigning} className="gap-2">
-              {assigning && <Loader2 className="h-4 w-4 animate-spin" />} Assign
+              {assigning && <Loader2 className="h-4 w-4 animate-spin" />} {c('actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1292,33 +1300,33 @@ export default function PatientDetail() {
       {/* View Lab Results Dialog */}
       <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Lab Test Results</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('patientDetail.resultsDialog.title')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             {activeLabTest && (
               <div className="text-sm bg-muted/30 p-3 rounded-md border flex justify-between items-start">
                 <div>
-                  <p><strong>Test Type:</strong> {activeLabTest.test_type}</p>
-                  <p><strong>Ordered:</strong> {formatDate(activeLabTest.ordered_at)}</p>
+                  <p><strong>{t('patientDetail.resultsDialog.testType')}:</strong> {activeLabTest.test_type}</p>
+                  <p><strong>{t('patientDetail.ordered')}:</strong> {formatDate(activeLabTest.ordered_at)}</p>
                 </div>
-                {activeLabTest.notes && <p className="text-muted-foreground max-w-sm text-right">Notes: {activeLabTest.notes}</p>}
+                {activeLabTest.notes && <p className="text-muted-foreground max-w-sm text-right">{t('patientDetail.orderLabDialog.notes')}: {activeLabTest.notes}</p>}
               </div>
             )}
 
             {loadingResults ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
             ) : labResults.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No results available yet.</p>
+              <p className="text-center text-muted-foreground py-8">{t('patientDetail.resultsDialog.noResults')}</p>
             ) : (
               <div className="border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Analyte</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Ref Range</TableHead>
-                      <TableHead>Flag</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Acknowledge</TableHead>
+                      <TableHead>{t('patientDetail.resultsDialog.analyte')}</TableHead>
+                      <TableHead>{t('patientDetail.resultsDialog.value')}</TableHead>
+                      <TableHead>{t('patientDetail.resultsDialog.refRange')}</TableHead>
+                      <TableHead>{t('patientDetail.resultsDialog.flag')}</TableHead>
+                      <TableHead>{t('patientDetail.resultsDialog.status')}</TableHead>
+                      <TableHead className="text-right">{t('patientDetail.resultsDialog.acknowledge')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1347,22 +1355,22 @@ export default function PatientDetail() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {isAmended   && <Badge variant="secondary" className="text-[10px] bg-muted-foreground text-white">Amended</Badge>}
-                            {isCorrected && <Badge className="text-[10px] bg-primary text-primary-foreground">Corrected</Badge>}
+                            {isAmended   && <Badge variant="secondary" className="text-[10px] bg-muted-foreground text-white">{t('patientDetail.resultsDialog.amended')}</Badge>}
+                            {isCorrected && <Badge className="text-[10px] bg-primary text-primary-foreground">{t('patientDetail.resultsDialog.corrected')}</Badge>}
                           </TableCell>
                           <TableCell className="text-right">
                             {isAmended ? (
-                              <span className="text-[10px] text-muted-foreground">Archived</span>
+                              <span className="text-[10px] text-muted-foreground">{t('patientDetail.resultsDialog.archived')}</span>
                             ) : !['CRITICAL', 'ABNORMAL'].includes(r.flag ?? '') ? (
                               <span className="text-[10px] text-muted-foreground">—</span>
                             ) : r.acknowledged_at ? (
                               <span className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                                <CheckCircle2 className="h-3 w-3" /> Ack'd
+                                <CheckCircle2 className="h-3 w-3" /> {t('patientDetail.resultsDialog.ackd')}
                               </span>
                             ) : (
                               <Button variant="outline" size="sm" className="h-7 text-xs"
                                 onClick={() => handleAcknowledgeResult(r.result_id)}>
-                                Acknowledge
+                                {t('patientDetail.resultsDialog.acknowledge')}
                               </Button>
                             )}
                           </TableCell>
@@ -1375,7 +1383,7 @@ export default function PatientDetail() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResultsOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setResultsOpen(false)}>{c('actions.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

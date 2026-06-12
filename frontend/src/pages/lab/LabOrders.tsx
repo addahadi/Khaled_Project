@@ -20,6 +20,7 @@ import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate, timeAgo } from '@/lib/formatDate';
+import { useTranslation, Trans } from 'react-i18next';
 
 interface LabOrder {
   test_id:            string;
@@ -55,6 +56,8 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_FILTERS = ['ALL', 'PENDING', 'INPROGRESS', 'COMPLETED'];
 
 export default function LabOrders() {
+  const { t } = useTranslation('lab');
+  const { t: c } = useTranslation('common');
   const navigate  = useNavigate();
   const { toast } = useToast();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
@@ -96,7 +99,7 @@ export default function LabOrders() {
       mutationFn:     () => apiClient.patch(`/lab/orders/${testId}/start`),
       invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
       onStart:   () => setActionId(testId),
-      onSuccess: (_d, msg) => { toast({ title: 'Order claimed', description: msg }); loadOrders(); },
+      onSuccess: (_d, msg) => { toast({ title: t('orders.orderClaimed'), description: msg }); loadOrders(); },
       onError:   ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
       onFinal:   () => setActionId(null),
     });
@@ -107,7 +110,7 @@ export default function LabOrders() {
       mutationFn:     () => apiClient.patch(`/lab/orders/${testId}/release`),
       invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
       onStart:   () => setActionId(testId),
-      onSuccess: (_d, msg) => { toast({ title: 'Order released', description: msg }); loadOrders(); },
+      onSuccess: (_d, msg) => { toast({ title: t('orders.orderReleased'), description: msg }); loadOrders(); },
       onError:   ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
       onFinal:   () => setActionId(null),
     });
@@ -121,9 +124,9 @@ export default function LabOrders() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Lab Orders</h1>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('orders.title')}</h1>
           {pagination && (
-            <p className="text-sm text-muted-foreground mt-0.5">{pagination.total} total orders</p>
+            <p className="text-sm text-muted-foreground mt-0.5"><Trans i18nKey="orders.totalOrders" t={t} count={pagination.total}>{{count: pagination.total}} total orders</Trans></p>
           )}
         </div>
       </div>
@@ -133,7 +136,7 @@ export default function LabOrders() {
         <div className="relative flex-1 w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Search patient or test…"
+            placeholder={t('orders.searchPlaceholder')}
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -142,12 +145,12 @@ export default function LabOrders() {
         
         <Select value={sort} onValueChange={setSort}>
           <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Sort by" />
+            <SelectValue placeholder={t('orders.sortPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">Recently Added</SelectItem>
-            <SelectItem value="older">Older First</SelectItem>
-            <SelectItem value="A-Z">Name (A-Z)</SelectItem>
+            <SelectItem value="recent">{t('orders.sortRecent')}</SelectItem>
+            <SelectItem value="older">{t('orders.sortOlder')}</SelectItem>
+            <SelectItem value="A-Z">{t('orders.sortAZ')}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -162,7 +165,7 @@ export default function LabOrders() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {s === 'ALL' ? 'All' : s === 'INPROGRESS' ? 'In Progress' : s.charAt(0) + s.slice(1).toLowerCase()}
+              {s === 'ALL' ? c('filters.all') : t(`orders.statusFilters.${s}`) ?? s}
             </button>
           ))}
         </div>
@@ -184,12 +187,12 @@ export default function LabOrders() {
                 }
               </div>
               <p className="text-sm font-medium text-foreground">
-                {search || filter !== 'ALL' ? 'No orders match your filter.' : 'No lab orders found.'}
+                {search || filter !== 'ALL' ? t('orders.noMatch') : t('orders.noOrders')}
               </p>
               {(search || filter !== 'ALL') && (
                 <Button size="sm" variant="outline" className="mt-4"
                   onClick={() => { setSearch(''); setFilter('ALL'); }}>
-                  Clear Filters
+                  {t('orders.clearFilters')}
                 </Button>
               )}
             </div>
@@ -197,7 +200,7 @@ export default function LabOrders() {
             <>
               {/* Table head */}
               <div className="grid grid-cols-[2fr_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-3 px-5 py-2.5 border-b border-border bg-muted/30">
-                {['Patient', 'Test Type', 'Ordered By', 'Assigned To', 'Status', 'Ordered At', ''].map(h => (
+                {[t('orders.table.patient'), t('orders.table.testType'), t('orders.table.orderedBy'), t('orders.table.assignedTo'), t('orders.table.status'), t('orders.table.orderedAt'), ''].map(h => (
                   <span key={h} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</span>
                 ))}
               </div>
@@ -222,14 +225,14 @@ export default function LabOrders() {
                   }`}>
                     {o.assigned_tech_name ? (
                       o.is_mine
-                        ? <><UserCheck className="h-3.5 w-3.5 shrink-0" /> You</>
+                        ? <><UserCheck className="h-3.5 w-3.5 shrink-0" /> {t('orders.you')}</>
                         : <><User className="h-3.5 w-3.5 shrink-0" /> {o.assigned_tech_name}</>
-                    ) : 'Unassigned'}
+                    ) : t('orders.unassigned')}
                   </span>
 
                   {/* Status */}
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${STATUS_BADGE[o.status] ?? ''}`}>
-                    {STATUS_LABEL[o.status] ?? o.status}
+                    {t(`orders.status.${o.status}`) ?? o.status}
                   </span>
 
                   {/* Date + overdue */}
@@ -253,34 +256,34 @@ export default function LabOrders() {
                         onClick={() => handleClaim(o.test_id)}
                       >
                         {actionId === o.test_id && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                        Claim
+                        {t('orders.actions.claim')}
                       </Button>
                     )}
                     {o.status === 'INPROGRESS' && o.is_mine && (
                       <>
                         <Button size="sm" className="h-7 text-xs"
                           onClick={() => navigate(`/lab/orders/${o.test_id}`)}>
-                          Enter Results
+                          {t('orders.actions.enterResults')}
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 text-xs text-muted-foreground"
                           disabled={actionId === o.test_id}
                           onClick={() => handleRelease(o.test_id)}
                         >
                           {actionId === o.test_id && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                          Release
+                          {t('orders.actions.release')}
                         </Button>
                       </>
                     )}
                     {o.status === 'INPROGRESS' && !o.is_mine && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs"
                         onClick={() => navigate(`/lab/orders/${o.test_id}`)}>
-                        View
+                        {t('orders.actions.view')}
                       </Button>
                     )}
                     {o.status === 'COMPLETED' && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs"
                         onClick={() => navigate(`/lab/orders/${o.test_id}`)}>
-                        View
+                        {t('orders.actions.view')}
                       </Button>
                     )}
                   </div>
@@ -291,20 +294,20 @@ export default function LabOrders() {
               {pagination && pagination.pages > 1 && (
                 <div className="flex items-center justify-between px-5 py-3 border-t border-border">
                   <p className="text-xs text-muted-foreground">
-                    Page {pagination.page} of {pagination.pages} · {pagination.total} orders
+                    <Trans i18nKey="orders.pagination" t={t} values={{page: pagination.page, pages: pagination.pages, total: pagination.total}}>Page {{page: pagination.page}} of {{pages: pagination.pages}} · {{total: pagination.total}} orders</Trans>
                   </p>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" className="h-8 gap-1"
                       disabled={page <= 1}
                       onClick={() => setPage(p => p - 1)}
                     >
-                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                      <ChevronLeft className="h-3.5 w-3.5" /> {c('pagination.previous')}
                     </Button>
                     <Button size="sm" variant="outline" className="h-8 gap-1"
                       disabled={page >= pagination.pages}
                       onClick={() => setPage(p => p + 1)}
                     >
-                      Next <ChevronRight className="h-3.5 w-3.5" />
+                      {c('pagination.next')} <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>

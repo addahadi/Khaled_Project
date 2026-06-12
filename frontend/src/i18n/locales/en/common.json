@@ -1,0 +1,115 @@
+{
+  "brand": "DiagInfect",
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "about": "About",
+    "signIn": "Sign in",
+    "getStarted": "Get started",
+    "getStartedFree": "Get started free",
+    "goToDashboard": "Go to dashboard"
+  },
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "patients": "Patients",
+    "predictions": "Predictions",
+    "alerts": "Alerts",
+    "profile": "Profile",
+    "staff": "Staff",
+    "departments": "Departments",
+    "subscription": "Subscription",
+    "reports": "Reports",
+    "labOrders": "Lab Orders",
+    "enterResults": "Enter Results"
+  },
+  "roles": {
+    "doctor": "Doctor",
+    "labTech": "Lab technician",
+    "manager": "Hospital manager"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "back": "Back",
+    "continue": "Continue",
+    "submit": "Submit",
+    "search": "Search",
+    "filter": "Filter",
+    "viewAll": "View all",
+    "markRead": "Mark read",
+    "signOut": "Sign out",
+    "learnMore": "Learn more",
+    "start": "Start",
+    "amend": "Amend",
+    "refresh": "Refresh",
+    "export": "Export",
+    "remove": "Remove"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "suspended": "Suspended",
+    "pending": "Pending",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  },
+  "fields": {
+    "email": "Email address",
+    "password": "Password",
+    "username": "Username",
+    "language": "Language",
+    "name": "Name",
+    "type": "Type",
+    "role": "Role",
+    "department": "Department",
+    "status": "Status"
+  },
+  "filters": {
+    "all": "All"
+  },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "gender": {
+    "MALE": "Male",
+    "FEMALE": "Female",
+    "OTHER": "Other"
+  },
+  "labels": {
+    "optional": "Optional"
+  },
+  "misc": {
+    "noData": "No data",
+    "loading": "Loading...",
+    "allClear": "All clear — no alerts",
+    "copyright": "© {{year}} DiagInfect — Ibn Khaldoun University of Tiaret. All rights reserved.",
+    "copyrightShort": "© {{year}} DiagInfect. All rights reserved.",
+    "builtWith": "Built with React · TypeScript · shadcn/ui",
+    "system": "System",
+    "panel": "Panel",
+    "select": "Select...",
+    "optional": "Optional"
+  },
+  "footer": {
+    "platform": "Platform",
+    "company": "Company",
+    "access": "Access",
+    "security": "Security",
+    "roadmap": "Roadmap",
+    "contact": "Contact",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "home": "Home",
+    "registerOrganization": "Register organization",
+    "brandDescription": "AI-powered infectious disease diagnostic support for hospitals and clinics."
+  },
+  "language": {
+    "en": "English",
+    "ar": "العربية"
+  }
+}

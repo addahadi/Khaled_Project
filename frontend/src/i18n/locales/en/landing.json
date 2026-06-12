@@ -1,0 +1,90 @@
+{
+  "hero": {
+    "tagline": "AI-powered clinical decision support",
+    "title": "Detect infectious\ndiseases earlier.",
+    "titleHighlight": "Act faster.",
+    "description": "DiagInfect analyses routine biological markers with AI to deliver infection risk scores before culture results arrive — giving clinicians a critical head start.",
+    "learnHow": "Learn how it works"
+  },
+  "features": {
+    "eyebrow": "Platform capabilities",
+    "title": "Everything your clinical team needs",
+    "description": "Built around the real workflows of doctors, lab technicians, and hospital managers — not the other way around.",
+    "items": {
+      "ai": { "eyebrow": "AI prediction", "title": "Early risk assessment", "description": "Machine learning models (Random Forest, XGBoost, Neural Networks) trained on real infectious disease datasets deliver risk scores in under 2 seconds — before culture results are available." },
+      "lab": { "eyebrow": "Lab integration", "title": "Seamless lab workflow", "description": "Bidirectional data flow between doctors and lab technicians. CRP, CBC, ESR, and NFS results link directly to patient records with anomaly alerts built in." },
+      "xai": { "eyebrow": "Explainable AI", "title": "Decisions you can trust", "description": "Every prediction comes with a ranked explanation of the contributing factors. Clinical trust requires transparency — not a black box." },
+      "rbac": { "eyebrow": "Role-based access", "title": "Built for the whole team", "description": "Separate, optimised panels for doctors, lab technicians, and hospital managers. Each role sees exactly what it needs, nothing more." }
+    }
+  },
+  "pricing": {
+    "eyebrow": "Subscription plans",
+    "title": "Simple, transparent pricing",
+    "description": "Start free. Scale when you are ready.",
+    "mostPopular": "Most popular",
+    "plans": {
+      "trial": { "name": "Trial", "period": "14 days", "description": "Full platform access with no commitment.", "cta": "Start free trial" },
+      "clinic": { "name": "Clinic", "period": "/month", "description": "For small and medium clinics.", "cta": "Get started" },
+      "hospital": { "name": "Hospital", "period": "/month", "description": "Enterprise-grade for hospital networks.", "cta": "Contact sales" }
+    },
+    "features": {
+      "predictions50": "50 AI predictions",
+      "doctors3": "Up to 3 doctors",
+      "labIntegration": "Lab integration",
+      "emailSupport": "Email support",
+      "predictions500": "500 AI predictions",
+      "doctors15": "Up to 15 doctors",
+      "fullLab": "Full lab integration",
+      "xai": "XAI explanations",
+      "prioritySupport": "Priority support",
+      "unlimitedPredictions": "Unlimited predictions",
+      "unlimitedStaff": "Unlimited staff",
+      "dedicatedSupport": "Dedicated support",
+      "apiAccess": "API access"
+    }
+  },
+  "cta": {
+    "eyebrow": "Ready to get started?",
+    "title": "Transform your infectious disease\ndiagnostic workflow today.",
+    "description": "Join hospitals already using DiagInfect to improve patient outcomes with AI-powered infection risk assessment.",
+    "startTrial": "Start free trial"
+  },
+  "mockup": {
+    "predictionResult": "Prediction Result",
+    "critical": "CRITICAL",
+    "riskScore": "Risk Score",
+    "confidence": "Confidence",
+    "modelVersion": "Model v2.3.1",
+    "topFactors": "Top factors",
+    "labLinked": "Lab results linked",
+    "labReady": "CBC · CRP · ESR — ready",
+    "aiSupport": "DiagInfect · AI diagnosis support",
+    "live": "Live"
+  },
+  "about": {
+    "eyebrow": "About DiagInfect",
+    "heroTitle": "AI diagnostics built for the realities of clinical work.",
+    "heroDescription": "We believe AI, built responsibly, can help clinicians detect infectious diseases earlier — reducing delays, antibiotic misuse, and preventable outcomes.",
+    "missionEyebrow": "Our mission",
+    "missionTitle": "Close the diagnostic gap.",
+    "missionP1": "Infectious disease diagnosis is time-critical. Every hour of delay carries real clinical consequences — delayed treatment, inappropriate antibiotics, worse outcomes.",
+    "missionP2": "DiagInfect gives clinicians a powerful second opinion: one that synthesises symptoms, lab data, and patient history in seconds, with full transparency about how the conclusion was reached.",
+    "techEyebrow": "Technology",
+    "techTitle": "How it works.",
+    "steps": {
+      "input": { "label": "Input", "description": "CRP, CBC, ESR, NFS, temperature, clinical indicators" },
+      "analyse": { "label": "Analyse", "description": "Random Forest, XGBoost, and Neural Network ensemble" },
+      "output": { "label": "Output", "description": "Infection risk score + ranked factor explanations" }
+    },
+    "valuesEyebrow": "Principles",
+    "valuesTitle": "What we stand for.",
+    "values": {
+      "accuracy": { "title": "Accuracy first", "description": "Every model is rigorously validated before deployment. Clinical safety is non-negotiable." },
+      "clinician": { "title": "Clinician-centered", "description": "Built with and for clinicians — our workflows mirror how hospitals actually operate." },
+      "xai": { "title": "Explainable AI", "description": "We don't just give predictions — we explain them, building trust between AI and clinicians." },
+      "learning": { "title": "Continuous learning", "description": "Our models improve over time with anonymised feedback from real clinical outcomes." }
+    },
+    "ctaTitle": "Ready to see it in action?",
+    "ctaDescription": "Start a 14-day free trial with full platform access."
+  }
+}

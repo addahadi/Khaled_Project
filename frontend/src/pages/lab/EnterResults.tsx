@@ -19,6 +19,7 @@ import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { labResultsSchema, labResultRowSchema, flattenZodErrors } from '@/api/schemas';
+import { useTranslation } from 'react-i18next';
 
 interface ResultRow {
  analyte_name:  string;
@@ -84,8 +85,10 @@ const TEMPLATES: Record<string, ResultRow[]> = {
 };
 
 export default function EnterResults() {
- const { testId } = useParams<{ testId: string }>();
- const navigate = useNavigate();
+  const { t } = useTranslation('lab');
+  const { t: c } = useTranslation('common');
+  const { testId } = useParams<{ testId: string }>();
+  const navigate = useNavigate();
  const { toast } = useToast();
  const { isLoading, startLoading, stopLoading } = useDelayedLoading();
 
@@ -160,7 +163,7 @@ export default function EnterResults() {
     invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
     onStart: () => setCompleting(true),
     onSuccess: () => {
-      toast({ title: 'Order Completed', description: 'The test status has been set to COMPLETED.' });
+      toast({ title: t('results.orderCompleted'), description: t('results.orderCompletedDesc') });
       ApiManager.execute({
         queryKey: ['lab', 'orders', testId!],
         endpoint: `/lab/orders/${testId}`,
@@ -182,7 +185,7 @@ export default function EnterResults() {
   const parsed = labResultRowSchema.safeParse(rowToParse);
   if (!parsed.success) {
     setFieldErrors(flattenZodErrors(parsed.error));
-    toast({ title: 'Validation Error', description: 'Please fill all required fields.', variant: 'destructive' });
+    toast({ title: t('results.validationError'), description: t('results.validationErrorDesc'), variant: 'destructive' });
     return;
   }
   setFieldErrors({});
@@ -203,7 +206,7 @@ export default function EnterResults() {
     invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
     onStart: () => setSubmitting(true),
     onSuccess: () => {
-      toast({ title: 'Result amended successfully', description: 'The original result has been archived.' });
+      toast({ title: t('results.resultAmended'), description: t('results.resultAmendedDesc') });
       setAmendingRowId(null);
       // Reload order data
       ApiManager.execute({
@@ -238,7 +241,7 @@ export default function EnterResults() {
  if (!parsed.success) {
  setFieldErrors(flattenZodErrors(parsed.error));
  console.log(parsed.error)
- toast({ title: 'Validation Error', description: 'Please fill all required fields.', variant: 'destructive' });
+ toast({ title: t('results.validationError'), description: t('results.validationErrorDesc'), variant: 'destructive' });
  return;
  }
  setFieldErrors({});
@@ -265,7 +268,7 @@ export default function EnterResults() {
  invalidateKeys: [['lab', 'orders'], ['lab', 'stats']],
  onStart: () => setSubmitting(true),
  onSuccess: (_data: unknown, msg: string) => {
- toast({ title: 'Results submitted', description: msg });
+ toast({ title: t('results.resultsSubmitted'), description: msg });
  // Reload order data so the tech can review and mark complete
  ApiManager.execute({
    queryKey: ['lab', 'orders', testId!],
@@ -302,7 +305,7 @@ export default function EnterResults() {
  }
 
  if (!order) {
- return <div className="text-center py-12 text-muted-foreground">Order not found.</div>;
+ return <div className="text-center py-12 text-muted-foreground">{t('results.orderNotFound')}</div>;
  }
 
  const isCompleted = order.status === 'COMPLETED';
@@ -315,7 +318,7 @@ export default function EnterResults() {
  </Button>
  <div>
  <h1 className="text-2xl font-semibold text-foreground tracking-tight">
- {isCompleted ? 'View Results' : 'Enter Results'}
+ {isCompleted ? t('results.viewResults') : t('results.enterResults')}
  </h1>
  <p className="text-muted-foreground">{order.test_type}</p>
  </div>
@@ -325,22 +328,22 @@ export default function EnterResults() {
  <Card>
  <CardHeader>
  <CardTitle className="text-base flex items-center gap-2">
- <User className="h-4 w-4" /> Patient Information
+ <User className="h-4 w-4" /> {t('results.patientInfo')}
  </CardTitle>
  </CardHeader>
  <CardContent className="grid sm:grid-cols-3 gap-4 text-sm">
- <div><span className="text-muted-foreground">Name:</span><span className="ml-2 font-medium">{order.patient_name}</span></div>
- <div><span className="text-muted-foreground">Age:</span><span className="ml-2 font-medium">{order.patient_age}</span></div>
- <div><span className="text-muted-foreground">Gender:</span><span className="ml-2 font-medium">{order.patient_gender}</span></div>
- <div><span className="text-muted-foreground">Test:</span><span className="ml-2 font-medium">{order.test_type}</span></div>
- <div><span className="text-muted-foreground">Ordered By:</span><span className="ml-2 font-medium">{order.ordered_by_name ?? '—'}</span></div>
+ <div><span className="text-muted-foreground">{t('orders.table.patient')}:</span><span className="ml-2 font-medium">{order.patient_name}</span></div>
+ <div><span className="text-muted-foreground">{t('results.age')}:</span><span className="ml-2 font-medium">{order.patient_age}</span></div>
+ <div><span className="text-muted-foreground">{t('results.gender')}:</span><span className="ml-2 font-medium">{order.patient_gender}</span></div>
+ <div><span className="text-muted-foreground">{t('orders.table.testType')}:</span><span className="ml-2 font-medium">{order.test_type}</span></div>
+ <div><span className="text-muted-foreground">{t('orders.table.orderedBy')}:</span><span className="ml-2 font-medium">{order.ordered_by_name ?? '—'}</span></div>
  <div>
- <span className="text-muted-foreground">Status:</span>
+ <span className="text-muted-foreground">{t('orders.table.status')}:</span>
  <Badge className="ml-2 text-xs" variant={isCompleted ? 'default' : 'outline'}>{order.status}</Badge>
  </div>
  {order.notes && (
  <div className="col-span-3">
- <span className="text-muted-foreground">Notes:</span>
+ <span className="text-muted-foreground">{t('results.notes')}:</span>
  <span className="ml-2">{order.notes}</span>
  </div>
  )}
@@ -350,7 +353,7 @@ export default function EnterResults() {
  {/* Results entry */}
  <Card>
   <CardHeader>
-  <CardTitle className="text-base">Result Entries</CardTitle>
+  <CardTitle className="text-base">{t('results.resultEntries')}</CardTitle>
   </CardHeader>
   <CardContent className="space-y-4">
   {rows.map((row, i) => {
@@ -364,16 +367,16 @@ export default function EnterResults() {
    {/* Status Badges */}
    {(row.is_amended || row.original_result_id) && (
      <div className="absolute -top-2.5 right-4 flex gap-2">
-       {row.is_amended && <Badge variant="secondary" className="text-[10px] bg-muted-foreground text-white">Amended (Archived)</Badge>}
-       {row.original_result_id && <Badge className="text-[10px] bg-primary text-primary-foreground">Corrected Result</Badge>}
+       {row.is_amended && <Badge variant="secondary" className="text-[10px] bg-muted-foreground text-white">{t('results.amended')}</Badge>}
+       {row.original_result_id && <Badge className="text-[10px] bg-primary text-primary-foreground">{t('results.corrected')}</Badge>}
      </div>
    )}
 
   {/* Analyte name */}
  <div className="col-span-12 sm:col-span-2 space-y-1">
-  <Label className="text-xs">Analyte Name</Label>
+  <Label className="text-xs">{t('results.analyteName')}</Label>
   <Input
-  placeholder="e.g. WBC Count"
+  placeholder={t('results.placeholders.analyte')}
   value={row.analyte_name}
   onChange={e => updateRow(i, 'analyte_name', e.target.value)}
   onBlur={() => handleBlur(i)}
@@ -384,9 +387,9 @@ export default function EnterResults() {
 
  {/* Value */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
-  <Label className="text-xs">Value</Label>
+  <Label className="text-xs">{t('results.value')}</Label>
   <Input
-  placeholder="e.g. 14.2"
+  placeholder={t('results.placeholders.value')}
   value={row.value}
   onChange={e => updateRow(i, 'value', e.target.value)}
   onBlur={() => handleBlur(i)}
@@ -397,7 +400,7 @@ export default function EnterResults() {
 
  {/* Ref Low */}
  <div className="col-span-6 sm:col-span-1 space-y-1">
-  <Label className="text-xs">Ref. Low</Label>
+  <Label className="text-xs">{t('results.refLow')}</Label>
   <Input
   type="number" placeholder="0"
   value={row.reference_low}
@@ -410,7 +413,7 @@ export default function EnterResults() {
 
  {/* Ref High */}
  <div className="col-span-6 sm:col-span-1 space-y-1">
-  <Label className="text-xs">Ref. High</Label>
+  <Label className="text-xs">{t('results.refHigh')}</Label>
   <Input
   type="number" placeholder="100"
   value={row.reference_high}
@@ -423,9 +426,9 @@ export default function EnterResults() {
 
  {/* Sub-panel grouping */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
-  <Label className="text-xs">Sub-Panel</Label>
+  <Label className="text-xs">{t('results.subPanel')}</Label>
   <Input
-  placeholder="e.g. CBC, Liver Panel"
+  placeholder={t('results.placeholders.subPanel')}
   value={row.sub_panel}
   onChange={e => updateRow(i, 'sub_panel', e.target.value)}
   onBlur={() => handleBlur(i)}
@@ -437,14 +440,14 @@ export default function EnterResults() {
  {/* Flag — auto-computed when ref range is provided, manual otherwise */}
  <div className="col-span-6 sm:col-span-2 space-y-1">
   <Label className="text-xs">
-  Flag{' '}
+  {t('results.flag')}{' '}
   {hasRefRange && !isRowDisabled && (
-  <span className="text-xs font-normal text-primary">(auto)</span>
+  <span className="text-xs font-normal text-primary">({t('results.auto')})</span>
   )}
   </Label>
   {hasRefRange && !isEditingThisRow && !row.fallback_flag ? (
   <div className={`h-9 flex items-center px-3 rounded-md border text-xs font-medium ${row.is_amended ? 'bg-muted text-muted-foreground line-through' : 'bg-primary/10 text-primary border-primary/20'}`}>
-  Server-computed
+  {t('results.serverComputed')}
   </div>
   ) : (
   <Select
@@ -453,12 +456,12 @@ export default function EnterResults() {
   disabled={isRowDisabled}
   >
   <SelectTrigger className={fieldErrors[`results.${i}.fallback_flag`] ? 'border-destructive' : row.is_amended ? 'line-through' : ''}>
-  <SelectValue placeholder="Flag" />
+  <SelectValue placeholder={t('results.flag')} />
   </SelectTrigger>
   <SelectContent>
-  <SelectItem value="NORMAL">Normal</SelectItem>
-  <SelectItem value="ABNORMAL">Abnormal</SelectItem>
-  <SelectItem value="CRITICAL">Critical</SelectItem>
+  <SelectItem value="NORMAL">{t('results.flags.NORMAL')}</SelectItem>
+  <SelectItem value="ABNORMAL">{t('results.flags.ABNORMAL')}</SelectItem>
+  <SelectItem value="CRITICAL">{t('results.flags.CRITICAL')}</SelectItem>
   </SelectContent>
   </Select>
   )}
@@ -473,7 +476,7 @@ export default function EnterResults() {
   )}
   {isCompleted && !row.is_amended && row.result_id && !amendingRowId && (
     <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setAmendingRowId(row.result_id!)}>
-      Amend
+      {c('actions.amend')}
     </Button>
   )}
   {isEditingThisRow && (
@@ -482,7 +485,7 @@ export default function EnterResults() {
         <Trash2 className="h-4 w-4 text-muted-foreground" />
       </Button>
       <Button variant="default" size="sm" className="h-9 text-xs px-2" onClick={() => handleAmendSubmit(i)} disabled={submitting}>
-        {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+        {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : c('actions.save')}
       </Button>
     </div>
   )}
@@ -494,25 +497,25 @@ export default function EnterResults() {
   {!isCompleted && (
   <div className="flex flex-wrap gap-3 pt-2">
   <Button variant="outline" onClick={addRow} className="gap-2">
-  <Plus className="h-4 w-4" /> Add Analyte
+  <Plus className="h-4 w-4" /> {t('results.addAnalyte')}
   </Button>
   <DropdownMenu>
   <DropdownMenuTrigger asChild>
   <Button variant="outline" className="gap-2 text-primary border-primary/50 hover:bg-primary/10">
-  <FileText className="h-4 w-4" /> Load Template <ChevronDown className="h-3 w-3 opacity-50" />
+  <FileText className="h-4 w-4" /> {t('results.loadTemplate')} <ChevronDown className="h-3 w-3 opacity-50" />
   </Button>
   </DropdownMenuTrigger>
   <DropdownMenuContent>
   {Object.keys(TEMPLATES).map(t => (
   <DropdownMenuItem key={t} onClick={() => loadTemplate(t)}>
-  {t} Panel
+  {t} {c('misc.panel')}
   </DropdownMenuItem>
   ))}
   </DropdownMenuContent>
   </DropdownMenu>
   <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-  Submit Results
+  {t('results.submitResults')}
   </Button>
   {order.status === 'INPROGRESS' && order.results?.length > 0 && (
   <Button
@@ -521,7 +524,7 @@ export default function EnterResults() {
     className="gap-2 bg-green-600 hover:bg-green-700 text-white ml-auto"
   >
     {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-    Mark as Complete
+    {t('results.markAsComplete')}
   </Button>
   )}
   </div>

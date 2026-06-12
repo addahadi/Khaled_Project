@@ -1,0 +1,175 @@
+{
+  "dashboard": {
+    "title": "لوحة تحكم المختبر",
+    "welcome": "مرحباً بعودتك، {{name}}",
+    "pendingOrders": "طلبات معلقة",
+    "inProgress": "قيد التنفيذ",
+    "completedToday": "مكتمل اليوم",
+    "totalCompleted": "إجمالي المكتمل",
+    "kpis": {
+      "pendingOrders": "طلبات معلقة",
+      "inProgress": "قيد التنفيذ",
+      "completedToday": "مكتمل اليوم",
+      "totalCompleted": "إجمالي المكتمل"
+    },
+    "pendingAndInProgress": "الطلبات المعلقة وقيد التنفيذ",
+    "pendingOrdersTitle": "الطلبات المعلقة وقيد التنفيذ",
+    "allCaughtUp": "لا توجد طلبات متأخرة!",
+    "noPendingOrders": "لا توجد طلبات معلقة حالياً.",
+    "patient": "المريض",
+    "testType": "نوع الفحص",
+    "orderedBy": "طلب بواسطة",
+    "status": "الحالة",
+    "waiting": "وقت الانتظار",
+    "enterResults": "إدخال النتائج",
+    "viewAll": "عرض الكل",
+    "table": {
+      "patient": "المريض",
+      "testType": "نوع الفحص",
+      "orderedBy": "طلب بواسطة",
+      "status": "الحالة",
+      "waiting": "وقت الانتظار"
+    },
+    "actions": {
+      "start": "بدء",
+      "enterResults": "إدخال النتائج"
+    }
+  },
+  "orders": {
+    "title": "طلبات المختبر",
+    "subtitle": "إدارة وتتبع طلبات الفحوصات المخبرية.",
+    "searchPlaceholder": "البحث بالمريض أو نوع الفحص...",
+    "noOrders": "لم يتم العثور على طلبات مختبر.",
+    "noMatch": "لا توجد طلبات تطابق بحثك.",
+    "clearFilters": "مسح الفلاتر",
+    "startOrder": "بدء",
+    "enterResults": "إدخال النتائج",
+    "totalOrders": "{{count}} إجمالي الطلبات",
+    "sortPlaceholder": "ترتيب حسب",
+    "sortRecent": "الأحدث أولاً",
+    "sortOlder": "الأقدم أولاً",
+    "sortAZ": "أ – ي",
+    "orderClaimed": "تم استلام الطلب",
+    "orderReleased": "تم إلغاء استلام الطلب",
+    "you": "أنت",
+    "unassigned": "غير مُسند",
+    "table": {
+      "patient": "المريض",
+      "testType": "نوع الفحص",
+      "orderedBy": "طلب بواسطة",
+      "assignedTo": "مُسند إلى",
+      "status": "الحالة",
+      "orderedAt": "تاريخ الطلب"
+    },
+    "status": {
+      "PENDING": "معلّق",
+      "INPROGRESS": "قيد التنفيذ",
+      "COMPLETED": "مكتمل",
+      "CANCELLED": "ملغى"
+    },
+    "statusFilters": {
+      "PENDING": "معلّق",
+      "INPROGRESS": "قيد التنفيذ",
+      "COMPLETED": "مكتمل"
+    },
+    "actions": {
+      "claim": "استلام",
+      "enterResults": "إدخال النتائج",
+      "release": "إلغاء الاستلام",
+      "view": "عرض"
+    },
+    "pagination": "الصفحة {{page}} من {{pages}} · {{total}} طلبات"
+  },
+  "results": {
+    "title": "إدخال النتائج",
+    "subtitle": "تسجيل نتائج الفحوصات المخبرية.",
+    "enterResults": "إدخال النتائج",
+    "viewResults": "عرض النتائج",
+    "orderNotFound": "لم يتم العثور على الطلب.",
+    "patientInfo": "معلومات المريض",
+    "age": "العمر",
+    "gender": "الجنس",
+    "notes": "ملاحظات",
+    "resultEntries": "إدخالات النتائج",
+    "analyte": "العنصر",
+    "analyteName": "العنصر",
+    "value": "القيمة",
+    "unit": "الوحدة",
+    "referenceRange": "النطاق المرجعي",
+    "refLow": "الحد الأدنى",
+    "refHigh": "الحد الأقصى",
+    "subPanel": "الفئة الفرعية",
+    "flag": "المؤشر",
+    "auto": "تلقائي",
+    "serverComputed": "محسوب تلقائياً",
+    "flags": {
+      "NORMAL": "طبيعي",
+      "ABNORMAL": "غير طبيعي",
+      "CRITICAL": "حرج"
+    },
+    "placeholders": {
+      "analyte": "مثل: Hemoglobin",
+      "value": "مثل: 14.2",
+      "subPanel": "مثل: CBC"
+    },
+    "normal": "طبيعي",
+    "abnormal": "غير طبيعي",
+    "critical": "حرج",
+    "submitResults": "إرسال النتائج",
+    "addRow": "إضافة صف",
+    "addAnalyte": "إضافة عنصر",
+    "loadTemplate": "تحميل قالب",
+    "markAsComplete": "تحديد كمكتمل",
+    "amended": "معدّل",
+    "corrected": "مصحّح",
+    "orderCompleted": "تم إكمال الطلب",
+    "orderCompletedDesc": "تم تحديد الطلب على أنه مكتمل.",
+    "validationError": "خطأ في التحقق",
+    "validationErrorDesc": "يرجى التحقق من جميع الحقول قبل الإرسال.",
+    "resultAmended": "تم تعديل النتيجة",
+    "resultAmendedDesc": "تم تحديث النتيجة.",
+    "resultsSubmitted": "تم إرسال النتائج"
+  },
+  "alerts": {
+    "title": "تنبيهات المختبر",
+    "subtitle": "إشعارات المختبر وتنبيهات النتائج الحرجة.",
+    "noAlerts": "لا توجد تنبيهات",
+    "unreadCount": "{{count}} غير مقروء",
+    "allCaughtUp": "أنت على اطلاع تام",
+    "allMarkedRead": "تم تحديد جميع التنبيهات كمقروءة",
+    "markAllRead": "تحديد الكل كمقروء",
+    "markRead": "تحديد كمقروء",
+    "filters": {
+      "ALL": "الكل",
+      "UNREAD": "غير مقروء",
+      "NEW_ORDERS": "طلبات جديدة",
+      "CRITICAL": "حرج",
+      "ABNORMAL": "غير طبيعي"
+    },
+    "types": {
+      "CRITICAL_RESULT": {
+        "label": "نتيجة حرجة",
+        "cta": "إدخال النتائج"
+      },
+      "NEW_LAB_ORDER": {
+        "label": "طلب جديد",
+        "cta": "فتح الطلب"
+      },
+      "ABNORMAL_RESULT": {
+        "label": "نتيجة غير طبيعية",
+        "cta": "عرض النتائج"
+      },
+      "RESULT_READY": {
+        "label": "النتيجة جاهزة",
+        "cta": "عرض النتائج"
+      }
+    },
+    "pagination": "الصفحة {{page}} من {{pages}} · {{total}} تنبيهات"
+  },
+  "statusLabels": {
+    "pending": "معلّق",
+    "inProgress": "قيد التنفيذ",
+    "completed": "مكتمل",
+    "cancelled": "ملغى"
+  }
+}

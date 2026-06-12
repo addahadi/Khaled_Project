@@ -20,6 +20,7 @@ import { useDelayedLoading } from '@/api/useDelayedLoading';
 import UpgradePrompt from '@/components/auth/UpgradePrompt';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { timeAgo } from '@/lib/formatDate';
+import { useTranslation } from 'react-i18next';
 
 interface Patient {
   patient_id: string; name: string; age: number;
@@ -60,6 +61,7 @@ const WARNING_META: Record<DataWarning['type'], { icon: React.ElementType; color
 };
 
 export default function NewPrediction() {
+  const { t } = useTranslation(['doctor', 'common']);
   const [searchParams]  = useSearchParams();
   const location        = useLocation();
   const navigate        = useNavigate();
@@ -132,7 +134,7 @@ export default function NewPrediction() {
   }
 
   const handleSubmit = () => {
-    if (!selectedId) { toast({ title: 'Select a patient first', variant: 'destructive' }); return; }
+    if (!selectedId) { toast({ title: t('newPrediction.selectPatientFirst'), variant: 'destructive' }); return; }
     ApiManager.executeMutation({
       mutationFn: () => apiClient.post('/doctor/predictions', { patient_id: selectedId, model_version: modelVersion }),
       invalidateKeys: [['doctor', 'predictions'], ['doctor', 'patients']],
@@ -151,7 +153,7 @@ export default function NewPrediction() {
         if (message.toLowerCase().includes('trial') || message.toLowerCase().includes('limit')) {
           setShowUpgrade(true);
         } else {
-          toast({ title: 'Prediction failed', description: message, variant: 'destructive' });
+          toast({ title: t('newPrediction.predictionFailed'), description: message, variant: 'destructive' });
         }
       },
       onFinal: () => setSubmitting(false),
@@ -171,9 +173,9 @@ export default function NewPrediction() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">New AI Prediction</h1>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('newPrediction.title')}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Runs an ensemble AI model on the patient's latest clinical record and recent lab results.
+            {t('newPrediction.subtitle')}
           </p>
         </div>
       </div>
@@ -182,19 +184,19 @@ export default function NewPrediction() {
       <Card>
         <CardHeader className="px-5 pt-5 pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-            <Brain className="h-4 w-4" /> Prediction Setup
+            <Brain className="h-4 w-4" /> {t('newPrediction.setup')}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-5 pb-5 space-y-4">
 
           {/* Patient selector */}
           <div className="space-y-1.5 relative">
-            <Label className="text-sm">Patient</Label>
+            <Label className="text-sm">{t('newPrediction.patient')}</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 className="pl-9 pr-9"
-                placeholder="Search patient by name…"
+                placeholder={t('newPrediction.searchPatient')}
                 value={selectedId ? (selectedPatient?.name ?? '') : searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setSelectedId(''); setIsDropdownOpen(true); }}
                 onFocus={() => setIsDropdownOpen(true)}
@@ -212,13 +214,13 @@ export default function NewPrediction() {
               <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-border rounded-[var(--radius)] shadow-md max-h-60 overflow-auto">
                 {patientsLoading ? (
                   <div className="p-3 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                    <Loader2 className="h-4 w-4 animate-spin" /> {t('newPrediction.loading')}
                   </div>
                 ) : patients.length === 0 ? (
                   <div className="p-4 text-center text-sm text-muted-foreground">
-                    No patients found.{' '}
+                    {t('newPrediction.noPatientsFound')}{' '}
                     <button className="text-primary font-medium hover:underline" onClick={() => navigate('/doctor/patients')}>
-                      Register new patient
+                      {t('newPrediction.registerNewPatient')}
                     </button>
                   </div>
                 ) : (
@@ -230,9 +232,9 @@ export default function NewPrediction() {
                     >
                       <span className="font-medium text-sm text-foreground">{p.name}</span>
                       <span className="text-muted-foreground text-xs block mt-0.5">
-                        {p.age} yrs, {p.gender.charAt(0) + p.gender.slice(1).toLowerCase()}
-                        {p.clinical_data_status === 'STALE' && <span className="ml-2 text-[#a2680a]">· stale vitals</span>}
-                        {p.clinical_data_status === 'NO_DATA' && <span className="ml-2 text-[#c0272d]">· no clinical data</span>}
+                        {p.age} {t('newPrediction.yrs')}, {t(`patients.${p.gender.toLowerCase()}`) ?? p.gender}
+                        {p.clinical_data_status === 'STALE' && <span className="ml-2 text-[#a2680a]">· {t('newPrediction.staleVitals')}</span>}
+                        {p.clinical_data_status === 'NO_DATA' && <span className="ml-2 text-[#c0272d]">· {t('newPrediction.noClinicalData')}</span>}
                       </span>
                     </div>
                   ))
@@ -261,7 +263,7 @@ export default function NewPrediction() {
                         className="shrink-0 text-xs font-medium underline hover:no-underline ml-2"
                         onClick={() => navigate(`/doctor/patients/${selectedId}`)}
                       >
-                        Add vitals
+                        {t('newPrediction.addVitals')}
                       </button>
                     )}
                   </div>
@@ -274,7 +276,7 @@ export default function NewPrediction() {
           {selectedPatient && latestClinical !== 'loading' && latestClinical && (
             <div className="bg-muted/50 rounded-[var(--radius)] p-3 space-y-2 border border-border">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Snapshot that will be used
+                {t('newPrediction.snapshotUsed')}
               </p>
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -286,7 +288,7 @@ export default function NewPrediction() {
                   )}
                   {latestClinical.symptoms.length > 0 && (
                     <span className="text-muted-foreground">
-                      {latestClinical.symptoms.length} symptom{latestClinical.symptoms.length > 1 ? 's' : ''}
+                      {latestClinical.symptoms.length} {latestClinical.symptoms.length > 1 ? t('newPrediction.symptoms') : t('newPrediction.symptom')}
                     </span>
                   )}
                 </div>
@@ -300,7 +302,7 @@ export default function NewPrediction() {
 
           {/* Model version */}
           <div className="space-y-1.5">
-            <Label className="text-sm">Model Version</Label>
+            <Label className="text-sm">{t('newPrediction.modelVersion')}</Label>
             <Select value={modelVersion} onValueChange={setModelVersion}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -318,12 +320,12 @@ export default function NewPrediction() {
           {selectedPatient && (
             <div className="bg-muted/40 rounded-[var(--radius)] p-3 space-y-2 border border-border">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                Data used for prediction
+                {t('newPrediction.dataUsed')}
               </p>
               {[
-                { icon: Activity,    text: 'Latest clinical record (vitals + symptoms)', status: selectedPatient.clinical_data_status },
-                { icon: FlaskConical,text: 'Lab results from the last 90 days',          status: null },
-                { icon: Brain,       text: `Model: ${modelVersion}`,                     status: null },
+                { icon: Activity,    text: t('newPrediction.latestClinical'), status: selectedPatient.clinical_data_status },
+                { icon: FlaskConical,text: t('newPrediction.labResults'),          status: null },
+                { icon: Brain,       text: `${t('newPrediction.modelPrefix')} ${modelVersion}`,                     status: null },
               ].map(({ icon: Icon, text, status }) => (
                 <div key={text} className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -338,8 +340,8 @@ export default function NewPrediction() {
           {/* Submit */}
           <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={submitting || !selectedId}>
             {submitting
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Running AI Pipeline…</>
-              : <><Brain className="h-4 w-4" /> Run Prediction</>
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('newPrediction.runningPipeline')}</>
+              : <><Brain className="h-4 w-4" /> {t('newPrediction.runPrediction')}</>
             }
           </Button>
         </CardContent>
@@ -350,7 +352,7 @@ export default function NewPrediction() {
         <Card className="border-[#faaf3a]/30 bg-[#faaf3a]/8">
           <CardHeader className="px-5 pt-4 pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-[#a2680a]">
-              <Database className="h-4 w-4" /> Data Quality Notices
+              <Database className="h-4 w-4" /> {t('newPrediction.dataQualityNotices')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4 space-y-2">
@@ -375,11 +377,11 @@ export default function NewPrediction() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <RiskIcon className={`h-5 w-5 ${riskCfg.color}`} />
-                Prediction Result
+                {t('newPrediction.predictionResult')}
               </CardTitle>
               {overageWarn && (
                 <Badge className="bg-[#faaf3a]/15 text-[#a2680a] border-[#faaf3a]/30 gap-1 text-xs">
-                  <Zap className="h-3 w-3" /> Overage #{overageWarn.predictions_overage}
+                  <Zap className="h-3 w-3" /> {t('newPrediction.overage')} #{overageWarn.predictions_overage}
                 </Badge>
               )}
             </div>
@@ -387,12 +389,12 @@ export default function NewPrediction() {
           <CardContent className="px-5 pb-5 space-y-4">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Risk Level</p>
-                <span className={`text-3xl font-bold ${riskCfg.color}`}>{result.risk_level}</span>
+                <p className="text-xs text-muted-foreground mb-1">{t('newPrediction.riskLevel')}</p>
+                <span className={`text-3xl font-bold ${riskCfg.color}`}>{t(`patients.riskLevels.${result.risk_level}`) ?? result.risk_level}</span>
               </div>
               <div className="flex-1">
                 <div className="flex justify-between text-sm mb-1.5">
-                  <span className="text-muted-foreground">Risk Score</span>
+                  <span className="text-muted-foreground">{t('newPrediction.riskScore')}</span>
                   <span className="font-medium">{Math.round(result.risk_score * 100)}%</span>
                 </div>
                 <Progress value={result.risk_score * 100} className={riskCfg.bar} />
@@ -401,16 +403,16 @@ export default function NewPrediction() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 cursor-help">
-                          Confidence: {Math.round(result.confidence * 100)}%
+                          {t('newPrediction.confidence')} {Math.round(result.confidence * 100)}%
                           <Info className="h-3 w-3" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
-                        Confidence reflects data completeness. It is not the probability of infection.
+                        {t('newPrediction.confidenceTooltip')}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <span>Model: {result.model_version}</span>
+                  <span>{t('newPrediction.model')} {result.model_version}</span>
                 </div>
               </div>
             </div>
@@ -418,7 +420,7 @@ export default function NewPrediction() {
             {dataWarnings.some(w => w.type === 'STALE_CLINICAL_DATA' || w.type === 'NO_CLINICAL_DATA') && (
               <div className="flex gap-2 p-3 bg-[#faaf3a]/10 rounded-[var(--radius)] border border-[#faaf3a]/25 text-xs text-[#a2680a]">
                 <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span>Confidence reduced due to stale or missing clinical data. Record fresh vitals and re-run for a higher-accuracy result.</span>
+                <span>{t('newPrediction.staleWarning')}</span>
               </div>
             )}
 
@@ -432,11 +434,11 @@ export default function NewPrediction() {
             <div className="flex gap-2 pt-1">
               <Button variant="outline" className="gap-2 flex-1"
                 onClick={() => navigate(`/doctor/predictions/${result.request_id}`)}>
-                <TrendingUp className="h-4 w-4" /> View Full Report + XAI
+                <TrendingUp className="h-4 w-4" /> {t('newPrediction.viewReport')}
               </Button>
               <Button className="gap-2 flex-1"
                 onClick={() => { setResult(null); setDataWarnings([]); setOverageWarn(null); }}>
-                <Brain className="h-4 w-4" /> New Prediction
+                <Brain className="h-4 w-4" /> {t('newPrediction.newPredictionBtn')}
               </Button>
             </div>
           </CardContent>

@@ -19,15 +19,19 @@ import {
   registerOrgStep1Schema, registerOrgStep2Schema, registerOrgStep3Schema,
   flattenZodErrors,
 } from '@/api/schemas';
+import { useTranslation, Trans } from 'react-i18next';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Plan {
   plan_id:       string;
-  name:          string;
-  description:   string;
+  name_en:       string;
+  name_ar:       string;
+  description_en:string;
+  description_ar:string;
   price_monthly: number | null;
   is_trial:      boolean;
-  features:      { name: string; is_enabled: boolean; value: number | null }[];
+  features:      { name_en: string; name_ar: string; is_enabled: boolean; value: number | null }[];
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -55,10 +59,11 @@ const PLAN_ICON: Record<string, React.ElementType> = {
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepBar({ current }: { current: Step }) {
+  const { t } = useTranslation('auth');
   const steps = [
-    { n: 1, label: 'Your Account',  icon: UserCircle },
-    { n: 2, label: 'Organization',  icon: Building2  },
-    { n: 3, label: 'Choose Plan',   icon: CreditCard },
+    { n: 1, label: t('register.step1Label'),  icon: UserCircle },
+    { n: 2, label: t('register.step2Label'),  icon: Building2  },
+    { n: 3, label: t('register.step3Label'),  icon: CreditCard },
   ];
   return (
     <div className="flex items-center justify-center gap-1 mb-8">
@@ -102,7 +107,7 @@ function Field({
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-sm">
         {label}
-        {optional && <span className="text-muted-foreground text-xs font-normal ml-1">(optional)</span>}
+        {optional && <span className="text-muted-foreground text-xs font-normal ml-1 pr-1">{optional}</span>}
       </Label>
       <Input
         id={id} type={type} placeholder={placeholder}
@@ -117,6 +122,9 @@ function Field({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function RegisterOrganization() {
+  const { t, i18n } = useTranslation('auth');
+  const lang = i18n.language;
+  const { t: c }  = useTranslation('common');
   const navigate  = useNavigate();
   const { toast } = useToast();
 
@@ -178,7 +186,7 @@ export default function RegisterOrganization() {
       }),
       onStart:   () => setLoading(true),
       onSuccess: (_data, msg) => {
-        toast({ title: 'Organization registered!', description: msg });
+        toast({ title: t('register.registrationSuccess'), description: msg });
         setStep(4);
       },
       onError: ({ message, fields }) => {
@@ -189,7 +197,7 @@ export default function RegisterOrganization() {
           if (Object.keys(fields).some(k => step1Keys.includes(k))) setStep(1);
           else if (Object.keys(fields).some(k => step2Keys.includes(k))) setStep(2);
         } else {
-          toast({ title: 'Registration failed', description: message, variant: 'destructive' });
+          toast({ title: t('register.registrationFailed'), description: message, variant: 'destructive' });
         }
       },
       onFinal: () => setLoading(false),
@@ -205,7 +213,7 @@ export default function RegisterOrganization() {
     /[^A-Za-z0-9]/.test(form.password),
   ];
   const pwScore = pwChecks.filter(Boolean).length;
-  const pwLabels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
+  const pwLabels = ['', t('register.pwStrength.weak'), t('register.pwStrength.fair'), t('register.pwStrength.good'), t('register.pwStrength.strong'), t('register.pwStrength.veryStrong')];
   const pwBarColors = ['', 'bg-[#c0272d]', 'bg-[#e07020]', 'bg-[#faaf3a]', 'bg-[#00a89c]', 'bg-[#00a89c]'];
   const pwTextColors = ['', 'text-[#c0272d]', 'text-[#e07020]', 'text-[#a2680a]', 'text-[#007a71]', 'text-[#007a71]'];
 
@@ -214,9 +222,12 @@ export default function RegisterOrganization() {
       <div className="w-full max-w-lg">
 
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <BrandLogo size="md" />
-          <span className="text-xl font-semibold tracking-tight">DiagInfect</span>
+        <div className="flex items-center justify-between w-full mb-8">
+          <div className="flex items-center gap-3">
+            <BrandLogo size="md" />
+            <span className="text-xl font-semibold tracking-tight">{c('brand')}</span>
+          </div>
+          <LanguageToggle />
         </div>
 
         {step < 4 && <StepBar current={step} />}
@@ -229,22 +240,23 @@ export default function RegisterOrganization() {
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <UserCircle className="h-4 w-4 text-primary" />
                 </div>
-                Your Account
+                {t('register.step1Title')}
               </CardTitle>
               <CardDescription className="text-sm leading-relaxed">
-                You will become the <span className="font-medium text-foreground">Hospital Manager</span> of
-                your organization. Doctors and lab technicians join later via invitation.
+                <Trans i18nKey="register.step1Description" t={t}>
+                  You will become the <span className="font-medium text-foreground">Hospital Manager</span> of your organization. Doctors and lab technicians join later via invitation.
+                </Trans>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field id="username" label="Username" placeholder="admin.benali"
+              <Field id="username" label={t('register.username')} placeholder={t('register.usernamePlaceholder')}
                 value={form.username} onChange={set('username')} error={errors.username} />
-              <Field id="email" label="Email" type="email" placeholder="you@hospital.dz"
+              <Field id="email" label={t('register.email')} type="email" placeholder={t('register.emailPlaceholder')}
                 value={form.email} onChange={set('email')} error={errors.email} />
               <div className="grid grid-cols-2 gap-3">
-                <Field id="password" label="Password" type="password" placeholder="Min. 8 chars"
+                <Field id="password" label={t('register.password')} type="password" placeholder={t('register.passwordPlaceholder')}
                   value={form.password} onChange={set('password')} error={errors.password} />
-                <Field id="confirm" label="Confirm" type="password" placeholder="Repeat password"
+                <Field id="confirm" label={t('register.confirm')} type="password" placeholder={t('register.confirmPlaceholder')}
                   value={form.confirm} onChange={set('confirm')} error={errors.confirm} />
               </div>
 
@@ -265,10 +277,10 @@ export default function RegisterOrganization() {
                     {pwLabels[pwScore]}
                     {pwScore < 4 && (
                       <span className="text-muted-foreground font-normal ml-1">
-                        — {!pwChecks[0] ? 'Use at least 8 characters'
-                           : !pwChecks[1] ? 'Add an uppercase letter'
-                           : !pwChecks[3] ? 'Add a number'
-                           : 'Add a special character'}
+                        — {!pwChecks[0] ? t('register.pwStrength.hint8chars')
+                           : !pwChecks[1] ? t('register.pwStrength.hintUppercase')
+                           : !pwChecks[3] ? t('register.pwStrength.hintNumber')
+                           : t('register.pwStrength.hintSpecial')}
                       </span>
                     )}
                   </p>
@@ -276,18 +288,18 @@ export default function RegisterOrganization() {
               )}
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Language</Label>
+                <Label className="text-sm">{t('register.language')}</Label>
                 <Select value={form.preferred_lang} onValueChange={v => setForm(p => ({ ...p, preferred_lang: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">العربية</SelectItem>
+                    <SelectItem value="en">{c('language.en')}</SelectItem>
+                    <SelectItem value="ar">{c('language.ar')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <Button className="w-full gap-2" onClick={nextStep}>
-                Continue <ChevronRight className="h-4 w-4" />
+                {c('actions.continue')} <ChevronRight className="h-4 w-4" />
               </Button>
             </CardContent>
           </Card>
@@ -301,40 +313,40 @@ export default function RegisterOrganization() {
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Building2 className="h-4 w-4 text-primary" />
                 </div>
-                Your Organization
+                {t('register.step2Title')}
               </CardTitle>
               <CardDescription className="text-sm leading-relaxed">
-                Tell us about the hospital or clinic you manage.
+                {t('register.step2Description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field id="org_name" label="Organization Name" placeholder="Al-Razi General Hospital"
+              <Field id="org_name" label={t('register.orgName')} placeholder={t('register.orgNamePlaceholder')}
                 value={form.org_name} onChange={set('org_name')} error={errors.org_name} />
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Type</Label>
+                <Label className="text-sm">{t('register.orgType')}</Label>
                 <Select value={form.org_type} onValueChange={v => setForm(p => ({ ...p, org_type: v }))}>
                   <SelectTrigger className={errors.org_type ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Select organization type" />
+                    <SelectValue placeholder={t('register.orgTypePlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {ORG_TYPES.map(o => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{t(`register.orgTypes.${o.label.toLowerCase()}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {errors.org_type && <p className="text-xs text-destructive">{errors.org_type}</p>}
               </div>
 
-              <Field id="org_email" label="Official Email" type="email" placeholder="admin@hospital.dz"
+              <Field id="org_email" label={t('register.orgEmail')} type="email" placeholder={t('register.orgEmailPlaceholder')}
                 value={form.org_email} onChange={set('org_email')} error={errors.org_email} />
-              <Field id="org_address" label="Address" placeholder="123 Rue Didouche Mourad, Algiers"
-                value={form.org_address} onChange={set('org_address')} optional />
+              <Field id="org_address" label={t('register.orgAddress')} placeholder={t('register.orgAddressPlaceholder')}
+                value={form.org_address} onChange={set('org_address')} optional={t('register.optional') as any} />
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>Back</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>{c('actions.back')}</Button>
                 <Button className="flex-1 gap-2" onClick={nextStep}>
-                  Continue <ChevronRight className="h-4 w-4" />
+                  {c('actions.continue')} <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </CardContent>
@@ -350,10 +362,10 @@ export default function RegisterOrganization() {
                   <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                     <CreditCard className="h-4 w-4 text-primary" />
                   </div>
-                  Choose Your Plan
+                  {t('register.step3Title')}
                 </CardTitle>
                 <CardDescription className="text-sm">
-                  You can upgrade or switch plans at any time from your dashboard.
+                  {t('register.step3Description')}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -378,8 +390,10 @@ export default function RegisterOrganization() {
             ) : (
               <div className="space-y-3">
                 {plans.map(plan => {
-                  const PlanIcon = PLAN_ICON[plan.name] ?? CreditCard;
+                  const PlanIcon = PLAN_ICON[plan.name_en] ?? CreditCard;
                   const selected = form.plan_id === plan.plan_id;
+                  const planName = lang === 'ar' && plan.name_ar ? plan.name_ar : plan.name_en;
+                  const planDesc = lang === 'ar' && plan.description_ar ? plan.description_ar : plan.description_en;
                   return (
                     <button
                       key={plan.plan_id}
@@ -401,24 +415,24 @@ export default function RegisterOrganization() {
                         {/* Plan details */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="font-semibold text-sm text-foreground">{plan.name}</span>
+                            <span className="font-semibold text-sm text-foreground">{planName}</span>
                             {plan.is_trial && (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">
-                                14-day trial
+                                {t('register.trialBadge')}
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mb-2 leading-relaxed">{plan.description}</p>
+                          <p className="text-xs text-muted-foreground mb-2 leading-relaxed">{planDesc}</p>
 
                           {/* Price */}
                           <div className="flex items-baseline gap-1 mb-3">
                             {plan.price_monthly ? (
                               <>
                                 <span className="text-2xl font-semibold text-foreground">${plan.price_monthly}</span>
-                                <span className="text-xs text-muted-foreground">/month</span>
+                                <span className="text-xs text-muted-foreground">{t('register.perMonth')}</span>
                               </>
                             ) : (
-                              <span className="text-lg font-semibold text-[#007a71]">Free</span>
+                              <span className="text-lg font-semibold text-[#007a71]">{t('register.free')}</span>
                             )}
                           </div>
 
@@ -426,13 +440,13 @@ export default function RegisterOrganization() {
                           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                             {plan.features.map(f => (
                               <span
-                                key={f.name}
+                                key={f.name_en}
                                 className={`flex items-center gap-1 text-xs ${
                                   f.is_enabled ? 'text-foreground' : 'text-muted-foreground line-through'
                                 }`}
                               >
                                 <Check className={`h-3 w-3 ${f.is_enabled ? 'text-[#00a89c]' : 'text-muted-foreground'}`} />
-                                {FEATURE_LABELS[f.name] ?? f.name}
+                                {t(`register.featureLabels.${f.name_en}`) ?? (lang === 'ar' && f.name_ar ? f.name_ar : f.name_en)}
                                 {f.value !== null && `: ${f.value}`}
                               </span>
                             ))}
@@ -457,15 +471,15 @@ export default function RegisterOrganization() {
             )}
 
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>Back</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>{c('actions.back')}</Button>
               <Button
                 className="flex-1 gap-2"
                 onClick={handleSubmit}
                 disabled={loading || !form.plan_id}
               >
                 {loading
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</>
-                  : <>Complete Registration <ChevronRight className="h-4 w-4" /></>
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('register.creating')}</>
+                  : <>{t('register.completeRegistration')} <ChevronRight className="h-4 w-4" /></>
                 }
               </Button>
             </div>
@@ -480,18 +494,17 @@ export default function RegisterOrganization() {
                 <CheckCircle2 className="h-8 w-8 text-[#00a89c]" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground tracking-tight">You're all set!</h2>
+                <h2 className="text-xl font-semibold text-foreground tracking-tight">{t('register.doneTitle')}</h2>
                 <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto leading-relaxed">
-                  Your organization and manager account are ready.
-                  Sign in to start inviting your doctors and lab technicians.
+                  {t('register.doneDescription')}
                 </p>
               </div>
               <div className="flex flex-col gap-2 pt-2">
                 <Button className="w-full" onClick={() => navigate('/login')}>
-                  Sign In Now
+                  {t('register.signInNow')}
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link to="/">Back to Home</Link>
+                  <Link to="/">{t('register.backToHome')}</Link>
                 </Button>
               </div>
             </CardContent>
@@ -500,8 +513,8 @@ export default function RegisterOrganization() {
 
         {step < 4 && (
           <p className="mt-5 text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
+            {t('register.alreadyHaveAccount')}{' '}
+            <Link to="/login" className="text-primary hover:underline font-medium">{t('register.signIn')}</Link>
           </p>
         )}
       </div>

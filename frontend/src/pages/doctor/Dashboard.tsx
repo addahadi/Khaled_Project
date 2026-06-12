@@ -14,6 +14,7 @@ import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
 import { getRiskConfig } from '@/lib/riskConfig';
+import { useTranslation, Trans } from 'react-i18next';
 
 interface Patient {
   patient_id: string; name: string; age: number;
@@ -31,6 +32,8 @@ interface Alert {
 }
 
 export default function DoctorDashboard() {
+  const { t } = useTranslation('doctor');
+  const { t: c } = useTranslation('common');
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,7 +95,7 @@ export default function DoctorDashboard() {
 
   const STAT_CARDS = [
     {
-      label: 'Total Patients',
+      label: t('dashboard.totalPatients'),
       val: patients.length,
       icon: Users,
       iconBg: 'bg-primary/10',
@@ -100,7 +103,7 @@ export default function DoctorDashboard() {
       loading: pLoading,
     },
     {
-      label: 'Critical Risk',
+      label: t('dashboard.criticalRisk'),
       val: criticalPatients.length,
       icon: AlertTriangle,
       iconBg: 'bg-[#c0272d]/10',
@@ -109,7 +112,7 @@ export default function DoctorDashboard() {
       highlight: criticalPatients.length > 0,
     },
     {
-      label: 'Predictions Run',
+      label: t('dashboard.predictionsRun'),
       val: predictions.length,
       icon: Brain,
       iconBg: 'bg-[#2e368f]/10',
@@ -117,7 +120,7 @@ export default function DoctorDashboard() {
       loading: prLoading,
     },
     {
-      label: 'Unread Alerts',
+      label: t('dashboard.unreadAlerts'),
       val: unreadAlerts.length,
       icon: Bell,
       iconBg: 'bg-[#faaf3a]/15',
@@ -133,14 +136,16 @@ export default function DoctorDashboard() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('dashboard.title')}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Welcome back, Dr. {user?.username}
+            <Trans i18nKey="dashboard.welcome" t={t} values={{ name: user?.username }}>
+              Welcome back, Dr. {{name: user?.username}}
+            </Trans>
           </p>
         </div>
         <Button onClick={() => navigate('/doctor/predictions/new')} className="gap-2">
           <Plus className="h-4 w-4" />
-          New Prediction
+          {t('dashboard.newPrediction')}
         </Button>
       </div>
 
@@ -179,14 +184,14 @@ export default function DoctorDashboard() {
           <Card>
             <CardHeader className="pb-3 px-5 pt-5">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Recent Patients</CardTitle>
+                <CardTitle className="text-base">{t('dashboard.recentPatients')}</CardTitle>
                 <Button
                   size="sm"
                   variant="ghost"
                   className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
                   onClick={() => navigate('/doctor/patients')}
                 >
-                  View all <ChevronRight className="h-3.5 w-3.5" />
+                  {t('dashboard.viewAll')} <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </CardHeader>
@@ -198,12 +203,12 @@ export default function DoctorDashboard() {
               ) : recentPatients.length === 0 ? (
                 <div className="px-5 pb-5 py-8 text-center">
                   <Users className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-                  <p className="text-sm text-muted-foreground">No patients yet.</p>
+                  <p className="text-sm text-muted-foreground">{t('dashboard.noPatientsYet')}</p>
                   <button
                     className="text-sm text-primary font-medium mt-1 hover:underline"
                     onClick={() => navigate('/doctor/patients')}
                   >
-                    Register your first patient
+                    {t('dashboard.registerFirstPatient')}
                   </button>
                 </div>
               ) : (
@@ -220,7 +225,7 @@ export default function DoctorDashboard() {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">{p.name}</p>
-                          <p className="text-xs text-muted-foreground">{p.age} yrs</p>
+                          <p className="text-xs text-muted-foreground">{p.age} {t('dashboard.yrs')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -231,11 +236,11 @@ export default function DoctorDashboard() {
                           return (
                             <Badge className={`gap-1 ${cfg.badgeClass}`}>
                               <RiskIcon className="h-3 w-3" />
-                              {cfg.label}
+                              {t(`patients.riskLevels.${cfg.label.toUpperCase()}`) ?? cfg.label}
                             </Badge>
                           );
                         })() : (
-                          <Badge variant="secondary">No data</Badge>
+                          <Badge variant="secondary">{t('dashboard.noData')}</Badge>
                         )}
                         <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                       </div>
@@ -251,14 +256,14 @@ export default function DoctorDashboard() {
             <Card>
               <CardHeader className="pb-3 px-5 pt-5">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Recent Predictions</CardTitle>
+                  <CardTitle className="text-base">{t('dashboard.recentPredictions')}</CardTitle>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
                     onClick={() => navigate('/doctor/predictions')}
                   >
-                    View all <ChevronRight className="h-3.5 w-3.5" />
+                    {t('dashboard.viewAll')} <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </CardHeader>
@@ -284,7 +289,7 @@ export default function DoctorDashboard() {
                             <p className="text-xs text-muted-foreground">
                               {formatDate(pr.created_at)}
                               {pr.risk_score !== null && (
-                                <span className="ml-1.5">· Score: {Math.round(pr.risk_score * 100)}%</span>
+                                <span className="ml-1.5">· {t('dashboard.score')}: {Math.round(pr.risk_score * 100)}%</span>
                               )}
                             </p>
                           </div>
@@ -297,7 +302,7 @@ export default function DoctorDashboard() {
                             return (
                               <Badge className={`gap-1 ${cfg.badgeClass}`}>
                                 <RiskIcon className="h-3 w-3" />
-                                {cfg.label}
+                                {t(`patients.riskLevels.${cfg.label.toUpperCase()}`) ?? cfg.label}
                               </Badge>
                             );
                           })()}
@@ -318,7 +323,7 @@ export default function DoctorDashboard() {
             <CardHeader className="pb-3 px-5 pt-5">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  Alerts
+                  {t('dashboard.alertsTitle')}
                   {unreadAlerts.length > 0 && (
                     <span className="bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none">
                       {unreadAlerts.length}
@@ -331,7 +336,7 @@ export default function DoctorDashboard() {
                   className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
                   onClick={() => navigate('/doctor/alerts')}
                 >
-                  View all <ChevronRight className="h-3.5 w-3.5" />
+                  {t('dashboard.viewAll')} <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </CardHeader>
@@ -345,7 +350,7 @@ export default function DoctorDashboard() {
                   <div className="w-10 h-10 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-2">
                     <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
                   </div>
-                  <p className="text-sm text-muted-foreground">All clear — no alerts</p>
+                  <p className="text-sm text-muted-foreground">{t('dashboard.allClear')}</p>
                 </div>
               ) : (
                 <div className="space-y-0">
@@ -391,7 +396,7 @@ export default function DoctorDashboard() {
                             aria-label={`Mark alert from ${a.patient_name ?? 'System'} as read`}
                             onClick={() => markRead(a.alert_id)}
                           >
-                            Mark read
+                            {c('actions.markRead')}
                           </button>
                         )}
                       </div>

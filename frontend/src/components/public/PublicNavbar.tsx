@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import type { UserRole } from '../../contexts/AuthContext';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 const NAV_LINKS = [
-  { label: 'Features', to: '/#features' },
-  { label: 'Pricing',  to: '/#pricing'  },
-  { label: 'About',    to: '/about'     },
+  { key: 'features', to: '/#features' },
+  { key: 'pricing',  to: '/#pricing'  },
+  { key: 'about',    to: '/about'     },
 ];
 
 const dashboardByRole: Record<UserRole, string> = {
@@ -19,6 +21,7 @@ const dashboardByRole: Record<UserRole, string> = {
 };
 
 export default function PublicNavbar() {
+  const { t } = useTranslation('common');
   const { isAuthenticated, user } = useAuth();
   const { pathname } = useLocation();
   const [open,      setOpen]      = useState(false);
@@ -75,7 +78,7 @@ export default function PublicNavbar() {
                         : 'text-white/75 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  {l.label}
+                  {t(`nav.${l.key}`)}
                 </Link>
               );
             })}
@@ -83,9 +86,11 @@ export default function PublicNavbar() {
 
           {/* CTAs */}
           <div className="hidden md:flex items-center gap-2">
+            <LanguageToggle variant={solid ? 'default' : 'transparent'} />
+            <div className="w-px h-4 bg-border mx-1" />
             {isAuthenticated && user ? (
               <Button asChild size="sm">
-                <Link to={dashboardByRole[user.role]}>Go to dashboard</Link>
+                <Link to={dashboardByRole[user.role]}>{t('nav.goToDashboard')}</Link>
               </Button>
             ) : (
               <>
@@ -97,10 +102,10 @@ export default function PublicNavbar() {
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  Sign in
+                  {t('nav.signIn')}
                 </Link>
                 <Button asChild size="sm" className={!solid ? 'bg-white text-[#0d1829] hover:bg-white/90 shadow-sm' : ''}>
-                  <Link to="/register-organization">Get started</Link>
+                  <Link to="/register-organization">{t('nav.getStarted')}</Link>
                 </Button>
               </>
             )}
@@ -129,26 +134,29 @@ export default function PublicNavbar() {
               className="flex items-center h-12 px-5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted border-b border-border transition-colors"
               onClick={() => setOpen(false)}
             >
-              {l.label}
+              {t(`nav.${l.key}`)}
             </Link>
           ))}
           <div className="p-4 flex flex-col gap-2">
             {isAuthenticated && user ? (
               <Button asChild>
                 <Link to={dashboardByRole[user.role]} onClick={() => setOpen(false)}>
-                  Go to dashboard
+                  {t('nav.goToDashboard')}
                 </Link>
               </Button>
             ) : (
               <>
                 <Button variant="outline" asChild>
-                  <Link to="/login" onClick={() => setOpen(false)}>Sign in</Link>
+                  <Link to="/login" onClick={() => setOpen(false)}>{t('nav.signIn')}</Link>
                 </Button>
                 <Button asChild>
-                  <Link to="/register-organization" onClick={() => setOpen(false)}>Get started free</Link>
+                  <Link to="/register-organization" onClick={() => setOpen(false)}>{t('nav.getStartedFree')}</Link>
                 </Button>
               </>
             )}
+            <div className="pt-2 flex justify-center">
+              <LanguageToggle />
+            </div>
           </div>
         </div>
       )}

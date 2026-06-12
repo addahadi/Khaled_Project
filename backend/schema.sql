@@ -30,7 +30,7 @@ CREATE TABLE public.users (
   organization_id uuid,
   department_id uuid,
   preferred_lang text NOT NULL DEFAULT 'en'::text CHECK (preferred_lang = ANY (ARRAY['en'::text, 'ar'::text])),
-  status text NOT NULL DEFAULT 'ACTIVE'::text CHECK (status = ANY (ARRAY['ACTIVE'::text, 'INACTIVE'::text, 'SUSPENDED'::text])),
+  status text NOT NULL DEFAULT 'ACTIVE'::text CHECK (status = ANY (ARRAY['ACTIVE'::text, 'INACTIVE'::text, 'SUSPENDED'::text, 'PENDING_VERIFICATION'::text])),
   failed_login_count integer NOT NULL DEFAULT 0,
   locked_until timestamp with time zone,
   last_login_at timestamp with time zone,
@@ -64,23 +64,26 @@ CREATE TABLE public.hospital_managers (
 );
 CREATE TABLE public.plans (
   plan_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  description text,
+  name_en text NOT NULL,
+  description_en text,
   price_monthly numeric,
   price_annually numeric,
   is_trial boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   deleted_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  name_ar text,
+  description_ar text,
   CONSTRAINT plans_pkey PRIMARY KEY (plan_id)
 );
 CREATE TABLE public.plan_features (
   feature_id uuid NOT NULL DEFAULT gen_random_uuid(),
   plan_id uuid NOT NULL,
-  name text NOT NULL,
+  name_en text NOT NULL,
   is_enabled boolean NOT NULL DEFAULT true,
   value numeric,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  name_ar text,
   CONSTRAINT plan_features_pkey PRIMARY KEY (feature_id),
   CONSTRAINT plan_features_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.plans(plan_id)
 );
@@ -153,9 +156,10 @@ CREATE TABLE public.clinical_data (
 );
 CREATE TABLE public.units (
   unit_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
+  name_en text NOT NULL,
   symbol text NOT NULL UNIQUE,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  name_ar text,
   CONSTRAINT units_pkey PRIMARY KEY (unit_id)
 );
 CREATE TABLE public.lab_tests (
@@ -241,8 +245,9 @@ CREATE TABLE public.infection_risks (
   risk_score numeric NOT NULL CHECK (risk_score >= 0::numeric AND risk_score <= 1::numeric),
   risk_level text NOT NULL CHECK (risk_level = ANY (ARRAY['LOW'::text, 'MODERATE'::text, 'HIGH'::text, 'CRITICAL'::text])),
   model_version text,
-  message text,
+  message_en text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  message_ar text,
   CONSTRAINT infection_risks_pkey PRIMARY KEY (risk_id),
   CONSTRAINT infection_risks_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id)
 );
@@ -296,4 +301,54 @@ CREATE TABLE public.alerts (
   CONSTRAINT alerts_pkey PRIMARY KEY (alert_id),
   CONSTRAINT alerts_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
   CONSTRAINT alerts_recipient_id_fkey FOREIGN KEY (recipient_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.patient_assignments (
+  assignment_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  doctor_id uuid NOT NULL,
+  role text NOT NULL DEFAULT 'PRIMARY'::text CHECK (role = ANY (ARRAY['PRIMARY'::text, 'CONSULTING'::text, 'COVERING'::text])),
+  assigned_by uuid,
+  assigned_at timestamp with time zone NOT NULL DEFAULT now(),
+  discharged_at timestamp with time zone,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  valid_until timestamp with time zone,
+  CONSTRAINT patient_assignments_pkey PRIMARY KEY (assignment_id),
+  CONSTRAINT patient_assignments_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(patient_id),
+  CONSTRAINT patient_assignments_doctor_id_fkey FOREIGN KEY (doctor_id) REFERENCES public.users(user_id),
+  CONSTRAINT patient_assignments_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.password_reset_tokens (
+  token_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT password_reset_tokens_pkey PRIMARY KEY (token_id),
+  CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.email_verification_tokens (
+  token_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT email_verification_tokens_pkey PRIMARY KEY (token_id),
+  CONSTRAINT email_verification_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.subscription_change_tokens (
+  token_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  new_plan_id uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscription_change_tokens_pkey PRIMARY KEY (token_id),
+  CONSTRAINT subscription_change_tokens_org_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT subscription_change_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT subscription_change_tokens_plan_id_fkey FOREIGN KEY (new_plan_id) REFERENCES public.plans(plan_id)
 );

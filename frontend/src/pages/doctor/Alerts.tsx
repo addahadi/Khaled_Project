@@ -4,12 +4,14 @@ import { useAlerts } from '@/contexts/AlertsContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/formatDate';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Bell, CheckCircle2, AlertTriangle, TrendingUp,
   Info, FlaskConical, AlertCircle, CheckCheck,
   UserPlus, UserCheck, ChevronLeft, ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 // ─── Extended alert type ──────────────────────────────────────────────────────
 // The AlertsContext interface is minimal; the backend may return patient_id and
@@ -31,25 +33,25 @@ type Severity = 'critical' | 'high' | 'warning' | 'info' | 'success';
 interface AlertConfig {
   sev:   Severity;
   Icon:  LucideIcon;
-  label: string;
-  cta:   string;
+  labelKey: string;
+  ctaKey:   string;
 }
 
 const ALERT_CONFIG: Record<string, AlertConfig> = {
-  RISK_CRITICAL:   { sev: 'critical', Icon: AlertTriangle, label: 'Critical risk',    cta: 'View patient'  },
-  RISK_HIGH:       { sev: 'high',     Icon: TrendingUp,    label: 'High risk',         cta: 'View patient'  },
-  RISK_MODERATE:   { sev: 'warning',  Icon: AlertCircle,   label: 'Moderate risk',     cta: 'View patient'  },
-  RISK_LOW:        { sev: 'success',  Icon: CheckCircle2,  label: 'Low risk',          cta: 'View patient'  },
-  RESULT_READY:    { sev: 'info',     Icon: FlaskConical,  label: 'Lab result',        cta: 'View results'  },
-  CRITICAL_RESULT: { sev: 'critical', Icon: AlertTriangle, label: 'Critical result',   cta: 'View results'  },
-  ABNORMAL_RESULT: { sev: 'warning',  Icon: AlertCircle,   label: 'Abnormal result',   cta: 'View results'  },
-  NEW_LAB_ORDER:   { sev: 'info',     Icon: FlaskConical,  label: 'Lab order',         cta: 'View order'    },
-  PATIENT_ASSIGNED: { sev: 'info',    Icon: UserPlus,      label: 'New patient',       cta: 'View patient'  },
-  PRIMARY_TRANSFERRED: { sev: 'info', Icon: UserCheck,     label: 'Primary doctor',    cta: 'View patient'  },
+  RISK_CRITICAL:   { sev: 'critical', Icon: AlertTriangle, labelKey: 'labels.criticalRisk',    ctaKey: 'cta.viewPatient'  },
+  RISK_HIGH:       { sev: 'high',     Icon: TrendingUp,    labelKey: 'labels.highRisk',         ctaKey: 'cta.viewPatient'  },
+  RISK_MODERATE:   { sev: 'warning',  Icon: AlertCircle,   labelKey: 'labels.moderateRisk',     ctaKey: 'cta.viewPatient'  },
+  RISK_LOW:        { sev: 'success',  Icon: CheckCircle2,  labelKey: 'labels.lowRisk',          ctaKey: 'cta.viewPatient'  },
+  RESULT_READY:    { sev: 'info',     Icon: FlaskConical,  labelKey: 'labels.labResult',        ctaKey: 'cta.viewResults'  },
+  CRITICAL_RESULT: { sev: 'critical', Icon: AlertTriangle, labelKey: 'labels.criticalResult',   ctaKey: 'cta.viewResults'  },
+  ABNORMAL_RESULT: { sev: 'warning',  Icon: AlertCircle,   labelKey: 'labels.abnormalResult',   ctaKey: 'cta.viewResults'  },
+  NEW_LAB_ORDER:   { sev: 'info',     Icon: FlaskConical,  labelKey: 'labels.labOrder',         ctaKey: 'cta.viewOrder'    },
+  PATIENT_ASSIGNED: { sev: 'info',    Icon: UserPlus,      labelKey: 'labels.newPatient',       ctaKey: 'cta.viewPatient'  },
+  PRIMARY_TRANSFERRED: { sev: 'info', Icon: UserCheck,     labelKey: 'labels.primaryDoctor',    ctaKey: 'cta.viewPatient'  },
 };
 
 const getAlertConfig = (type: string): AlertConfig =>
-  ALERT_CONFIG[type] ?? { sev: 'info', Icon: Info, label: type, cta: 'View' };
+  ALERT_CONFIG[type] ?? { sev: 'info', Icon: Info, labelKey: type, ctaKey: 'cta.view' };
 
 // ─── Severity display tokens ──────────────────────────────────────────────────
 
@@ -101,16 +103,8 @@ const SEV: Record<Severity, {
 
 type FilterKey = 'ALL' | 'UNREAD' | 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' | 'LAB_RESULTS' | 'SYSTEM';
 
-const FILTERS: { value: FilterKey; label: (unread: number) => string }[] = [
-  { value: 'ALL',         label: (u) => `All` },
-  { value: 'UNREAD',      label: (u) => `Unread${u > 0 ? ` (${u})` : ''}` },
-  { value: 'CRITICAL',    label: () => 'Critical' },
-  { value: 'HIGH',        label: () => 'High' },
-  { value: 'MODERATE',    label: () => 'Moderate' },
-  { value: 'LOW',         label: () => 'Low' },
-  { value: 'LAB_RESULTS', label: () => 'Lab results' },
-  { value: 'SYSTEM',      label: () => 'System' },
-];
+// We'll map the labels directly in the component, but we can keep an array of keys here
+const FILTER_KEYS: FilterKey[] = ['ALL', 'UNREAD', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW', 'LAB_RESULTS', 'SYSTEM'];
 
 const matchFilter = (a: EnrichedAlert, f: FilterKey): boolean => {
   if (f === 'UNREAD')      return !a.is_read;
@@ -126,9 +120,22 @@ const matchFilter = (a: EnrichedAlert, f: FilterKey): boolean => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Alerts() {
+  const { t } = useTranslation(['doctor', 'common']);
+  const { lang } = useLanguage();
   const { alerts: rawAlerts, markRead, markAllRead, isLoading, unreadCount, pagination, page, setPage } = useAlerts();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterKey>('ALL');
+
+  // Helper: return a translated message if Arabic locale has a key for this alert type
+  const getAlertMessage = (alert: EnrichedAlert): string => {
+    if (lang === 'ar') {
+      const key = `alerts.messages.${alert.alert_type}`;
+      const translated = t(key, { name: alert.patient_name ?? '' });
+      // i18next returns the key itself if not found — so only use if different
+      if (translated && translated !== key) return translated;
+    }
+    return alert.message;
+  };
 
   useEffect(() => {
     setPage(1);
@@ -141,7 +148,7 @@ export default function Alerts() {
 
   const handleCta = (alert: EnrichedAlert) => {
     const cfg = getAlertConfig(alert.alert_type);
-    if (cfg.cta === 'View patient') {
+    if (cfg.ctaKey === 'cta.viewPatient') {
       navigate(alert.patient_id
         ? `/doctor/patients/${alert.patient_id}`
         : '/doctor/patients'
@@ -163,26 +170,37 @@ export default function Alerts() {
         <div>
           <h1 className="text-[22px] font-medium tracking-tight text-foreground flex items-center gap-2">
             <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            Alerts
+            {t('alerts.title')}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {unreadCount > 0
-              ? `${unreadCount} unread alert${unreadCount > 1 ? 's' : ''}`
-              : 'All caught up'
+              ? unreadCount > 1 ? t('alerts.unreads', { count: unreadCount }) : t('alerts.unread', { count: unreadCount })
+              : t('alerts.caughtUp')
             }
           </p>
         </div>
         {unreadCount > 0 && (
           <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={markAllRead}>
-            <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+            <CheckCheck className="h-3.5 w-3.5" /> {t('alerts.markAllRead')}
           </Button>
         )}
       </div>
 
       {/* ── Filter chips ────────────────────────────────────────────────── */}
       <div className="flex gap-2 flex-wrap" role="group" aria-label="Filter alerts">
-        {FILTERS.map(({ value, label }) => {
+        {FILTER_KEYS.map((value) => {
           const count = value === 'UNREAD' ? unreadCount : alerts.filter(a => matchFilter(a, value)).length;
+          
+          let labelStr = '';
+          if (value === 'ALL') labelStr = t('alerts.filters.all');
+          else if (value === 'UNREAD') labelStr = `${t('alerts.filters.unread')}${unreadCount > 0 ? ` (${unreadCount})` : ''}`;
+          else if (value === 'CRITICAL') labelStr = t('alerts.filters.critical');
+          else if (value === 'HIGH') labelStr = t('alerts.filters.high');
+          else if (value === 'MODERATE') labelStr = t('alerts.filters.moderate');
+          else if (value === 'LOW') labelStr = t('alerts.filters.low');
+          else if (value === 'LAB_RESULTS') labelStr = t('alerts.filters.labResults');
+          else if (value === 'SYSTEM') labelStr = t('alerts.filters.system');
+
           return (
             <button
               key={value}
@@ -193,7 +211,7 @@ export default function Alerts() {
                   : 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-primary/40'
               }`}
             >
-              {label(unreadCount)}{value !== 'ALL' && value !== 'UNREAD' && count > 0 ? ` (${count})` : ''}
+              {labelStr}{value !== 'ALL' && value !== 'UNREAD' && count > 0 ? ` (${count})` : ''}
             </button>
           );
         })}
@@ -210,8 +228,8 @@ export default function Alerts() {
           <div className="w-11 h-11 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
             <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
           </div>
-          <p className="text-sm font-medium text-foreground">All caught up</p>
-          <p className="text-sm text-muted-foreground mt-1">No alerts match this filter.</p>
+          <p className="text-sm font-medium text-foreground">{t('alerts.caughtUp')}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t('alerts.noMatchFilter')}</p>
         </div>
 
       ) : (
@@ -231,7 +249,7 @@ export default function Alerts() {
                   opacity: alert.is_read ? 0.5 : 1,
                 }}
                 role="article"
-                aria-label={`${cfg.label} alert${alert.patient_name ? ` for ${alert.patient_name}` : ''}`}
+                aria-label={`${t(`alerts.${cfg.labelKey}`)} alert${alert.patient_name ? ` for ${alert.patient_name}` : ''}`}
               >
                 {/* Severity icon */}
                 <div className={`w-8 h-8 rounded-md ${sev.iconBg} flex items-center justify-center shrink-0 mt-0.5`}
@@ -244,7 +262,7 @@ export default function Alerts() {
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {/* Type badge */}
                     <span className={`text-[10px] font-medium uppercase tracking-[0.04em] px-1.5 py-0.5 rounded ${sev.badgeBg} ${sev.badgeText}`}>
-                      {cfg.label}
+                      {t(`alerts.${cfg.labelKey}`) ?? cfg.labelKey}
                     </span>
 
                     {/* Patient name */}
@@ -260,7 +278,7 @@ export default function Alerts() {
                     )}
                   </div>
 
-                  <p className="text-sm text-muted-foreground leading-snug">{alert.message}</p>
+                  <p className="text-sm text-muted-foreground leading-snug">{getAlertMessage(alert)}</p>
                   <p className="text-xs text-muted-foreground mt-1">{formatDate(alert.created_at)}</p>
                 </div>
 
@@ -272,14 +290,14 @@ export default function Alerts() {
                     className="h-7 text-xs whitespace-nowrap gap-1"
                     onClick={() => handleCta(alert)}
                   >
-                    {cfg.cta} →
+                    {t(`alerts.${cfg.ctaKey}`) ?? cfg.ctaKey} →
                   </Button>
                   {!alert.is_read && (
                     <button
                       className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors"
                       onClick={() => markRead(alert.alert_id)}
                     >
-                      Mark read
+                      {t('alerts.markRead')}
                     </button>
                   )}
                 </div>
@@ -293,20 +311,20 @@ export default function Alerts() {
       {pagination && pagination.pages > 1 && (
         <div className="flex items-center justify-between py-3 border-t border-border mt-6">
           <p className="text-xs text-muted-foreground">
-            Page {pagination.page} of {pagination.pages} · {pagination.total} alerts
+            {t('alerts.pageOf', { page: pagination.page, pages: pagination.pages, total: pagination.total })}
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-8 gap-1"
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
             >
-              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              <ChevronLeft className="h-3.5 w-3.5" /> {t('alerts.previous')}
             </Button>
             <Button size="sm" variant="outline" className="h-8 gap-1"
               disabled={page >= pagination.pages}
               onClick={() => setPage(p => p + 1)}
             >
-              Next <ChevronRight className="h-3.5 w-3.5" />
+              {t('alerts.next')} <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

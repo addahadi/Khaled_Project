@@ -14,6 +14,7 @@ import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { timeAgo } from '@/lib/formatDate';
+import { useTranslation } from 'react-i18next';
 
 interface LabStats {
   pending_count:    string;
@@ -31,19 +32,16 @@ interface LabOrder {
   ordered_at:      string;
 }
 
+// Visual-only — badge colours are not translated
 const STATUS_BADGE: Record<string, string> = {
   PENDING:    'bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30',
   INPROGRESS: 'bg-primary/10 text-primary border border-primary/20',
   COMPLETED:  'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING:    'Pending',
-  INPROGRESS: 'In Progress',
-  COMPLETED:  'Completed',
-};
-
 export default function LabDashboard() {
+  const { t }      = useTranslation('lab');
+  const { t: c }   = useTranslation('common');
   const { user }   = useAuth();
   const navigate   = useNavigate();
   const { toast }  = useToast();
@@ -86,10 +84,10 @@ export default function LabDashboard() {
   };
 
   const STAT_CARDS = [
-    { label: 'Pending Orders',  value: stats?.pending_count,    icon: Clock,        iconBg: 'bg-[#faaf3a]/15', iconColor: 'text-[#a2680a]',  highlight: Number(stats?.pending_count) > 0 },
-    { label: 'In Progress',     value: stats?.inprogress_count, icon: FlaskConical, iconBg: 'bg-primary/10',   iconColor: 'text-primary',     highlight: false },
-    { label: 'Completed Today', value: stats?.completed_today,  icon: CheckCircle2, iconBg: 'bg-[#00a89c]/10', iconColor: 'text-[#007a71]',   highlight: false },
-    { label: 'Total Completed', value: stats?.total_completed,  icon: ClipboardList,iconBg: 'bg-[#2e368f]/10', iconColor: 'text-[#2e368f]',   highlight: false },
+    { label: t('dashboard.kpis.pendingOrders'),  value: stats?.pending_count,    icon: Clock,        iconBg: 'bg-[#faaf3a]/15', iconColor: 'text-[#a2680a]',  highlight: Number(stats?.pending_count) > 0 },
+    { label: t('dashboard.kpis.inProgress'),     value: stats?.inprogress_count, icon: FlaskConical, iconBg: 'bg-primary/10',   iconColor: 'text-primary',     highlight: false },
+    { label: t('dashboard.kpis.completedToday'), value: stats?.completed_today,  icon: CheckCircle2, iconBg: 'bg-[#00a89c]/10', iconColor: 'text-[#007a71]',   highlight: false },
+    { label: t('dashboard.kpis.totalCompleted'), value: stats?.total_completed,  icon: ClipboardList,iconBg: 'bg-[#2e368f]/10', iconColor: 'text-[#2e368f]',   highlight: false },
   ];
 
   return (
@@ -97,8 +95,8 @@ export default function LabDashboard() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground tracking-tight">Lab Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Welcome back, {user?.username}</p>
+        <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('dashboard.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t('dashboard.welcome', { name: user?.username })}</p>
       </div>
 
       {/* Stat cards */}
@@ -125,12 +123,12 @@ export default function LabDashboard() {
       <Card>
         <CardHeader className="px-5 pt-5 pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Pending &amp; In-Progress Orders</CardTitle>
+            <CardTitle className="text-base">{t('dashboard.pendingOrdersTitle')}</CardTitle>
             <Button size="sm" variant="ghost"
               className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
               onClick={() => navigate('/lab/orders')}
             >
-              View all <ChevronRight className="h-3.5 w-3.5" />
+              {t('dashboard.viewAll')} <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </CardHeader>
@@ -144,15 +142,22 @@ export default function LabDashboard() {
               <div className="w-12 h-12 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
                 <CheckCircle2 className="h-6 w-6 text-[#007a71]" />
               </div>
-              <p className="text-sm font-medium text-foreground">All caught up!</p>
-              <p className="text-sm text-muted-foreground mt-1">No pending orders at the moment.</p>
+              <p className="text-sm font-medium text-foreground">{t('dashboard.allCaughtUp')}</p>
+              <p className="text-sm text-muted-foreground mt-1">{t('dashboard.noPendingOrders')}</p>
             </div>
           ) : (
             <div>
               {/* Table header */}
               <div className="grid grid-cols-[2fr_2fr_1.5fr_1fr_1fr_auto] gap-3 px-5 py-2 border-b border-border bg-muted/30">
-                {['Patient', 'Test Type', 'Ordered By', 'Status', 'Waiting', ''].map(h => (
-                  <span key={h} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</span>
+                {[
+                  t('dashboard.table.patient'),
+                  t('dashboard.table.testType'),
+                  t('dashboard.table.orderedBy'),
+                  t('dashboard.table.status'),
+                  t('dashboard.table.waiting'),
+                  '',
+                ].map((h, i) => (
+                  <span key={i} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</span>
                 ))}
               </div>
               {pendingOrders.map((order, i) => {
@@ -164,11 +169,15 @@ export default function LabDashboard() {
                       i < pendingOrders.length - 1 ? 'border-b border-border' : ''
                     } hover:bg-muted/30 transition-colors`}
                   >
+                    {/* Patient name: medical data — stays as-is from API */}
                     <span className="text-sm font-medium text-foreground truncate">{order.patient_name}</span>
+                    {/* Test type: medical data — stays as-is from API */}
                     <span className="text-sm text-foreground truncate">{order.test_type}</span>
+                    {/* Ordered by: user data — stays as-is from API */}
                     <span className="text-xs text-muted-foreground truncate">{order.ordered_by_name}</span>
+                    {/* Status: UI chrome — translated */}
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${STATUS_BADGE[order.status] ?? ''}`}>
-                      {STATUS_LABEL[order.status] ?? order.status}
+                      {t(`orders.status.${order.status}`, { defaultValue: order.status })}
                     </span>
                     <span className={`text-xs font-medium flex items-center gap-1 ${isOverdue ? 'text-[#c0272d]' : 'text-muted-foreground'}`}>
                       {isOverdue && <AlertTriangle className="h-3 w-3" />}
@@ -181,12 +190,12 @@ export default function LabDashboard() {
                           disabled={startingId === order.test_id}
                         >
                           {startingId === order.test_id && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                          Start
+                          {t('dashboard.actions.start')}
                         </Button>
                       ) : (
                         <Button size="sm" className="h-7 text-xs"
                           onClick={() => navigate(`/lab/orders/${order.test_id}`)}>
-                          Enter Results
+                          {t('dashboard.actions.enterResults')}
                         </Button>
                       )}
                     </div>

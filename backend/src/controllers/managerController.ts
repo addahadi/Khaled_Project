@@ -353,7 +353,7 @@ export const getReports = catchAsync(async (req: Request, res: Response, next: N
     FROM subscriptions s
     JOIN usage_records ur ON ur.subscription_id = s.subscription_id
     LEFT JOIN plan_features pf
-      ON pf.plan_id = s.plan_id AND pf.name = 'predictions_per_month'
+      ON pf.plan_id = s.plan_id AND pf.name_en = 'predictions_per_month'
     WHERE s.organization_id = ${orgId}
       AND s.status = 'ACTIVE'
       AND ur.cycle_start <= NOW()::DATE

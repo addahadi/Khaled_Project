@@ -6,47 +6,38 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, CreditCard, Loader2, Zap, Shield, Building2, Download } from 'lucide-react';
+import {
+  CreditCard, Zap, Shield, Building2, Check,
+  CheckCircle2, AlertTriangle, Loader2, TrendingDown, TrendingUp,
+} from 'lucide-react';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
+import { useTranslation, Trans } from 'react-i18next';
 
-interface PlanFeature { name: string; is_enabled: boolean; value: number | null }
-
-interface Plan {
-  plan_id: string;   // ← backend always returns plan_id (not id)
-  name: string;
-  description: string;
-  price_monthly: number | null;
-  price_annually: number | null;
-  is_trial: boolean;
-  features: PlanFeature[];
-}
-
+// ─── Types ─────────────────────────────────────────────────────────────────────
+interface SubscriptionFeature { name_en: string; name_ar: string; is_enabled: boolean; value: number | null; }
 interface Subscription {
-  subscription_id: string;
-  plan_id: string;
-  plan_name: string;
-  plan_description: string;
-  price_monthly: number | null;
-  is_trial: boolean;
-  status: string;
-  current_cycle_start: string;
-  current_cycle_end: string;
-  features: PlanFeature[];
-  usage: { prediction_used: number; prediction_overage: number };
+  plan_id: string; plan_name_en: string; plan_name_ar: string; plan_description_en: string; plan_description_ar: string;
+  status: 'ACTIVE' | 'CANCELLED' | 'TRIAL';
+  is_trial: boolean; price_monthly: number | null;
+  current_cycle_start: string; current_cycle_end: string;
+  features: SubscriptionFeature[];
+  usage: { prediction_used: number; prediction_overage: number; prediction_limit: number | null };
 }
-
+interface PlanFeature { name_en: string; name_ar: string; is_enabled: boolean; value: number | null; }
+interface Plan {
+  plan_id: string; name_en: string; name_ar: string; description_en: string; description_ar: string;
+  price_monthly: number | null; is_trial: boolean;
+  features: PlanFeature[];
+}
 interface OverageEvent {
-  event_id: string;
-  feature_name: string;
-  overage_amount: number;
-  created_at: string;
-  plan_id: string;
+  event_id: string; feature_name: string;
+  overage_amount: number; created_at: string;
 }
 
 const PLAN_ICONS: Record<string, React.ElementType> = {
@@ -55,108 +46,76 @@ const PLAN_ICONS: Record<string, React.ElementType> = {
 
 const FEATURE_LABELS: Record<string, string> = {
   predictions_per_month: 'Predictions / month',
-  doctors_limit:          'Max doctors',
-  lab_techs_limit:        'Max lab techs',
-  xai_explanations:       'XAI explanations',
-  priority_support:       'Priority support',
-  api_access:             'API access',
+  doctors_limit:         'Max doctors',
+  lab_techs_limit:       'Max lab techs',
+  xai_explanations:      'XAI explanations',
+  priority_support:      'Priority support',
+  api_access:            'API access',
 };
 
+const STATUS_STYLE: Record<string, string> = {
+  ACTIVE:    'bg-[#00a89c]/10 text-[#007a71] border border-[#00a89c]/25',
+  TRIAL:     'bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30',
+  CANCELLED: 'bg-muted text-muted-foreground border border-border',
+};
+
+// ─── Main component ────────────────────────────────────────────────────────────
 export default function Subscription() {
+  const { t, i18n } = useTranslation('manager');
+  const lang = i18n.language;
+  const { t: c } = useTranslation('common');
   const { toast } = useToast();
-  const { isLoading: subLoading, startLoading: startSub, stopLoading: stopSub } = useDelayedLoading();
-  const { isLoading: plansLoading, startLoading: startPlans, stopLoading: stopPlans } = useDelayedLoading();
+  const { isLoading: subLoading,     startLoading: startSub,     stopLoading: stopSub     } = useDelayedLoading();
+  const { isLoading: plansLoading,   startLoading: startPlans,   stopLoading: stopPlans   } = useDelayedLoading();
   const { isLoading: overageLoading, startLoading: startOverage, stopLoading: stopOverage } = useDelayedLoading();
 
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscription,  setSubscription]  = useState<Subscription | null>(null);
+  const [plans,         setPlans]         = useState<Plan[]>([]);
   const [overageEvents, setOverageEvents] = useState<OverageEvent[]>([]);
-  const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
-  const [switching, setSwitching] = useState(false);
+  const [confirmPlan,   setConfirmPlan]   = useState<Plan | null>(null);
+  const [switching,     setSwitching]     = useState(false);
+  const [cancelling,    setCancelling]    = useState(false);
+  const [cancelOpen,    setCancelOpen]    = useState(false);
 
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-
-  useEffect(() => {
+  const refreshSub = () =>
     ApiManager.execute({
       queryKey: ['manager', 'subscription'],
-      endpoint: '/subscriptions/my',
-      onStart: startSub,
-      onSuccess: (data: unknown) => setSubscription((data as { subscription: Subscription }).subscription),
-      onFinal: stopSub,
+      endpoint:  '/subscriptions/my',
+      onSuccess: (d) => setSubscription((d as { subscription: Subscription }).subscription),
     });
 
-    ApiManager.execute({
-      queryKey: ['plans'],
-      endpoint: '/plans',
-      onStart: startPlans,
-      onSuccess: (data: unknown) => {
-        // Map using plan_id — never p.id
-        const raw = (data as { plans: Plan[] }).plans;
-        setPlans(raw.map(p => ({ ...p, id: p.plan_id })));
-      },
-      onFinal: stopPlans,
-    });
-
-    ApiManager.execute({
-      queryKey: ['manager', 'overage'],
-      endpoint: '/subscriptions/overage',
-      onStart: startOverage,
-      onSuccess: (data: unknown) => {
-        setOverageEvents((data as { events: OverageEvent[] }).events);
-      },
-      onFinal: stopOverage,
-    });
+  useEffect(() => {
+    ApiManager.execute({ queryKey: ['manager', 'subscription'], endpoint: '/subscriptions/my', onStart: startSub, onSuccess: (d) => setSubscription((d as { subscription: Subscription }).subscription), onFinal: stopSub });
+    ApiManager.execute({ queryKey: ['plans'], endpoint: '/plans', onStart: startPlans, onSuccess: (d) => { const raw = (d as { plans: Plan[] }).plans; setPlans(raw.map(p => ({ ...p, id: p.plan_id }))); }, onFinal: stopPlans });
+    ApiManager.execute({ queryKey: ['manager', 'overage'], endpoint: '/subscriptions/overage', onStart: startOverage, onSuccess: (d) => setOverageEvents((d as { events: OverageEvent[] }).events), onFinal: stopOverage });
   }, [startSub, stopSub, startPlans, stopPlans, startOverage, stopOverage]);
 
   const handleSwitch = () => {
     if (!confirmPlan) return;
-
     ApiManager.executeMutation({
-      // Use plan_id field from backend, never .id
-      mutationFn: () => apiClient.patch('/subscriptions/change-plan', { plan_id: confirmPlan.plan_id }),
+      mutationFn:     () => apiClient.patch('/subscriptions/change-plan', { plan_id: confirmPlan.plan_id }),
       invalidateKeys: [['manager', 'subscription'], ['manager', 'reports']],
-      onStart: () => setSwitching(true),
-      onSuccess: (_data: unknown, msg: string) => {
-        toast({ title: 'Plan updated', description: msg });
-        setConfirmPlan(null);
-        // Refresh subscription
-        ApiManager.execute({
-          queryKey: ['manager', 'subscription'],
-          endpoint: '/subscriptions/my',
-          onSuccess: (data: unknown) => setSubscription((data as { subscription: Subscription }).subscription),
-        });
-      },
-      onError: ({ message }: { message: string }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
-      onFinal: () => setSwitching(false),
+      onStart:   () => setSwitching(true),
+      onSuccess: (_d, msg) => { toast({ title: t('subscription.planUpdated'), description: msg }); setConfirmPlan(null); refreshSub(); },
+      onError:   ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
+      onFinal:   () => setSwitching(false),
     });
   };
 
   const handleCancel = () => {
     ApiManager.executeMutation({
-      mutationFn: () => apiClient.delete('/subscriptions/my'),
+      mutationFn:     () => apiClient.delete('/subscriptions/my'),
       invalidateKeys: [['manager', 'subscription']],
-      onStart: () => setCancelling(true),
-      onSuccess: (_data: unknown, msg: string) => {
-        toast({ title: 'Subscription cancelled', description: msg });
-        setCancelConfirmOpen(false);
-        // Refresh subscription
-        ApiManager.execute({
-          queryKey: ['manager', 'subscription'],
-          endpoint: '/subscriptions/my',
-          onSuccess: (data: unknown) => setSubscription((data as { subscription: Subscription }).subscription),
-        });
-      },
-      onError: ({ message }: { message: string }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
-      onFinal: () => setCancelling(false),
+      onStart:   () => setCancelling(true),
+      onSuccess: (_d, msg) => { toast({ title: t('subscription.subscriptionCancelled'), description: msg }); setCancelOpen(false); refreshSub(); },
+      onError:   ({ message }) => toast({ title: 'Error', description: message, variant: 'destructive' }),
+      onFinal:   () => setCancelling(false),
     });
   };
 
   const usagePct = (() => {
-    if (!subscription) return null;
-    const limit = subscription.features.find(f => f.name === 'predictions_per_month')?.value;
-    if (!limit) return null;
-    return Math.min((subscription.usage.prediction_used / limit) * 100, 100);
+    if (!subscription?.usage?.prediction_limit) return null;
+    return Math.min((subscription.usage.prediction_used / subscription.usage.prediction_limit) * 100, 100);
   })();
 
   const getIcon = (planName: string) => {
@@ -165,320 +124,300 @@ export default function Subscription() {
   };
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Subscription</h1>
+    <div className="space-y-8 max-w-5xl">
 
-      {/* Current subscription */}
-      <Card className="border-primary/30 bg-primary/5">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('subscription.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t('subscription.manageText')}</p>
+      </div>
+
+      {/* ── Current plan card ── */}
+      <Card className="border-primary/25 bg-primary/[0.03]">
+        <CardHeader className="px-6 pt-6 pb-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
                 <CreditCard className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <CardTitle className="text-lg">Current Plan</CardTitle>
-                <CardDescription>Your active subscription</CardDescription>
+                <CardTitle className="text-base">{t('subscription.currentPlan')}</CardTitle>
+                <CardDescription className="text-xs mt-0.5">{t('subscription.activeSubscription')}</CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {subscription && subscription.status === 'ACTIVE' && (
-                <Button variant="destructive" size="sm" onClick={() => setCancelConfirmOpen(true)}>
-                  Cancel Subscription
+              {subscription?.status === 'ACTIVE' && (
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 gap-1.5" onClick={() => setCancelOpen(true)}>
+                  {t('subscription.cancelSubscription')}
                 </Button>
               )}
               {subscription && (
-                <Badge variant="default" className="text-sm">{subscription.status}</Badge>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[subscription.status] ?? ''}`}>
+                  {subscription.status.charAt(0) + subscription.status.slice(1).toLowerCase()}
+                </span>
               )}
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-6 pb-6">
           {subLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="h-4 w-full" />
-            </div>
+            <div className="space-y-3"><Skeleton className="h-7 w-36" /><Skeleton className="h-4 w-full" /></div>
           ) : subscription ? (
-            <div className="space-y-4">
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-bold">{subscription.plan_name}</span>
-                {subscription.is_trial && <Badge variant="secondary">Trial</Badge>}
+            <div className="space-y-5">
+              {/* Plan name + price */}
+              <div className="flex items-end gap-3">
+                <h2 className="text-3xl font-semibold text-foreground tracking-tight">
+                  {lang === 'ar' && subscription.plan_name_ar ? subscription.plan_name_ar : subscription.plan_name_en}
+                </h2>
+                {subscription.is_trial && (
+                  <span className="mb-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">{t('subscription.trial')}</span>
+                )}
               </div>
-              <p className="text-muted-foreground">{subscription.plan_description}</p>
+              <p className="text-sm text-muted-foreground">
+                {lang === 'ar' && subscription.plan_description_ar ? subscription.plan_description_ar : subscription.plan_description_en}
+              </p>
 
+              {/* Cycle dates */}
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Cycle Start:</span>
-                  <span className="ml-2 font-medium">
-                    {formatDate(subscription.current_cycle_start)}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">{t('subscription.cycleStart')}:</span>
+                  <span className="font-medium">{formatDate(subscription.current_cycle_start)}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Cycle End:</span>
-                  <span className="ml-2 font-medium">
-                    {formatDate(subscription.current_cycle_end)}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">{t('subscription.cycleEnd')}:</span>
+                  <span className="font-medium">{formatDate(subscription.current_cycle_end)}</span>
                 </div>
               </div>
 
-              {/* Usage */}
+              {/* Usage bar */}
               {usagePct !== null && (
-                <div className="space-y-2 pt-2 border-t">
+                <div className="space-y-2 pt-4 border-t border-border">
                   <div className="flex justify-between text-sm">
-                    <span>AI Predictions Used</span>
+                    <span className="text-muted-foreground">{t('subscription.aiPredictionsUsed')}</span>
                     <span className="font-medium">
-                      {subscription.usage.prediction_used} / {subscription.features.find(f => f.name === 'predictions_per_month')?.value}
+                      {subscription.usage.prediction_used}
+                      <span className="text-muted-foreground"> / {subscription.usage.prediction_limit}</span>
                     </span>
                   </div>
                   <Progress
                     value={usagePct}
-                    className={usagePct > 85 ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}
+                    className={usagePct > 85 ? '[&>div]:bg-[#c0272d]' : '[&>div]:bg-primary'}
                   />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{t('subscription.usedPct', { pct: Math.round(usagePct) })}</span>
+                    {usagePct > 85 && <span className="text-[#c0272d] font-medium">{t('subscription.approachingLimit')}</span>}
+                  </div>
                   {subscription.usage.prediction_overage > 0 && (
-                    <p className="text-xs text-destructive">
-                      {subscription.usage.prediction_overage} overage predictions this cycle
-                    </p>
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#c0272d]/8 border border-[#c0272d]/20">
+                      <AlertTriangle className="h-3.5 w-3.5 text-[#c0272d] shrink-0" />
+                      <p className="text-xs text-[#c0272d]">{t('subscription.overagePredictions', { count: subscription.usage.prediction_overage })}</p>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Features */}
+              {/* Feature pills */}
               <div className="flex flex-wrap gap-2 pt-2">
                 {subscription.features.map(f => (
-                  <Badge key={f.name} variant={f.is_enabled ? 'default' : 'secondary'} className="text-xs gap-1">
-                    {f.is_enabled && <CheckCircle2 className="h-3 w-3" />}
-                    {FEATURE_LABELS[f.name] ?? f.name}
-                    {f.value && `: ${f.value}`}
-                  </Badge>
+                  <span key={f.name_en} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    f.is_enabled
+                      ? 'bg-primary/10 text-primary border-primary/20'
+                      : 'bg-muted text-muted-foreground border-border line-through'
+                  }`}>
+                    {f.is_enabled && <Check className="h-3 w-3" />}
+                    {(lang === 'ar' && f.name_ar) ? f.name_ar : f.name_en}{f.value ? `: ${f.value}` : ''}
+                  </span>
                 ))}
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground">No active subscription. Choose a plan below.</p>
+            <p className="text-sm text-muted-foreground">{t('subscription.noActiveSubscription')}</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Available plans */}
+      {/* ── Available plans ── */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Available Plans</h2>
+        <h2 className="text-base font-semibold text-foreground mb-4">{t('subscription.availablePlans')}</h2>
         {plansLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[1,2,3].map(i => <Skeleton key={i} className="h-64 w-full rounded-[var(--radius)]" />)}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-3">
             {plans.map(plan => {
-              // Always use plan.plan_id for comparison — never plan.id
               const isCurrent = plan.plan_id === subscription?.plan_id;
-              const PlanIcon = getIcon(plan.name);
-
+              const PlanIcon  = getIcon(plan.name_en);
+              const planName = lang === 'ar' && plan.name_ar ? plan.name_ar : plan.name_en;
+              const planDesc = lang === 'ar' && plan.description_ar ? plan.description_ar : plan.description_en;
               return (
-                <Card
+                <div
                   key={plan.plan_id}
-                  className={`relative transition-all ${
+                  className={`relative rounded-[var(--radius)] border-2 p-6 flex flex-col transition-all ${
                     isCurrent
-                      ? 'border-primary ring-1 ring-primary/40 shadow-md'
-                      : 'hover:shadow-md hover:border-primary/30'
+                      ? 'border-primary bg-primary/[0.03] shadow-sm shadow-primary/10'
+                      : 'border-border bg-card hover:border-primary/40 hover:shadow-sm'
                   }`}
                 >
                   {isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="text-xs shadow-sm">Current Plan</Badge>
+                      <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-3 py-1 rounded-full shadow-sm">
+                        {t('subscription.currentPlanLabel')}
+                      </span>
                     </div>
                   )}
-                  <CardHeader>
-                    <div className="flex items-center gap-3 mb-1">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${isCurrent ? 'bg-primary' : 'bg-muted'}`}>
-                        <PlanIcon className={`h-5 w-5 ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`} />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">{plan.name}</CardTitle>
-                        {plan.is_trial && <Badge variant="secondary" className="text-xs">Trial</Badge>}
-                      </div>
-                    </div>
-                    <div className="flex items-end gap-1">
-                      {plan.price_monthly ? (
-                        <>
-                          <span className="text-3xl font-bold">${plan.price_monthly}</span>
-                          <span className="text-muted-foreground text-sm mb-1">/mo</span>
-                        </>
-                      ) : (
-                        <span className="text-xl font-semibold text-muted-foreground">Free Trial</span>
-                      )}
-                    </div>
-                    <CardDescription className="text-xs">{plan.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <ul className="space-y-1.5">
-                      {plan.features.map(f => (
-                        <li key={f.name} className={`flex items-center gap-2 text-xs ${f.is_enabled ? '' : 'text-muted-foreground line-through'}`}>
-                          <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${f.is_enabled ? 'text-green-500' : 'text-muted-foreground'}`} />
-                          {FEATURE_LABELS[f.name] ?? f.name}
-                          {f.value && ` (${f.value})`}
-                        </li>
-                      ))}
-                    </ul>
 
-                    <Button
-                      className="w-full"
-                      variant={isCurrent ? 'outline' : 'default'}
-                      disabled={isCurrent || (Boolean(subscription) && plan.is_trial)}
-                      onClick={() => !isCurrent && setConfirmPlan(plan)}
-                    >
-                      {isCurrent ? 'Current Plan' : (Boolean(subscription) && plan.is_trial) ? 'Unavailable' : subscription ? 'Switch to this Plan' : 'Subscribe'}
-                    </Button>
-                  </CardContent>
-                </Card>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isCurrent ? 'bg-primary' : 'bg-muted'}`}>
+                      <PlanIcon className={`h-4 w-4 ${isCurrent ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{planName}</p>
+                      {plan.is_trial && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#faaf3a]/15 text-[#a2680a] border border-[#faaf3a]/30">{t('subscription.trial')}</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex items-baseline gap-1 mb-2">
+                    {plan.price_monthly
+                      ? <><span className="text-3xl font-semibold text-foreground">${plan.price_monthly}</span><span className="text-sm text-muted-foreground">/{t('subscription.mo')}</span></>
+                      : <span className="text-xl font-semibold text-[#007a71]">{t('subscription.freeTrial')}</span>
+                    }
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{planDesc}</p>
+
+                  <ul className="space-y-2 flex-1 mb-5">
+                    {plan.features.map(f => (
+                      <li key={f.name_en} className={`flex items-center gap-2 text-xs ${f.is_enabled ? 'text-muted-foreground' : 'text-muted-foreground/50 line-through'}`}>
+                        <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${f.is_enabled ? 'text-[#00a89c]' : 'text-muted-foreground/40'}`} />
+                        {(lang === 'ar' && f.name_ar) ? f.name_ar : f.name_en}{f.value ? ` (${f.value})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button
+                    variant={isCurrent ? 'outline' : 'default'}
+                    className="w-full"
+                    disabled={isCurrent || (Boolean(subscription) && plan.is_trial)}
+                    onClick={() => !isCurrent && setConfirmPlan(plan)}
+                  >
+                    {isCurrent ? t('subscription.currentPlanLabel') : Boolean(subscription) && plan.is_trial ? t('subscription.unavailable') : subscription ? t('subscription.switchToPlan') : t('subscription.subscribe')}
+                  </Button>
+                </div>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Billing & Overage History */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Billing & Overage History</h2>
+      {/* ── Overage history ── */}
+      <div>
+        <h2 className="text-base font-semibold text-foreground mb-4">{t('subscription.billingHistory')}</h2>
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="px-0 py-0">
             {overageLoading ? (
-              <div className="p-4 space-y-4">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}
-              </div>
+              <div className="p-5 space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>
             ) : overageEvents.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <p>No overage events or billing history found.</p>
+              <div className="py-12 text-center">
+                <div className="w-10 h-10 rounded-full bg-[#00a89c]/10 flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle2 className="h-5 w-5 text-[#00a89c]" />
+                </div>
+                <p className="text-sm text-muted-foreground">{t('subscription.noOverageHistory')}</p>
               </div>
             ) : (
-              <div className="divide-y">
-                {overageEvents.map(event => (
-                  <div key={event.event_id} className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
-                    <div className="space-y-1">
-                      <p className="font-medium text-sm">
-                        Overage: {FEATURE_LABELS[event.feature_name] ?? event.feature_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(event.created_at)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant="destructive">
-                        + {event.overage_amount} used
-                      </Badge>
-                    </div>
+              overageEvents.map((event, i) => (
+                <div key={event.event_id}
+                  className={`flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors ${
+                    i < overageEvents.length - 1 ? 'border-b border-border' : ''
+                  }`}>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('subscription.overageLabel')}: {t(`subscription.features.${event.feature_name}`) ?? event.feature_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatDate(event.created_at)}</p>
                   </div>
-                ))}
-              </div>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#c0272d]/10 text-[#c0272d] border border-[#c0272d]/20">
+                    <AlertTriangle className="h-3 w-3" />
+                    +{event.overage_amount} {t('subscription.used')}
+                  </span>
+                </div>
+              ))
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Confirm switch dialog */}
+      {/* ── Confirm switch dialog ── */}
       <Dialog open={!!confirmPlan} onOpenChange={() => setConfirmPlan(null)}>
-        <DialogContent>
+        <DialogContent className="rounded-xl max-w-sm">
           <DialogHeader>
-            <DialogTitle>Confirm Plan Switch</DialogTitle>
-            <DialogDescription>
-              Review the changes before switching plans.
-              {subscription && ' Your current plan will be cancelled immediately and a new billing cycle will start.'}
+            <DialogTitle className="text-base">{t('subscription.dialogs.confirmSwitchTitle')}</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">
+              {subscription && t('subscription.dialogs.confirmSwitchDesc')}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Plan comparison */}
           {subscription && confirmPlan && (
-            <div className="grid grid-cols-2 gap-3 py-2">
-              {/* Current */}
-              <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current</p>
-                <p className="font-semibold text-sm">{subscription.plan_name}</p>
-                <p className="text-xl font-bold">
-                  {subscription.price_monthly ? `$${subscription.price_monthly}` : 'Free'}
-                  {subscription.price_monthly && <span className="text-xs font-normal text-muted-foreground">/mo</span>}
+            <div className="grid grid-cols-2 gap-3 py-1">
+              <div className="rounded-[var(--radius)] border border-border p-3 bg-muted/30 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t('subscription.current')}</p>
+                <p className="font-semibold text-sm text-foreground">{lang === 'ar' && subscription.plan_name_ar ? subscription.plan_name_ar : subscription.plan_name_en}</p>
+                <p className="text-xl font-semibold text-foreground">
+                  {subscription.price_monthly ? `$${subscription.price_monthly}` : t('subscription.free')}
+                  {subscription.price_monthly && <span className="text-xs font-normal text-muted-foreground">/{t('subscription.mo')}</span>}
                 </p>
               </div>
-              {/* New */}
-              <div className="rounded-lg border-2 border-primary p-3 bg-primary/5 space-y-2">
-                <p className="text-xs font-medium text-primary uppercase tracking-wide">New</p>
-                <p className="font-semibold text-sm">{confirmPlan.name}</p>
-                <p className="text-xl font-bold">
-                  {confirmPlan.price_monthly ? `$${confirmPlan.price_monthly}` : 'Free'}
-                  {confirmPlan.price_monthly && <span className="text-xs font-normal text-muted-foreground">/mo</span>}
+              <div className="rounded-[var(--radius)] border-2 border-primary p-3 bg-primary/5 space-y-1">
+                <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t('subscription.new')}</p>
+                <p className="font-semibold text-sm text-foreground">{lang === 'ar' && confirmPlan.name_ar ? confirmPlan.name_ar : confirmPlan.name_en}</p>
+                <p className="text-xl font-semibold text-foreground">
+                  {confirmPlan.price_monthly ? `$${confirmPlan.price_monthly}` : t('subscription.free')}
+                  {confirmPlan.price_monthly && <span className="text-xs font-normal text-muted-foreground">/{t('subscription.mo')}</span>}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Price difference */}
           {subscription && confirmPlan && (() => {
-            const currentPrice = subscription.price_monthly ?? 0;
-            const newPrice = confirmPlan.price_monthly ?? 0;
-            const diff = newPrice - currentPrice;
+            const diff = (confirmPlan.price_monthly ?? 0) - (subscription.price_monthly ?? 0);
             if (diff === 0) return null;
             return (
-              <div className={`text-center py-2 rounded-lg text-sm font-medium ${
+              <div className={`flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius)] text-sm font-medium ${
                 diff > 0
-                  ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/20'
-                  : 'bg-green-50 text-green-700 dark:bg-green-950/20'
+                  ? 'bg-[#faaf3a]/10 text-[#a2680a]'
+                  : 'bg-[#00a89c]/10 text-[#007a71]'
               }`}>
-                {diff > 0 ? `+$${diff}/mo increase` : `−$${Math.abs(diff)}/mo savings`}
+                {diff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                {diff > 0 ? `+$${diff}/${t('subscription.mo')} ${t('subscription.dialogs.increase')}` : `-$${Math.abs(diff)}/${t('subscription.mo')} ${t('subscription.dialogs.savings')}`}
               </div>
             );
           })()}
 
-          {/* Feature changes */}
-          {subscription && confirmPlan && (() => {
-            const currentFeatures = new Set(
-              subscription.features.filter(f => f.is_enabled).map(f => f.name)
-            );
-            const newFeatures = confirmPlan.features.filter(f => f.is_enabled);
-            const gained = newFeatures.filter(f => !currentFeatures.has(f.name));
-            const lost = subscription.features
-              .filter(f => f.is_enabled && !confirmPlan.features.find(nf => nf.name === f.name && nf.is_enabled));
-            if (gained.length === 0 && lost.length === 0) return null;
-            return (
-              <div className="text-xs space-y-1 py-1">
-                {gained.map(f => (
-                  <div key={f.name} className="flex items-center gap-1.5 text-green-600">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>+ {FEATURE_LABELS[f.name] ?? f.name}{f.value ? ` (${f.value})` : ''}</span>
-                  </div>
-                ))}
-                {lost.map(f => (
-                  <div key={f.name} className="flex items-center gap-1.5 text-destructive">
-                    <span className="h-3 w-3 flex items-center justify-center">✕</span>
-                    <span>− {FEATURE_LABELS[f.name] ?? f.name}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmPlan(null)}>Cancel</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmPlan(null)}>{c('actions.cancel')}</Button>
             <Button onClick={handleSwitch} disabled={switching}>
-              {switching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Switch
+              {switching && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {t('subscription.dialogs.confirmSwitch')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Cancel subscription dialog */}
-      <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
-        <DialogContent>
+      {/* ── Cancel confirm dialog ── */}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent className="rounded-xl max-w-sm">
           <DialogHeader>
-            <DialogTitle>Cancel Subscription</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to cancel your subscription? You will lose access to all AI prediction features and other premium capabilities immediately. This action cannot be undone.
+            <DialogTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" /> {t('subscription.dialogs.cancelSubscriptionTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">
+              <Trans i18nKey="subscription.dialogs.cancelSubscriptionDesc" t={t}>You will <strong>immediately lose access</strong> to all AI prediction features and premium capabilities. This cannot be undone.</Trans>
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelConfirmOpen(false)}>Keep Subscription</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>{t('subscription.dialogs.keepSubscription')}</Button>
             <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
-              {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Cancel Subscription
+              {cancelling && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {t('subscription.cancelSubscription')}
             </Button>
           </DialogFooter>
         </DialogContent>

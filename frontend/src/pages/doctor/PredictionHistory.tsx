@@ -15,6 +15,7 @@ import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
 import { getRiskConfig, RISK_CONFIG } from '@/lib/riskConfig';
 import type { RiskLevel } from '@/lib/riskConfig';
+import { useTranslation } from 'react-i18next';
 
 interface Prediction {
   request_id:    string; patient_id: string; patient_name: string;
@@ -35,6 +36,7 @@ const RISK_SUMMARY_STYLES = {
 } as const;
 
 export default function PredictionHistory() {
+  const { t } = useTranslation(['doctor', 'common']);
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoading, startLoading, stopLoading } = useDelayedLoading();
@@ -90,11 +92,11 @@ export default function PredictionHistory() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Prediction History</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{pagination?.total ?? 0} total predictions</p>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{t('predictions.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{pagination?.total ?? 0} {t('predictionHistory.totalPredictions')}</p>
         </div>
         <Button className="gap-2" onClick={() => navigate('/doctor/predictions/new')}>
-          <Brain className="h-4 w-4" /> New Prediction
+          <Brain className="h-4 w-4" /> {t('predictions.newPrediction')}
         </Button>
       </div>
 
@@ -111,7 +113,7 @@ export default function PredictionHistory() {
             }`}
           >
             {s === 'mine' ? <User className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
-            {s === 'mine' ? 'My Predictions' : 'All Predictions'}
+            {s === 'mine' ? t('predictionHistory.myPredictions') : t('predictionHistory.allPredictions')}
           </button>
         ))}
       </div>
@@ -130,7 +132,7 @@ export default function PredictionHistory() {
               }`}
             >
               <p className={`text-3xl font-semibold ${style.text}`}>{counts[level]}</p>
-              <p className="text-xs text-muted-foreground mt-1 font-medium">{cfg.label} Risk</p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">{t(`patients.riskLevels.${level}`) ?? cfg.label} {t('predictionHistory.risk')}</p>
             </button>
           );
         })}
@@ -142,7 +144,7 @@ export default function PredictionHistory() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             className="pl-9"
-            placeholder="Search by patient…"
+            placeholder={t('predictionHistory.searchByPatient')}
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
           />
@@ -150,13 +152,13 @@ export default function PredictionHistory() {
         <Select value={dateFilter} onValueChange={val => { setDateFilter(val); setPage(1); }}>
           <SelectTrigger className="w-[160px] bg-card">
             <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="Date Range" />
+            <SelectValue placeholder={t('predictionHistory.dateRange')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">All Time</SelectItem>
-            <SelectItem value="TODAY">Today</SelectItem>
-            <SelectItem value="7DAYS">Last 7 Days</SelectItem>
-            <SelectItem value="30DAYS">This Month</SelectItem>
+            <SelectItem value="ALL">{t('predictionHistory.allTime')}</SelectItem>
+            <SelectItem value="TODAY">{t('predictionHistory.today')}</SelectItem>
+            <SelectItem value="7DAYS">{t('predictionHistory.last7Days')}</SelectItem>
+            <SelectItem value="30DAYS">{t('predictionHistory.thisMonth')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -172,9 +174,9 @@ export default function PredictionHistory() {
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
               <Search className="h-5 w-5 text-muted-foreground" />
             </div>
-            <p className="text-sm font-medium">No predictions match your search.</p>
+            <p className="text-sm font-medium">{t('predictionHistory.noMatch')}</p>
             <Button size="sm" variant="outline" className="mt-4" onClick={() => { setSearch(''); setRiskFilter('ALL'); setDateFilter('ALL'); setPage(1); }}>
-              Clear Filters
+              {t('predictionHistory.clearFilters')}
             </Button>
           </CardContent>
         </Card>
@@ -184,9 +186,9 @@ export default function PredictionHistory() {
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
               <Brain className="h-5 w-5 text-muted-foreground" />
             </div>
-            <p className="text-sm font-medium">No predictions yet.</p>
+            <p className="text-sm font-medium">{t('predictions.noPredictions')}</p>
             <Button size="sm" className="mt-4 gap-2" onClick={() => navigate('/doctor/predictions/new')}>
-              <Brain className="h-4 w-4" /> Run First Prediction
+              <Brain className="h-4 w-4" /> {t('predictions.runFirst')}
             </Button>
           </CardContent>
         </Card>
@@ -222,19 +224,19 @@ export default function PredictionHistory() {
                       <span className="font-medium text-sm text-foreground truncate">{p.patient_name}</span>
                       {cfg && RiskIcon && (
                         <Badge className={`text-xs gap-1 ${cfg.badgeClass}`}>
-                          <RiskIcon className="h-3 w-3" /> {cfg.label}
+                          <RiskIcon className="h-3 w-3" /> {t(`patients.riskLevels.${p.risk_level}`) ?? cfg.label}
                         </Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
                       {p.risk_score !== null && (
                         <span className="text-xs text-muted-foreground">
-                          Score: <span className="font-medium text-foreground">{Math.round(p.risk_score * 100)}%</span>
+                          {t('dashboard.score')} <span className="font-medium text-foreground">{Math.round(p.risk_score * 100)}%</span>
                         </span>
                       )}
                       {p.confidence !== null && (
                         <span className="text-xs text-muted-foreground">
-                          Confidence: <span className="font-medium text-foreground">{Math.round(p.confidence * 100)}%</span>
+                          {t('predictionDetail.confidence')} <span className="font-medium text-foreground">{Math.round(p.confidence * 100)}%</span>
                         </span>
                       )}
                       <span className="text-xs text-muted-foreground">{formatDate(p.created_at)}</span>
@@ -247,11 +249,10 @@ export default function PredictionHistory() {
             );
           })}
 
-          {/* Pagination controls */}
           {pagination && pagination.pages > 1 && (
             <div className="flex items-center justify-between border-t border-border/50 pt-4 mt-6">
               <p className="text-sm text-muted-foreground">
-                Page {pagination.page} of {pagination.pages} · {pagination.total} predictions
+                {t('predictionHistory.pageOf', { page: pagination.page, pages: pagination.pages, total: pagination.total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -259,14 +260,14 @@ export default function PredictionHistory() {
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  Previous
+                  {t('predictionHistory.previous')}
                 </Button>
                 <Button
                   variant="outline" size="sm"
                   onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
                   disabled={page >= pagination.pages}
                 >
-                  Next
+                  {t('predictionHistory.next')}
                 </Button>
               </div>
             </div>

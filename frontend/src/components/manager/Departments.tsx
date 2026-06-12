@@ -18,10 +18,10 @@ import {
  LayoutGrid,
 } from 'lucide-react';
 import apiClient from '@/api/apiClient';
-import ApiManager from '@/api/ApiManager';
 import { queryClient } from '@/api/queryClientSetup';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
+import { useTranslation, Trans } from 'react-i18next';
 
 // ─── Icon registry ────────────────────────────────────────────────────────────
 
@@ -77,6 +77,8 @@ interface Member {
 // ─── Sub-component: Member list for one department ───────────────────────────
 
 function DepartmentMembers({ departmentId }: { departmentId: string }) {
+ const { t } = useTranslation('manager');
+ const { t: c } = useTranslation('common');
  const [members, setMembers]  = useState<Member[] | null>(null);
  const [loading, setLoading]  = useState(true);
  const { toast } = useToast();
@@ -107,7 +109,7 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
  if (!members || members.length === 0) {
  return (
  <p className="text-sm text-muted-foreground py-3 text-center">
- No staff assigned to this department yet.
+ {t('departments.noStaffAssigned')}
  </p>
  );
  }
@@ -122,14 +124,14 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
  <div className="flex items-center gap-1.5 mb-2">
  <Stethoscope className="h-3.5 w-3.5 text-primary" />
  <span className="text-xs font-normal text-primary uppercase tracking-wide">
- Doctors ({doctors.length})
+ {t('departments.doctorsCount', { count: doctors.length })}
  </span>
  </div>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+ <div className="flex flex-col w-full gap-1.5">
  {doctors.map(m => (
  <div
  key={m.user_id}
- className="flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-blue-500/10"
+ className="flex items-center w-full gap-2 p-2 rounded-md bg-primary/5 border border-blue-500/10"
  >
  <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
  <Stethoscope className="h-3.5 w-3.5 text-primary" />
@@ -142,7 +144,7 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
  variant={m.status === 'ACTIVE' ? 'default' : 'secondary'}
  className="ml-auto shrink-0 text-xs"
  >
- {m.status}
+ {t(`staff.status.${m.status}`) ?? m.status}
  </Badge>
  </div>
  ))}
@@ -155,14 +157,14 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
  <div className="flex items-center gap-1.5 mb-2">
  <FlaskConical className="h-3.5 w-3.5 text-emerald-500" />
  <span className="text-xs font-normal text-emerald-500 uppercase tracking-wide">
- Lab Technicians ({labTechs.length})
+ {t('departments.labTechsCount', { count: labTechs.length })}
  </span>
  </div>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+ <div className="flex flex-col w-full gap-1.5">
  {labTechs.map(m => (
  <div
  key={m.user_id}
- className="flex items-center gap-2 p-2 rounded-md bg-emerald-500/5 border border-emerald-500/10"
+ className="flex items-center w-full gap-2 p-2 rounded-md bg-emerald-500/5 border border-emerald-500/10"
  >
  <div className="h-7 w-7 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
  <FlaskConical className="h-3.5 w-3.5 text-emerald-500" />
@@ -175,7 +177,7 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
  variant={m.status === 'ACTIVE' ? 'default' : 'secondary'}
  className="ml-auto shrink-0 text-xs"
  >
- {m.status}
+ {t(`staff.status.${m.status}`) ?? m.status}
  </Badge>
  </div>
  ))}
@@ -189,9 +191,10 @@ function DepartmentMembers({ departmentId }: { departmentId: string }) {
 // ─── Icon Picker ─────────────────────────────────────────────────────────────
 
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+ const { t } = useTranslation('manager');
  return (
  <div>
- <p className="text-sm font-medium mb-2">Department Icon</p>
+ <p className="text-sm font-medium mb-2">{t('departments.departmentIcon')}</p>
  <div className="grid grid-cols-5 gap-2 max-h-52 overflow-y-auto pr-1">
  {ICON_OPTIONS.map(({ name, label, Icon }) => (
  <button
@@ -226,6 +229,8 @@ function DepartmentCard({
  onEdit:  (d: Department) => void;
  onDelete: (d: Department) => void;
 }) {
+ const { t } = useTranslation('manager');
+ const { t: c } = useTranslation('common');
  const [expanded, setExpanded] = useState(false);
 
  return (
@@ -240,7 +245,7 @@ function DepartmentCard({
  <div className="min-w-0">
  <CardTitle className="text-base truncate">{dept.name}</CardTitle>
  <p className="text-xs text-muted-foreground mt-0.5">
- Created {formatDate(dept.created_at)}
+ <Trans i18nKey="departments.created" t={t} values={{date: formatDate(dept.created_at)}}>Created {{date: formatDate(dept.created_at)}}</Trans>
  </p>
  </div>
  </div>
@@ -251,7 +256,7 @@ function DepartmentCard({
  size="icon" variant="ghost"
  className="h-8 w-8 text-muted-foreground hover:text-foreground"
  onClick={() => onEdit(dept)}
- title="Edit department"
+ title={t('departments.actions.edit')}
  >
  <Pencil className="h-3.5 w-3.5" />
  </Button>
@@ -259,7 +264,7 @@ function DepartmentCard({
  size="icon" variant="ghost"
  className="h-8 w-8 text-muted-foreground hover:text-destructive"
  onClick={() => onDelete(dept)}
- title="Delete department"
+ title={t('departments.actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </Button>
@@ -276,7 +281,7 @@ function DepartmentCard({
  >
  <span className="flex items-center gap-1.5 text-xs">
  <Users className="h-3.5 w-3.5" />
- View staff members
+ {t('departments.actions.viewStaff')}
  </span>
  {expanded
  ? <ChevronUp className="h-3.5 w-3.5" />
@@ -302,6 +307,8 @@ function DepartmentDialog({
  department:  Department | null;  // null = create mode
  onSaved:  () => void;
 }) {
+ const { t } = useTranslation('manager');
+ const { t: c } = useTranslation('common');
  const { toast } = useToast();
  const isEdit = Boolean(department);
 
@@ -323,10 +330,10 @@ function DepartmentDialog({
  try {
  if (isEdit && department) {
  await apiClient.patch(`/manager/departments/${department.department_id}`, { name: name.trim(), icon });
- toast({ title: 'Updated', description: 'Department updated successfully.' });
+ toast({ title: t('departments.dialogs.updated'), description: t('departments.dialogs.updatedDesc') });
  } else {
  await apiClient.post('/manager/departments', { name: name.trim(), icon });
- toast({ title: 'Created', description: 'Department created successfully.' });
+ toast({ title: t('departments.dialogs.created'), description: t('departments.dialogs.createdDesc') });
  }
  // Bust the React Query cache so the next fetch is always fresh
  queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
@@ -343,18 +350,18 @@ function DepartmentDialog({
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent className="sm:max-w-md">
  <DialogHeader>
- <DialogTitle>{isEdit ? 'Edit Department' : 'Add Department'}</DialogTitle>
+ <DialogTitle>{isEdit ? t('departments.dialogs.editDepartment') : t('departments.dialogs.addDepartment')}</DialogTitle>
  <DialogDescription>
- {isEdit ? 'Update the department name and icon.' : 'Create a new department for your organization.'}
+ {isEdit ? t('departments.dialogs.editDesc') : t('departments.dialogs.createDesc')}
  </DialogDescription>
  </DialogHeader>
 
  <div className="space-y-4 py-2">
  <div>
- <label className="text-sm font-medium">Department Name</label>
+ <label className="text-sm font-medium">{t('departments.departmentName')}</label>
  <Input
  className="mt-1.5"
- placeholder="e.g. Cardiology"
+ placeholder={t('departments.placeholders.name')}
  value={name}
  onChange={e => setName(e.target.value)}
  onKeyDown={e => e.key === 'Enter' && handleSave()}
@@ -365,11 +372,11 @@ function DepartmentDialog({
 
  <DialogFooter>
  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
- Cancel
+ {c('actions.cancel')}
  </Button>
  <Button onClick={handleSave} disabled={!name.trim() || saving}>
  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
- {isEdit ? 'Save Changes' : 'Create'}
+ {isEdit ? c('actions.save') : c('actions.create')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -380,6 +387,8 @@ function DepartmentDialog({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Departments() {
+ const { t } = useTranslation('manager');
+ const { t: c } = useTranslation('common');
  const { toast } = useToast();
  const { isLoading, startLoading, stopLoading } = useDelayedLoading();
 
@@ -395,13 +404,15 @@ export default function Departments() {
  const [deleting, setDeleting]  = useState(false);
 
  const loadDepartments = useCallback(() => {
- ApiManager.execute({
- queryKey:  ['manager', 'departments'],
- endpoint:  '/manager/departments',
- onStart:  startLoading,
- onSuccess: (data: unknown) =>
- setDepartments((data as { departments: Department[] }).departments),
- onFinal:  stopLoading,
+ apiClient.get('/manager/departments')
+ .then((data: any) => {
+ setDepartments((data as { departments: Department[] }).departments);
+ })
+ .catch((err: any) => {
+ toast({ title: 'Error', description: err?.message ?? 'Failed to load departments.', variant: 'destructive' });
+ })
+ .finally(() => {
+ stopLoading();
  });
  }, [startLoading, stopLoading]);
 
@@ -417,7 +428,7 @@ export default function Departments() {
  setDeleting(true);
  try {
  await apiClient.delete(`/manager/departments/${deleteTarget.department_id}`);
- toast({ title: 'Deleted', description: `"${deleteTarget.name}" has been deleted.` });
+ toast({ title: t('departments.dialogs.deleted'), description: t('departments.dialogs.deletedDesc', { name: deleteTarget.name }) });
  // Bust the React Query cache so the reload fetches fresh data
  queryClient.invalidateQueries({ queryKey: ['manager', 'departments'] });
  setDeleteTarget(null);
@@ -441,13 +452,13 @@ export default function Departments() {
  {/* Header */}
  <div className="flex items-center justify-between">
  <div>
- <h1 className="text-[28px] font-light">Departments</h1>
+ <h1 className="text-[28px] font-light">{t('departments.title')}</h1>
  <p className="text-sm text-muted-foreground mt-0.5">
- Manage your organization's departments and their staff.
+ {t('departments.subtitle')}
  </p>
  </div>
  <Button className="gap-2" onClick={openCreate}>
- <Plus className="h-4 w-4" /> Add Department
+ <Plus className="h-4 w-4" /> {t('departments.addDepartment')}
  </Button>
  </div>
 
@@ -457,14 +468,14 @@ export default function Departments() {
  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
  <Input
  className="pl-8"
- placeholder="Search departments..."
+ placeholder={t('departments.searchPlaceholder')}
  value={search}
  onChange={e => setSearch(e.target.value)}
  />
  </div>
  <div className="flex items-center gap-2 text-sm text-muted-foreground">
  <LayoutGrid className="h-4 w-4" />
- <span>{departments.length} department{departments.length !== 1 ? 's' : ''} total</span>
+ <span><Trans i18nKey="departments.totalDepartments" t={t} count={departments.length}>{{count: departments.length}} department(s) total</Trans></span>
  </div>
  </div>
 
@@ -491,18 +502,18 @@ export default function Departments() {
  ) : filtered.length === 0 && search ? (
  <div className="text-center py-16 text-muted-foreground">
  <Search className="mx-auto h-10 w-10 mb-3 opacity-30" />
- <p className="font-medium">No departments match your search.</p>
+ <p className="font-medium">{t('departments.noMatch')}</p>
  <Button variant="ghost" size="sm" className="mt-2" onClick={() => setSearch('')}>
- Clear search
+ {t('departments.clearSearch')}
  </Button>
  </div>
  ) : filtered.length === 0 ? (
  <div className="text-center py-16 text-muted-foreground">
  <Building2 className="mx-auto h-10 w-10 mb-3 opacity-30" />
- <p className="font-medium">No departments yet.</p>
- <p className="text-sm mt-1">Create the first department to get started.</p>
+ <p className="font-medium">{t('departments.noDepartments')}</p>
+ <p className="text-sm mt-1">{t('departments.createFirst')}</p>
  <Button size="sm" className="mt-4 gap-2" onClick={openCreate}>
- <Plus className="h-4 w-4" /> Create Department
+ <Plus className="h-4 w-4" /> {t('departments.addDepartment')}
  </Button>
  </div>
  ) : (
@@ -530,16 +541,16 @@ export default function Departments() {
  <Dialog open={Boolean(deleteTarget)} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
  <DialogContent className="sm:max-w-sm">
  <DialogHeader>
- <DialogTitle>Delete Department</DialogTitle>
+ <DialogTitle>{t('departments.dialogs.deleteDepartment')}</DialogTitle>
  <DialogDescription>
- Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?{' '}
- Staff assigned to this department will have their department cleared.
- This action cannot be undone.
+ <Trans i18nKey="departments.dialogs.deleteWarning" t={t} components={{ strong: <strong /> }}>
+ Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? Staff assigned to this department will have their department cleared. This action cannot be undone.
+ </Trans>
  </DialogDescription>
  </DialogHeader>
  <DialogFooter className="gap-2">
  <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
- Cancel
+ {c('actions.cancel')}
  </Button>
  <Button
  variant="destructive"
@@ -547,7 +558,7 @@ export default function Departments() {
  disabled={deleting}
  >
  {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
- Delete
+ {c('actions.delete')}
  </Button>
  </DialogFooter>
  </DialogContent>

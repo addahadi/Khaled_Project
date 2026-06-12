@@ -15,14 +15,19 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import ApiManager from '@/api/ApiManager';
+import { useTranslation } from 'react-i18next';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 function LabSidebar() {
+  const { t }            = useTranslation('common');
   const { state }        = useSidebar();
   const collapsed        = state === 'collapsed';
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
   const initials         = user?.username?.slice(0, 2).toUpperCase() ?? 'LT';
   const [unread, setUnread] = useState(0);
+  const { dir } = useLanguage();
 
   useEffect(() => {
     const fetchUnread = () => {
@@ -42,17 +47,18 @@ function LabSidebar() {
   }, []);
 
   const NAV_ITEMS = [
-    { title: 'Dashboard',     url: '/lab/dashboard', icon: LayoutDashboard, end: true,  badge: 0 },
-    { title: 'Lab Orders',    url: '/lab/orders',    icon: ClipboardList,   end: false, badge: 0 },
-    { title: 'Enter Results', url: '/lab/results',   icon: FlaskConical,    end: false, badge: 0 },
-    { title: 'Alerts',        url: '/lab/alerts',    icon: Bell,            end: false, badge: unread },
-    { title: 'Profile',       url: '/lab/profile',   icon: UserCircle,      end: false, badge: 0 },
+    { key: 'dashboard',    url: '/lab/dashboard', icon: LayoutDashboard, end: true,  badge: 0 },
+    { key: 'labOrders',    url: '/lab/orders',    icon: ClipboardList,   end: false, badge: 0 },
+    { key: 'enterResults', url: '/lab/results',   icon: FlaskConical,    end: false, badge: 0 },
+    { key: 'alerts',       url: '/lab/alerts',    icon: Bell,            end: false, badge: unread },
+    { key: 'profile',      url: '/lab/profile',   icon: UserCircle,      end: false, badge: 0 },
   ];
 
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-border bg-card shadow-[1px_0_0_0_hsl(var(--border))]"
+      side={dir === 'rtl' ? 'right' : 'left'}
+      className="border-border bg-card ltr:border-r ltr:shadow-[1px_0_0_0_hsl(var(--border))] rtl:border-l rtl:shadow-[-1px_0_0_0_hsl(var(--border))]"
     >
       <SidebarHeader className={collapsed ? "h-14 flex items-center justify-center border-b border-border p-0" : "h-14 flex items-center px-4 border-b border-border"}>
         {!collapsed ? (
@@ -80,7 +86,7 @@ function LabSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton asChild className={collapsed ? "justify-center" : ""}>
                     <NavLink
                       to={item.url}
@@ -100,7 +106,7 @@ function LabSidebar() {
                           </span>
                         )}
                       </div>
-                      {!collapsed && <span className="ml-2.5">{item.title}</span>}
+                      {!collapsed && <span className="ml-2.5">{t(`sidebar.${item.key}`)}</span>}
                       {!collapsed && item.badge > 0 && (
                         <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive">
                           {item.badge > 99 ? '99+' : item.badge}
@@ -131,17 +137,17 @@ function LabSidebar() {
                   <span className="text-sm font-medium text-foreground truncate">
                     {user?.username}
                   </span>
-                  <span className="text-xs text-muted-foreground">Lab technician</span>
+                  <span className="text-xs text-muted-foreground">{t('roles.labTech')}</span>
                 </div>
               )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="end" className="w-44 rounded-xl">
             <DropdownMenuItem onClick={() => navigate('/lab/profile')} className="text-sm rounded-lg">
-              <UserCircle className="mr-2 h-4 w-4" /> Profile
+              <UserCircle className="mr-2 h-4 w-4" /> {t('sidebar.profile')}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive text-sm rounded-lg" onClick={logout}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+              <LogOut className="mr-2 h-4 w-4" /> {t('actions.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -151,13 +157,16 @@ function LabSidebar() {
 }
 
 export function LabLayout() {
+  const { dir } = useLanguage();
+
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full" dir={dir}>
         <LabSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center border-b border-border px-4 shrink-0 bg-card shadow-sm">
+          <header className="h-14 flex items-center justify-between border-b border-border px-4 shrink-0 bg-card shadow-sm">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-all duration-150" />
+            <LanguageToggle />
           </header>
           <main className="flex-1 overflow-auto bg-background p-6">
             <Outlet />
