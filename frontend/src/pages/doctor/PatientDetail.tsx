@@ -48,6 +48,8 @@ interface PatientDetail {
   patient_id:    string; name: string; age: number;
   gender:        string; medical_history: Record<string, unknown>;
   risk_level:    string | null; risk_score: number | null;
+  message_ar?:   string;
+  message_en?:   string;
   created_at:    string;
   clinicalData:  ClinicalRecord[];
   labTests:      LabTest[];
@@ -1212,7 +1214,7 @@ export default function PatientDetail() {
           <DialogHeader><DialogTitle>{t('patientDetail.archiveDialog.title')}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             <Trans i18nKey="patientDetail.archiveDialog.desc" t={t} values={{ name: patient.name }}>
-              This record will be <strong>archived</strong> (soft-deleted) and removed from future predictions for <strong>{{name: patient.name}}</strong>.
+              This record will be <strong>archived</strong> (soft-deleted) and removed from future predictions for <strong>{patient.name}</strong>.
             </Trans>
           </p>
           {deleteTarget && Number(deleteTarget.linked_prediction_count) > 0 && (
@@ -1220,7 +1222,7 @@ export default function PatientDetail() {
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
                 <Trans i18nKey="patientDetail.archiveDialog.warning" t={t} values={{ count: deleteTarget.linked_prediction_count }}>
-                  This record was used in {{count: deleteTarget.linked_prediction_count}} completed prediction(s).
+                  This record was used in {deleteTarget.linked_prediction_count} completed prediction(s).
                   Those historical records will be preserved but marked as referencing an archived snapshot.
                 </Trans>
               </span>
