@@ -164,6 +164,12 @@
         "cta": "View results"
       }
     },
+    "messages": {
+      "CRITICAL_RESULT": "Critical lab result entered — immediate review and acknowledgment required.",
+      "NEW_LAB_ORDER": "A lab order has been assigned to you by the manager.",
+      "ABNORMAL_RESULT": "Abnormal lab result entered — review recommended.",
+      "RESULT_READY": "Lab results are ready for review."
+    },
     "pagination": "Page {{page}} of {{pages}} · {{total}} alerts"
   },
   "statusLabels": {

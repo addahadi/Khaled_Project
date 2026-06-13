@@ -472,7 +472,7 @@ export default function PatientDetail() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-0 max-w-5xl">
+    <div className="space-y-0 w-full">
 
       {/* ── Breadcrumb ────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">

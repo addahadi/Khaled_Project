@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
 import { useTranslation } from 'react-i18next';
-
+import { motion } from 'framer-motion';
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 function PredictionMockup() {
@@ -204,7 +204,11 @@ export default function Landing() {
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8 pt-32 pb-24">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left — text */}
-            <div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            >
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/15 border border-primary/25 text-primary text-xs font-medium mb-6">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                 {t('hero.tagline')}
@@ -229,12 +233,17 @@ export default function Landing() {
                   <Link to="/about">{t('hero.learnHow')}</Link>
                 </Button>
               </div>
-            </div>
+            </motion.div>
 
             {/* Right — mockup */}
-            <div className="hidden lg:flex items-center justify-center py-8 pr-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+              className="hidden lg:flex items-center justify-center py-8 pr-4"
+            >
               <PredictionMockup />
-            </div>
+            </motion.div>
           </div>
         </div>
 
@@ -245,7 +254,13 @@ export default function Landing() {
       {/* ── Features ── */}
       <section className="py-24 border-b border-border" id="features">
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
-          <div className="mb-14 max-w-2xl">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.5 }}
+            className="mb-14 max-w-2xl"
+          >
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
               {t('features.eyebrow')}
             </p>
@@ -255,12 +270,16 @@ export default function Landing() {
             <p className="text-muted-foreground leading-relaxed">
               {t('features.description')}
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {FEATURES.map(({ icon: Icon, eyebrow, title, description, color, bg }) => (
-              <div
+            {FEATURES.map(({ icon: Icon, eyebrow, title, description, color, bg }, i) => (
+              <motion.div
                 key={title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
                 className="group bg-card border border-border rounded-[var(--radius)] p-6 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200"
               >
                 <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center mb-5`}>
@@ -271,7 +290,7 @@ export default function Landing() {
                 </p>
                 <h3 className="text-sm font-semibold text-foreground mb-3">{title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -280,7 +299,13 @@ export default function Landing() {
       {/* ── Pricing ── */}
       <section className="py-24 border-b border-border bg-muted/30" id="pricing">
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
-          <div className="mb-14 max-w-2xl">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.5 }}
+            className="mb-14 max-w-2xl"
+          >
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
               {t('pricing.eyebrow')}
             </p>
@@ -288,12 +313,16 @@ export default function Landing() {
               {t('pricing.title')}
             </h2>
             <p className="text-muted-foreground">{t('pricing.description')}</p>
-          </div>
+          </motion.div>
 
           <div className="grid md:grid-cols-3 gap-5 max-w-5xl">
-            {PLANS.map(({ name, price, period, description, features, cta, featured, accentBg, accentBorder }) => (
-              <div
+            {PLANS.map(({ name, price, period, description, features, cta, featured, accentBg, accentBorder }, i) => (
+              <motion.div
                 key={name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
                 className={`relative rounded-[var(--radius)] border-2 ${accentBorder} ${accentBg} p-8 flex flex-col shadow-sm ${
                   featured ? 'shadow-primary/10 shadow-lg' : ''
                 }`}
@@ -334,7 +363,7 @@ export default function Landing() {
                     {cta} <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -344,7 +373,13 @@ export default function Landing() {
       <section className="bg-primary relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8 py-20">
-          <div className="max-w-2xl">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.5 }}
+            className="max-w-2xl"
+          >
             <p className="text-sm text-primary-foreground/60 font-medium uppercase tracking-widest mb-4">
               {t('cta.eyebrow')}
             </p>
@@ -370,7 +405,7 @@ export default function Landing() {
                 <Link to="/about">{c('actions.learnMore')}</Link>
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 

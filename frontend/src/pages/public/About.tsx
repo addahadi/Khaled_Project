@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Target, Users, Lightbulb, Activity } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 
 // ─── Icon / style maps (visual-only, not translated) ──────────────────────────
 
@@ -44,15 +45,21 @@ export default function About() {
           }}
         />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-8">
-          <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
-            {t('about.eyebrow')}
-          </p>
-          <h1 className="text-4xl md:text-5xl font-semibold text-white leading-tight tracking-tight mb-6 max-w-2xl">
-            {t('about.heroTitle')}
-          </h1>
-          <p className="text-lg text-white/60 max-w-xl leading-relaxed">
-            {t('about.heroDescription')}
-          </p>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          >
+            <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
+              {t('about.eyebrow')}
+            </p>
+            <h1 className="text-4xl md:text-5xl font-semibold text-white leading-tight tracking-tight mb-6 max-w-2xl">
+              {t('about.heroTitle')}
+            </h1>
+            <p className="text-lg text-white/60 max-w-xl leading-relaxed">
+              {t('about.heroDescription')}
+            </p>
+          </motion.div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
       </section>
@@ -63,7 +70,12 @@ export default function About() {
           <div className="grid md:grid-cols-2 gap-16">
 
             {/* Mission */}
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+            >
               <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
                 {t('about.missionEyebrow')}
               </p>
@@ -76,10 +88,15 @@ export default function About() {
               <p className="text-muted-foreground leading-relaxed">
                 {t('about.missionP2')}
               </p>
-            </div>
+            </motion.div>
 
             {/* How it works */}
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+            >
               <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
                 {t('about.techEyebrow')}
               </p>
@@ -88,7 +105,14 @@ export default function About() {
               </h2>
               <div className="space-y-5">
                 {stepKeys.map((key, i) => (
-                  <div key={key} className="flex gap-4 items-start pb-5 border-b border-border last:border-0 last:pb-0">
+                  <motion.div 
+                    key={key} 
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: i * 0.15 }}
+                    className="flex gap-4 items-start pb-5 border-b border-border last:border-0 last:pb-0"
+                  >
                     <div className={`w-9 h-9 rounded-lg ${STEP_COLORS[i]} flex items-center justify-center text-xs font-bold shrink-0`}>
                       {String(i + 1).padStart(2, '0')}
                     </div>
@@ -101,10 +125,10 @@ export default function About() {
                         {t(`about.steps.${key}.description`)}
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -112,20 +136,30 @@ export default function About() {
       {/* ── Values ── */}
       <section className="py-24 border-b border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 sm:px-8">
-          <div className="mb-14 max-w-2xl">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.5 }}
+            className="mb-14 max-w-2xl"
+          >
             <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
               {t('about.valuesEyebrow')}
             </p>
             <h2 className="text-3xl font-semibold text-foreground tracking-tight">
               {t('about.valuesTitle')}
             </h2>
-          </div>
+          </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {valueKeys.map((key) => {
+            {valueKeys.map((key, i) => {
               const { icon: Icon, color, bg } = VALUE_ICONS[key];
               return (
-                <div
+                <motion.div
                   key={key}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
                   className="bg-card border border-border rounded-[var(--radius)] p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200"
                 >
                   <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center mb-5`}>
@@ -137,7 +171,7 @@ export default function About() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {t(`about.values.${key}.description`)}
                   </p>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -147,7 +181,13 @@ export default function About() {
       {/* ── CTA banner ── */}
       <section className="bg-primary relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none translate-x-1/2 -translate-y-1/2" />
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-8 py-20 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.5 }}
+          className="relative mx-auto max-w-7xl px-4 sm:px-8 py-20 flex flex-col md:flex-row md:items-center md:justify-between gap-8"
+        >
           <div>
             <h2 className="text-3xl font-semibold text-primary-foreground mb-3 tracking-tight">
               {t('about.ctaTitle')}
@@ -164,7 +204,7 @@ export default function About() {
               {c('nav.getStartedFree')} <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
-        </div>
+        </motion.div>
       </section>
 
       {/* ── Footer ── */}

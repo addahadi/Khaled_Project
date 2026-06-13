@@ -346,7 +346,9 @@ export default function LabAlerts() {
                     )}
                   </div>
 
-                  <p className="text-sm text-muted-foreground leading-snug">{alert.message}</p>
+                  <p className="text-sm text-muted-foreground leading-snug">
+                    {t(`alerts.messages.${alert.alert_type}`, { defaultValue: alert.message })}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">{formatDate(alert.created_at)}</p>
                 </div>
 
