@@ -15,6 +15,7 @@ import {
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
+import { formatDZD } from '@/lib/formatPrice';
 import {
   registerOrgStep1Schema, registerOrgStep2Schema, registerOrgStep3Schema,
   flattenZodErrors,
@@ -30,6 +31,7 @@ interface Plan {
   description_en:string;
   description_ar:string;
   price_monthly: number | null;
+  price_annually:number | null;
   is_trial:      boolean;
   features:      { name_en: string; name_ar: string; is_enabled: boolean; value: number | null }[];
 }
@@ -52,9 +54,9 @@ const ORG_TYPES = [
 ];
 
 const PLAN_ICON: Record<string, React.ElementType> = {
-  Trial:    Zap,
-  Clinic:   Shield,
-  Hospital: Building,
+  'Trial':          Zap,
+  'Private Clinic': Shield,
+  'Grand Hospital': Building,
 };
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -428,8 +430,13 @@ export default function RegisterOrganization() {
                           <div className="flex items-baseline gap-1 mb-3">
                             {plan.price_monthly ? (
                               <>
-                                <span className="text-2xl font-semibold text-foreground">${plan.price_monthly}</span>
+                                <span className="text-2xl font-semibold text-foreground">{formatDZD(plan.price_monthly, lang)}</span>
                                 <span className="text-xs text-muted-foreground">{t('register.perMonth')}</span>
+                              </>
+                            ) : plan.price_annually ? (
+                              <>
+                                <span className="text-2xl font-semibold text-foreground">{formatDZD(plan.price_annually, lang)}</span>
+                                <span className="text-xs text-muted-foreground">{t('register.perYear')}</span>
                               </>
                             ) : (
                               <span className="text-lg font-semibold text-[#007a71]">{t('register.free')}</span>

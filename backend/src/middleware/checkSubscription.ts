@@ -58,7 +58,7 @@ export const checkPredictionLimit = catchAsync(
             s.subscription_id,
             s.plan_id,
             s.status,
-            p.name        AS plan_name,
+            p.name_en     AS plan_name,
             p.is_trial,
             pf.value      AS max_predictions,
             ur.usage_id,
@@ -69,7 +69,7 @@ export const checkPredictionLimit = catchAsync(
           JOIN plans p ON p.plan_id = s.plan_id
           LEFT JOIN plan_features pf
             ON pf.plan_id = s.plan_id
-           AND pf.name = 'predictions_per_month'
+           AND pf.name_en = 'predictions_per_month'
            AND pf.is_enabled = TRUE
           LEFT JOIN usage_records ur
             ON ur.subscription_id = s.subscription_id
@@ -241,7 +241,7 @@ export const checkUserLimit = catchAsync(
       JOIN plans p ON p.plan_id = s.plan_id
       LEFT JOIN plan_features pf_users
         ON pf_users.plan_id = s.plan_id
-       AND pf_users.name = 'users_limit'
+       AND pf_users.name_en = 'users_limit'
        AND pf_users.is_enabled = TRUE
       WHERE s.organization_id = ${req.user.org_id}
         AND s.status = 'ACTIVE'

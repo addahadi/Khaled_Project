@@ -55,7 +55,7 @@ export const registerOrganization = catchAsync(
     if (conflict) return next(new AppError('ERROR_ACCOUNT_EXISTS', 409));
 
     const [plan] = await sql`
-      SELECT plan_id, name_en, name_ar, is_trial FROM plans
+      SELECT plan_id, name_en, name_ar, is_trial, price_monthly, price_annually FROM plans
       WHERE plan_id = ${plan_id} AND is_active = TRUE AND deleted_at IS NULL
       LIMIT 1
     `;
@@ -67,7 +67,9 @@ export const registerOrganization = catchAsync(
       RETURNING organization_id, name
     `;
 
-    const cycleIntervalDays = plan.is_trial ? 14 : 30;
+    // Trial = 14 days; annual-only plans bill yearly; everything else monthly
+    const isAnnual = plan.price_annually != null && plan.price_monthly == null;
+    const cycleIntervalDays = plan.is_trial ? 14 : isAnnual ? 365 : 30;
 
     const [subscription] = await sql`
       INSERT INTO subscriptions (

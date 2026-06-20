@@ -24,12 +24,14 @@
     "mostPopular": "Most popular",
     "plans": {
       "trial": { "name": "Trial", "period": "14 days", "description": "Full platform access with no commitment.", "cta": "Start free trial" },
-      "clinic": { "name": "Clinic", "period": "/month", "description": "For small and medium clinics.", "cta": "Get started" },
-      "hospital": { "name": "Hospital", "period": "/month", "description": "Enterprise-grade for hospital networks.", "cta": "Contact sales" }
+      "clinic": { "name": "Private Clinic", "period": "/month", "description": "For private clinics and small practices.", "cta": "Get started" },
+      "hospital": { "name": "Grand Hospital", "period": "/year", "description": "Enterprise-grade for large hospital networks.", "cta": "Contact sales" }
     },
     "features": {
       "predictions50": "50 AI predictions",
       "doctors3": "Up to 3 doctors",
+      "users5": "Up to 5 users",
+      "users20": "Up to 20 users",
       "labIntegration": "Lab integration",
       "emailSupport": "Email support",
       "predictions500": "500 AI predictions",
@@ -49,6 +51,11 @@
     "description": "Join hospitals already using DiagInfect to improve patient outcomes with AI-powered infection risk assessment.",
     "startTrial": "Start free trial"
   },
+  "vision": {
+    "eyebrow": "Our Vision",
+    "year": "2032",
+    "statement": "To become the leading AI-driven infectious disease diagnostic ecosystem in Africa and the MENA region, enabling faster, smarter, and more accessible healthcare decisions while supporting global efforts against antimicrobial resistance and emerging infectious diseases."
+  },
   "mockup": {
     "predictionResult": "Prediction Result",
     "critical": "CRITICAL",
@@ -64,7 +71,7 @@
   "about": {
     "eyebrow": "About DiagInfect",
     "heroTitle": "AI diagnostics built for the realities of clinical work.",
-    "heroDescription": "We believe AI, built responsibly, can help clinicians detect infectious diseases earlier — reducing delays, antibiotic misuse, and preventable outcomes.",
+    "heroDescription": "DiagInfect-AI is an innovative healthcare platform that leverages artificial intelligence to support the early detection of bacterial infections through the analysis of biological and laboratory parameters. Our mission is to help healthcare professionals make faster and more accurate diagnostic decisions, improving patient outcomes while advancing the future of intelligent healthcare.",
     "missionEyebrow": "Our mission",
     "missionTitle": "Close the diagnostic gap.",
     "missionP1": "Infectious disease diagnosis is time-critical. Every hour of delay carries real clinical consequences — delayed treatment, inappropriate antibiotics, worse outcomes.",

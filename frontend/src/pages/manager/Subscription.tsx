@@ -17,6 +17,7 @@ import ApiManager from '@/api/ApiManager';
 import apiClient from '@/api/apiClient';
 import { useDelayedLoading } from '@/api/useDelayedLoading';
 import { formatDate } from '@/lib/formatDate';
+import { formatDZD } from '@/lib/formatPrice';
 import { useTranslation, Trans } from 'react-i18next';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ interface SubscriptionFeature { name_en: string; name_ar: string; is_enabled: bo
 interface Subscription {
   plan_id: string; plan_name_en: string; plan_name_ar: string; plan_description_en: string; plan_description_ar: string;
   status: 'ACTIVE' | 'CANCELLED' | 'TRIAL';
-  is_trial: boolean; price_monthly: number | null;
+  is_trial: boolean; price_monthly: number | null; price_annually: number | null;
   current_cycle_start: string; current_cycle_end: string;
   features: SubscriptionFeature[];
   usage: { prediction_used: number; prediction_overage: number; prediction_limit: number | null };
@@ -32,7 +33,7 @@ interface Subscription {
 interface PlanFeature { name_en: string; name_ar: string; is_enabled: boolean; value: number | null; }
 interface Plan {
   plan_id: string; name_en: string; name_ar: string; description_en: string; description_ar: string;
-  price_monthly: number | null; is_trial: boolean;
+  price_monthly: number | null; price_annually: number | null; is_trial: boolean;
   features: PlanFeature[];
 }
 interface OverageEvent {
@@ -41,7 +42,7 @@ interface OverageEvent {
 }
 
 const PLAN_ICONS: Record<string, React.ElementType> = {
-  trial: Zap, clinic: Shield, hospital: Building2,
+  trial: Zap, private: Shield, grand: Building2,
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -122,6 +123,16 @@ export default function Subscription() {
     const key = planName.toLowerCase().split(' ')[0];
     return PLAN_ICONS[key] ?? Building2;
   };
+
+  // Localised "50,000 DA/mo" | "8,000,000 DA/yr" | "Free Trial"
+  const priceLabel = (pm: number | null, pa: number | null) => {
+    if (pm) return `${formatDZD(pm, lang)}/${t('subscription.mo')}`;
+    if (pa) return `${formatDZD(pa, lang)}/${t('subscription.yr')}`;
+    return t('subscription.freeTrial');
+  };
+
+  const featureLabel = (f: PlanFeature | SubscriptionFeature) =>
+    lang === 'ar' && f.name_ar ? f.name_ar : t(`subscription.featureLabels.${f.name_en}`, f.name_en);
 
   return (
     <div className="space-y-8 w-full">
@@ -225,7 +236,7 @@ export default function Subscription() {
                       : 'bg-muted text-muted-foreground border-border line-through'
                   }`}>
                     {f.is_enabled && <Check className="h-3 w-3" />}
-                    {(lang === 'ar' && f.name_ar) ? f.name_ar : f.name_en}{f.value ? `: ${f.value}` : ''}
+                    {featureLabel(f)}{f.value ? `: ${f.value}` : ''}
                   </span>
                 ))}
               </div>
@@ -278,10 +289,13 @@ export default function Subscription() {
                   </div>
 
                   <div className="flex items-baseline gap-1 mb-2">
-                    {plan.price_monthly
-                      ? <><span className="text-3xl font-semibold text-foreground">${plan.price_monthly}</span><span className="text-sm text-muted-foreground">/{t('subscription.mo')}</span></>
-                      : <span className="text-xl font-semibold text-[#007a71]">{t('subscription.freeTrial')}</span>
-                    }
+                    {plan.price_monthly ? (
+                      <><span className="text-3xl font-semibold text-foreground">{formatDZD(plan.price_monthly, lang)}</span><span className="text-sm text-muted-foreground">/{t('subscription.mo')}</span></>
+                    ) : plan.price_annually ? (
+                      <><span className="text-3xl font-semibold text-foreground">{formatDZD(plan.price_annually, lang)}</span><span className="text-sm text-muted-foreground">/{t('subscription.yr')}</span></>
+                    ) : (
+                      <span className="text-xl font-semibold text-[#007a71]">{t('subscription.freeTrial')}</span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{planDesc}</p>
 
@@ -289,7 +303,7 @@ export default function Subscription() {
                     {plan.features.map(f => (
                       <li key={f.name_en} className={`flex items-center gap-2 text-xs ${f.is_enabled ? 'text-muted-foreground' : 'text-muted-foreground/50 line-through'}`}>
                         <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${f.is_enabled ? 'text-[#00a89c]' : 'text-muted-foreground/40'}`} />
-                        {(lang === 'ar' && f.name_ar) ? f.name_ar : f.name_en}{f.value ? ` (${f.value})` : ''}
+                        {featureLabel(f)}{f.value ? ` (${f.value})` : ''}
                       </li>
                     ))}
                   </ul>
@@ -362,23 +376,23 @@ export default function Subscription() {
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t('subscription.current')}</p>
                 <p className="font-semibold text-sm text-foreground">{lang === 'ar' && subscription.plan_name_ar ? subscription.plan_name_ar : subscription.plan_name_en}</p>
                 <p className="text-xl font-semibold text-foreground">
-                  {subscription.price_monthly ? `$${subscription.price_monthly}` : t('subscription.free')}
-                  {subscription.price_monthly && <span className="text-xs font-normal text-muted-foreground">/{t('subscription.mo')}</span>}
+                  {(subscription.price_monthly || subscription.price_annually) ? priceLabel(subscription.price_monthly, subscription.price_annually) : t('subscription.free')}
                 </p>
               </div>
               <div className="rounded-[var(--radius)] border-2 border-primary p-3 bg-primary/5 space-y-1">
                 <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t('subscription.new')}</p>
                 <p className="font-semibold text-sm text-foreground">{lang === 'ar' && confirmPlan.name_ar ? confirmPlan.name_ar : confirmPlan.name_en}</p>
                 <p className="text-xl font-semibold text-foreground">
-                  {confirmPlan.price_monthly ? `$${confirmPlan.price_monthly}` : t('subscription.free')}
-                  {confirmPlan.price_monthly && <span className="text-xs font-normal text-muted-foreground">/{t('subscription.mo')}</span>}
+                  {(confirmPlan.price_monthly || confirmPlan.price_annually) ? priceLabel(confirmPlan.price_monthly, confirmPlan.price_annually) : t('subscription.free')}
                 </p>
               </div>
             </div>
           )}
 
           {subscription && confirmPlan && (() => {
-            const diff = (confirmPlan.price_monthly ?? 0) - (subscription.price_monthly ?? 0);
+            // Only show a delta when both plans bill on the same (monthly) cycle
+            if (!subscription.price_monthly || !confirmPlan.price_monthly) return null;
+            const diff = confirmPlan.price_monthly - subscription.price_monthly;
             if (diff === 0) return null;
             return (
               <div className={`flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius)] text-sm font-medium ${
@@ -387,7 +401,7 @@ export default function Subscription() {
                   : 'bg-[#00a89c]/10 text-[#007a71]'
               }`}>
                 {diff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                {diff > 0 ? `+$${diff}/${t('subscription.mo')} ${t('subscription.dialogs.increase')}` : `-$${Math.abs(diff)}/${t('subscription.mo')} ${t('subscription.dialogs.savings')}`}
+                {diff > 0 ? `+${formatDZD(diff, lang)}/${t('subscription.mo')} ${t('subscription.dialogs.increase')}` : `-${formatDZD(Math.abs(diff), lang)}/${t('subscription.mo')} ${t('subscription.dialogs.savings')}`}
               </div>
             );
           })()}

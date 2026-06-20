@@ -16,6 +16,7 @@ import {
   DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAlerts } from '@/contexts/AlertsContext';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 const NAV_ITEMS = [
   { title: 'Dashboard',   url: '/doctor/dashboard',  icon: LayoutDashboard },
@@ -45,21 +46,11 @@ function DoctorSidebar() {
           <SidebarGroupLabel className="h-14 flex items-center px-4 border-b border-border mb-0">
             {!collapsed ? (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/30">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <rect x="8.5" y="1" width="3" height="18" fill="white" />
-                    <rect x="1" y="8.5" width="18" height="3" fill="white" />
-                  </svg>
-                </div>
+                <BrandLogo size="sm" />
                 <span className="text-sm font-semibold text-foreground tracking-tight">DiagInfect</span>
               </div>
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <rect x="8.5" y="1" width="3" height="18" fill="white" />
-                  <rect x="1" y="8.5" width="18" height="3" fill="white" />
-                </svg>
-              </div>
+              <BrandLogo size="sm" />
             )}
           </SidebarGroupLabel>
 

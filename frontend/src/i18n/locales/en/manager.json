@@ -245,6 +245,7 @@
     "noActiveSubscription": "No active subscription",
     "currentPlanLabel": "Current Plan",
     "mo": "mo",
+    "yr": "yr",
     "freeTrial": "Free Trial",
     "unavailable": "Unavailable",
     "switchToPlan": "Switch to Plan",
@@ -271,6 +272,13 @@
       "staff_accounts": "Staff Accounts",
       "priority_support": "Priority Support",
       "custom_models": "Custom Models"
+    },
+    "featureLabels": {
+      "predictions_per_month": "AI predictions / month",
+      "users_limit": "Max users",
+      "xai_explanations": "XAI explanations",
+      "priority_support": "Priority support",
+      "api_access": "API access"
     }
   },
   "reports": {

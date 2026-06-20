@@ -245,6 +245,7 @@
     "noActiveSubscription": "لا يوجد اشتراك نشط",
     "currentPlanLabel": "الخطة الحالية",
     "mo": "شهر",
+    "yr": "سنة",
     "freeTrial": "فترة تجريبية مجانية",
     "unavailable": "غير متاح",
     "switchToPlan": "التبديل إلى الخطة",
@@ -271,6 +272,13 @@
       "staff_accounts": "حسابات الموظفين",
       "priority_support": "دعم ذو أولوية",
       "custom_models": "نماذج مخصصة"
+    },
+    "featureLabels": {
+      "predictions_per_month": "تنبؤات الذكاء الاصطناعي / شهر",
+      "users_limit": "الحد الأقصى للمستخدمين",
+      "xai_explanations": "تفسيرات الذكاء الاصطناعي (XAI)",
+      "priority_support": "دعم ذو أولوية",
+      "api_access": "الوصول عبر API"
     }
   },
   "reports": {

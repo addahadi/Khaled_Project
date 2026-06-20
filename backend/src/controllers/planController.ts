@@ -31,7 +31,7 @@ export const getPlans = catchAsync(async (_req: Request, res: Response) => {
     WHERE p.is_active = TRUE
       AND p.deleted_at IS NULL
     GROUP BY p.plan_id
-    ORDER BY p.price_monthly ASC NULLS LAST
+    ORDER BY p.is_trial DESC, COALESCE(p.price_monthly, p.price_annually) ASC NULLS LAST
   `;
 
   res.status(200).json({ status: 'success', data: { plans } });

@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Brain, FlaskConical, Shield, Activity,
-  Check, AlertTriangle, TrendingUp, CheckCircle2,
+  Check, AlertTriangle, TrendingUp, CheckCircle2, Eye,
 } from 'lucide-react';
 import PublicNavbar from '../../components/public/PublicNavbar';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { formatDZD } from '@/lib/formatPrice';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -110,8 +112,9 @@ function PredictionMockup() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Landing() {
-  const { t } = useTranslation('landing');
+  const { t, i18n } = useTranslation('landing');
   const { t: c } = useTranslation('common');
+  const lang = i18n.language;
 
   const FEATURES = [
     {
@@ -154,7 +157,7 @@ export default function Landing() {
       price: c('pricing.free', 'Free'),
       period: t('pricing.plans.trial.period'),
       description: t('pricing.plans.trial.description'),
-      features: [t('pricing.features.predictions50'), t('pricing.features.doctors3'), t('pricing.features.labIntegration'), t('pricing.features.emailSupport')],
+      features: [t('pricing.features.predictions50'), t('pricing.features.users5'), t('pricing.features.xai'), t('pricing.features.emailSupport')],
       cta: t('pricing.plans.trial.cta'),
       featured: false,
       accentBg: 'bg-card',
@@ -162,10 +165,10 @@ export default function Landing() {
     },
     {
       name: t('pricing.plans.clinic.name'),
-      price: '$299',
+      price: formatDZD(50000, lang),
       period: t('pricing.plans.clinic.period'),
       description: t('pricing.plans.clinic.description'),
-      features: [t('pricing.features.predictions500'), t('pricing.features.doctors15'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.prioritySupport')],
+      features: [t('pricing.features.predictions500'), t('pricing.features.users20'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.prioritySupport')],
       cta: t('pricing.plans.clinic.cta'),
       featured: true,
       accentBg: 'bg-primary/5',
@@ -173,7 +176,7 @@ export default function Landing() {
     },
     {
       name: t('pricing.plans.hospital.name'),
-      price: '$799',
+      price: formatDZD(8000000, lang),
       period: t('pricing.plans.hospital.period'),
       description: t('pricing.plans.hospital.description'),
       features: [t('pricing.features.unlimitedPredictions'), t('pricing.features.unlimitedStaff'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.dedicatedSupport'), t('pricing.features.apiAccess')],
@@ -189,19 +192,11 @@ export default function Landing() {
 
       {/* ── Hero ── */}
       <section className="relative bg-[#0d1829] overflow-hidden">
-        {/* Background orbs */}
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/15 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#2e368f]/20 rounded-full blur-[80px] pointer-events-none" />
-        {/* Dot grid */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.07]"
-          style={{
-            backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }}
-        />
+        {/* Colour orbs for atmospheric depth */}
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none z-0" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#2e368f]/15 rounded-full blur-[100px] pointer-events-none z-0" />
 
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-8 pt-32 pb-24">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-8 pt-32 pb-24">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left — text */}
             <motion.div
@@ -291,6 +286,79 @@ export default function Landing() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Vision 2032 ── */}
+      <section className="relative py-24 overflow-hidden" id="vision">
+        {/* Background decorative elements */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0d1829] via-[#141e30] to-[#1a1a2e]" />
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#2e368f]/40 to-transparent" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[#2e368f]/10 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className="text-center"
+          >
+            {/* Eyebrow badge */}
+            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm mb-8">
+              <Eye className="h-4 w-4 text-primary" />
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-widest">{t('vision.eyebrow')}</span>
+            </div>
+
+            {/* Year highlight */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6, delay: 0.15 }}
+              className="mb-6"
+            >
+              <span className="text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-gradient-to-r from-primary via-[#5db1e3] to-[#2bd4c0] bg-clip-text text-transparent">
+                {t('vision.year')}
+              </span>
+            </motion.div>
+
+            {/* Decorative line */}
+            <div className="flex items-center justify-center gap-3 mb-10">
+              <div className="h-px w-16 bg-gradient-to-r from-transparent to-primary/50" />
+              <div className="w-2 h-2 rounded-full bg-primary/60 animate-pulse" />
+              <div className="h-px w-16 bg-gradient-to-l from-transparent to-primary/50" />
+            </div>
+
+            {/* Vision statement */}
+            <motion.blockquote
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="relative max-w-3xl mx-auto"
+            >
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-6xl text-primary/15 font-serif pointer-events-none select-none">&ldquo;</div>
+              <p className="text-lg md:text-xl lg:text-2xl text-white/80 leading-relaxed font-light italic">
+                {t('vision.statement')}
+              </p>
+            </motion.blockquote>
+
+            {/* Bottom accent dots */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="flex items-center justify-center gap-2 mt-10"
+            >
+              <div className="w-1 h-1 rounded-full bg-primary/40" />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+              <div className="w-1 h-1 rounded-full bg-primary/40" />
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
@@ -414,12 +482,7 @@ export default function Landing() {
             {/* Brand */}
             <div className="md:col-span-1">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm shadow-primary/40">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <rect x="8.5" y="1" width="3" height="18" fill="white" />
-                    <rect x="1" y="8.5" width="18" height="3" fill="white" />
-                  </svg>
-                </div>
+                <BrandLogo size="sm" />
                 <span className="text-white text-base font-semibold tracking-tight">{c('brand')}</span>
               </div>
               <p className="text-sm leading-relaxed">

@@ -99,7 +99,7 @@ export const createSubscription = catchAsync(async (req: Request, res: Response,
 
   // Verify plan exists
   const [plan] = await sql`
-    SELECT plan_id, is_trial FROM plans
+    SELECT plan_id, is_trial, price_monthly, price_annually FROM plans
     WHERE plan_id = ${plan_id} AND is_active = TRUE AND deleted_at IS NULL
     LIMIT 1
   `;
@@ -118,9 +118,9 @@ export const createSubscription = catchAsync(async (req: Request, res: Response,
       AND status = 'ACTIVE'
   `;
 
-  const cycleEnd = plan.is_trial
-    ? sql`NOW()::DATE + INTERVAL '14 days'`
-    : sql`NOW()::DATE + INTERVAL '30 days'`;
+  // Annual-only plans bill yearly; everything else monthly (trial is rejected above)
+  const cycleDays = plan.price_annually != null && plan.price_monthly == null ? 365 : 30;
+  const cycleEnd = sql`NOW()::DATE + (${cycleDays} || ' days')::INTERVAL`;
 
   const [subscription] = await sql`
     INSERT INTO subscriptions (
@@ -235,6 +235,13 @@ export const verifyChangePlan = catchAsync(async (req: Request, res: Response, n
   }
 
   const subscription = await sql.begin(async (tx) => {
+    // Annual-only plans bill yearly; everything else monthly
+    const [newPlan] = await tx`
+      SELECT price_monthly, price_annually FROM plans
+      WHERE plan_id = ${storedToken.new_plan_id} LIMIT 1
+    `;
+    const cycleDays = newPlan?.price_annually != null && newPlan?.price_monthly == null ? 365 : 30;
+
     // Cancel current
     await tx`
       UPDATE subscriptions
@@ -253,7 +260,7 @@ export const verifyChangePlan = catchAsync(async (req: Request, res: Response, n
         ${storedToken.new_plan_id},
         'ACTIVE',
         NOW()::DATE,
-        NOW()::DATE + INTERVAL '30 days',
+        NOW()::DATE + (${cycleDays} || ' days')::INTERVAL,
         ${external_payment_ref ?? null}
       )
       RETURNING subscription_id, plan_id, status, current_cycle_start, current_cycle_end
