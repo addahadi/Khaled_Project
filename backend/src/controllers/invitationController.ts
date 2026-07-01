@@ -101,16 +101,16 @@ export const inviteStaff = catchAsync(
       RETURNING invitation_id
     `;
 
-    // Send invitation email (non-blocking — don't let SMTP issues hang the request)
+    // Send invitation email
     const activationUrl = `${process.env.CLIENT_URL}/activate/${rawToken}`;
-    sendInvitationEmail({
+    await sendInvitationEmail({
       to:              email,
       org_name:        meta?.org_name    ?? 'Your Organization',
       role,
       activation_url:  activationUrl,
       invited_by_name: meta?.inviter_name ?? 'Your administrator',
       expires_in_days: 7,
-    }).catch(err => console.error('[EmailService] Invitation email failed:', err));
+    });
 
     res.status(201).json({
       status:     'success',

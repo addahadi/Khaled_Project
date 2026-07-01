@@ -1,15 +1,21 @@
 /**
- * Email service — uses Nodemailer with SMTP (e.g. Gmail).
- * Add to .env:
- *   SMTP_HOST=smtp.gmail.com
- *   SMTP_PORT=465
- *   SMTP_USER=you@gmail.com
- *   SMTP_PASS=your_app_password
- *   FROM_EMAIL=DiagInfect <you@gmail.com>
+ * Email service — supports two providers:
  *
- * Falls back to console.log when SMTP_PASS is not set (dev/test).
+ * 1. **Resend** (recommended for Render / production — uses HTTPS, not blocked)
+ *    RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+ *    FROM_EMAIL=DiagInfect <onboarding@resend.dev>
+ *
+ * 2. **Nodemailer SMTP** (fallback for local dev / paid hosting)
+ *    SMTP_HOST=smtp.gmail.com
+ *    SMTP_PORT=465
+ *    SMTP_USER=you@gmail.com
+ *    SMTP_PASS=your_app_password
+ *    FROM_EMAIL=DiagInfect <you@gmail.com>
+ *
+ * Priority: RESEND_API_KEY → SMTP_PASS → console.log (dev stub).
  */
 
+import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 
 interface InvitationEmailOpts {
@@ -52,7 +58,16 @@ function roleLabel(role: string): string {
     : role;
 }
 
-// ─── Nodemailer transporter (created once, reused) ────────────────────────────
+// ─── Resend client (preferred for production / Render) ────────────────────────
+let resendClient: Resend | null = null;
+
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!resendClient) resendClient = new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
+}
+
+// ─── Nodemailer transporter (fallback for local dev) ──────────────────────────
 let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter | null {
@@ -67,10 +82,7 @@ function getTransporter(): nodemailer.Transporter | null {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      connectionTimeout: 10_000,  // 10s to establish connection
-      greetingTimeout:   10_000,  // 10s for SMTP greeting
-      socketTimeout:     10_000,  // 10s for socket inactivity
-    } as any);
+    });
   }
 
   return transporter;
@@ -255,26 +267,44 @@ function subscriptionChangeHtml(opts: SubscriptionChangeEmailOpts): string {
 </html>`;
 }
 
-// ─── Send via Nodemailer (or console.log in dev) ──────────────────────────────
+// ─── Send via Resend → SMTP → console.log ────────────────────────────────────
 async function send(opts: { to: string; subject: string; html: string }): Promise<void> {
-  const mailer = getTransporter();
-  const from   = process.env.FROM_EMAIL ?? 'DiagInfect <no-reply@diaginfect.dz>';
+  const from = process.env.FROM_EMAIL ?? 'DiagInfect <onboarding@resend.dev>';
 
-  if (!mailer) {
-    console.warn('[EmailService] SMTP_PASS not set — logging email instead');
-    console.log(`  TO:      ${opts.to}`);
-    console.log(`  SUBJECT: ${opts.subject}`);
+  // 1️⃣ Try Resend (HTTPS — works on Render free tier)
+  const resend = getResend();
+  if (resend) {
+    const { error } = await resend.emails.send({
+      from,
+      to:      [opts.to],
+      subject: opts.subject,
+      html:    opts.html,
+    });
+    if (error) {
+      console.error('[EmailService] Resend error:', error);
+      throw new Error(`Email send failed: ${error.message}`);
+    }
+    console.log('[EmailService] Email sent via Resend to:', opts.to);
     return;
   }
 
-  const info = await mailer.sendMail({
-    from,
-    to:      opts.to,
-    subject: opts.subject,
-    html:    opts.html,
-  });
+  // 2️⃣ Fallback: Nodemailer SMTP (local dev / paid hosting)
+  const mailer = getTransporter();
+  if (mailer) {
+    const info = await mailer.sendMail({
+      from,
+      to:      opts.to,
+      subject: opts.subject,
+      html:    opts.html,
+    });
+    console.log('[EmailService] Email sent via SMTP:', info.messageId);
+    return;
+  }
 
-  console.log('[EmailService] Email sent:', info.messageId);
+  // 3️⃣ Dev stub — no provider configured
+  console.warn('[EmailService] No email provider configured — logging instead');
+  console.log(`  TO:      ${opts.to}`);
+  console.log(`  SUBJECT: ${opts.subject}`);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
