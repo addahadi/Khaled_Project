@@ -67,7 +67,10 @@ function getTransporter(): nodemailer.Transporter | null {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-    });
+      connectionTimeout: 10_000,  // 10s to establish connection
+      greetingTimeout:   10_000,  // 10s for SMTP greeting
+      socketTimeout:     10_000,  // 10s for socket inactivity
+    } as any);
   }
 
   return transporter;
