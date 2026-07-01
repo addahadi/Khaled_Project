@@ -176,7 +176,7 @@ export default function Landing() {
     },
     {
       name: t('pricing.plans.hospital.name'),
-      price: formatDZD(8000000, lang),
+      price: formatDZD(800000, lang),
       period: t('pricing.plans.hospital.period'),
       description: t('pricing.plans.hospital.description'),
       features: [t('pricing.features.unlimitedPredictions'), t('pricing.features.unlimitedStaff'), t('pricing.features.fullLab'), t('pricing.features.xai'), t('pricing.features.dedicatedSupport'), t('pricing.features.apiAccess')],
