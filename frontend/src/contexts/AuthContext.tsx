@@ -2,7 +2,7 @@ import {
   createContext, useContext, useEffect, useState,
   useCallback, useRef, type ReactNode,
 } from 'react';
-import apiClient from '@/api/apiClient';
+import apiClient, { scheduleProactiveRefresh } from '@/api/apiClient';
 import i18n from '@/i18n';
 
 export type UserRole = 'DOCTOR' | 'LAB_TECH' | 'MANAGER';
@@ -81,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setAuthenticated = useCallback((user: AuthUser, accessToken: string) => {
     sessionStorage.setItem('accessToken', accessToken);
+    scheduleProactiveRefresh(accessToken);
     setState({ user, isLoading: false, isAuthenticated: true });
     // Sync language from user's DB preference
     syncLang(user.preferred_lang);

@@ -15,7 +15,7 @@ function signAccessToken(payload: Omit<JwtPayload, 'jti'>): { token: string; jti
   const jti = crypto.randomUUID();
   return {
     token: jwt.sign({ ...payload, jti }, process.env.JWT_ACCESS_SECRET!, {
-      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as any,
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '1h') as any,
     }),
     jti,
   };
@@ -27,17 +27,18 @@ function makeRefreshToken(userId: string) {
   const jwt_token = jwt.sign(
     { sub: userId },
     process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as any }
+    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '30d') as any }
   );
   return { raw, hash, jwt_token };
 }
 
 function setRefreshCookie(res: Response, token: string) {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie('refreshToken', token, {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge:   7 * 24 * 60 * 60 * 1000,
+    secure:   isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge:   30 * 24 * 60 * 60 * 1000,
     path:     '/api/auth',
   });
 }
@@ -384,7 +385,13 @@ export const logout = catchAsync(
       } catch { /* ignore */ }
     }
 
-    res.clearCookie('refreshToken', { path: '/api/auth' });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.clearCookie('refreshToken', {
+      path:     '/api/auth',
+      httpOnly: true,
+      secure:   isProd,
+      sameSite: isProd ? 'none' : 'lax',
+    });
     res.status(200).json({ status: 'success', messageKey: 'SUCCESS_LOGOUT' });
   }
 );
