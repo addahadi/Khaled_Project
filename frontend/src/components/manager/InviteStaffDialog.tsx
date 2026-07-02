@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, X, UserPlus, Clock } from 'lucide-react';
+import { Loader2, Send, X, UserPlus, Clock, Copy, Check, Link } from 'lucide-react';
 import ApiManager from '../../api/ApiManager';
 import apiClient from '../../api/apiClient';
 import { queryClient } from '../../api/queryClientSetup';
@@ -63,6 +63,8 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [manualActivationUrl, setManualActivationUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -116,16 +118,21 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
       onSuccess: (data, msg) => {
         const res = data as {
           invite_sent:    boolean;
+          activation_url?: string;
           overage_notice?: { message: string };
         };
 
-        toast({
-          title:       t('staff.invitationSent'),
-          description: res.overage_notice
-            ? `${msg} - ${res.overage_notice.message}`
-            : msg,
-          variant: res.overage_notice ? 'default' : 'default',
-        });
+        if (!res.invite_sent && res.activation_url) {
+          setManualActivationUrl(res.activation_url);
+        } else {
+          toast({
+            title:       t('staff.invitationSent'),
+            description: res.overage_notice
+              ? `${msg} - ${res.overage_notice.message}`
+              : msg,
+            variant: res.overage_notice ? 'default' : 'default',
+          });
+        }
 
         // Invalidate then refresh invitation list
         queryClient.invalidateQueries({ queryKey: ['manager', 'invitations'] });
@@ -315,6 +322,51 @@ export default function InviteStaffDialog({ open, onClose, onSent }: InviteStaff
         onClose={() => setShowUpgrade(false)}
         limitType="user"
       />
+
+      {/* Manual activation link dialog (when email fails due to sandbox) */}
+      <Dialog open={!!manualActivationUrl} onOpenChange={(open) => {
+        if (!open) {
+          setManualActivationUrl(null);
+          setCopied(false);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link className="h-5 w-5 text-primary" />
+              Manual Activation Link
+            </DialogTitle>
+            <DialogDescription>
+              The invitation email couldn't be sent (free tier sandbox restriction). 
+              Please copy the link below and send it to the staff member directly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 mt-4">
+            <Input 
+              readOnly 
+              value={manualActivationUrl || ''} 
+              className="font-mono text-xs text-muted-foreground bg-muted/50" 
+            />
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => {
+                if (manualActivationUrl) {
+                  navigator.clipboard.writeText(manualActivationUrl);
+                  setCopied(true);
+                  toast({ title: 'Link copied to clipboard' });
+                  setTimeout(() => setCopied(false), 2000);
+                }
+              }}
+            >
+              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <div className="mt-6 flex justify-end">
+            <Button onClick={() => setManualActivationUrl(null)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

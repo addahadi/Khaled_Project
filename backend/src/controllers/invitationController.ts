@@ -103,14 +103,20 @@ export const inviteStaff = catchAsync(
 
     // Send invitation email
     const activationUrl = `${process.env.CLIENT_URL}/activate/${rawToken}`;
-    await sendInvitationEmail({
-      to:              email,
-      org_name:        meta?.org_name    ?? 'Your Organization',
-      role,
-      activation_url:  activationUrl,
-      invited_by_name: meta?.inviter_name ?? 'Your administrator',
-      expires_in_days: 7,
-    });
+    let emailSent = true;
+    try {
+      await sendInvitationEmail({
+        to:              email,
+        org_name:        meta?.org_name    ?? 'Your Organization',
+        role,
+        activation_url:  activationUrl,
+        invited_by_name: meta?.inviter_name ?? 'Your administrator',
+        expires_in_days: 7,
+      });
+    } catch (err) {
+      console.error('[InvitationController] Email failed (sandbox limitation?):', err);
+      emailSent = false;
+    }
 
     res.status(201).json({
       status:     'success',
@@ -118,7 +124,8 @@ export const inviteStaff = catchAsync(
         ? 'SUCCESS_INVITATION_SENT_OVERAGE'
         : 'SUCCESS_INVITATION_SENT',
       data: {
-        invite_sent:   true,
+        invite_sent:   emailSent,
+        activation_url: activationUrl, // Returned so manager can manually share it if email fails
         invitation_id: invitation.invitation_id,
         email,
         role,
